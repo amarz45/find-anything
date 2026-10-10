@@ -1,0 +1,941 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>800</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*SD05: Compare documents (UC06; F09, F10)*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>790</x>
+      <y>750</y>
+      <w>2460</w>
+      <h>180</h>
+    </coordinates>
+    <panel_attributes>break
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>790</x>
+      <y>1088</y>
+      <w>2280</w>
+      <h>826</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>780</x>
+      <y>1196</y>
+      <w>2300</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2290.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>810</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1150</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1490</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1770</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1950</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2290</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2650</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2830</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>3030</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>3210</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>3390</x>
+      <y>180</y>
+      <w>20</w>
+      <h>1934</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1924.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>0</x>
+      <y>235</y>
+      <w>3515</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-
+lw=2
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;3505.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>0</x>
+      <y>545</y>
+      <w>3515</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-
+lw=2
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;3505.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>0</x>
+      <y>1949</y>
+      <w>3515</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-
+lw=2
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;3505.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLActor</id>
+    <coordinates>
+      <x>50</x>
+      <y>70</y>
+      <w>150</w>
+      <h>120</h>
+    </coordinates>
+    <panel_attributes>User</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>410</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:ResultsView</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>750</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:GuiController</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1060</x>
+      <y>140</y>
+      <w>210</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:FindAnythingService</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1400</x>
+      <y>140</y>
+      <w>210</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:DocumentComparator</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1710</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:SearchIndex</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1880</x>
+      <y>140</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:AgentController</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2230</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:PromptBuilder</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2600</x>
+      <y>130</y>
+      <w>130</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>llmClient:
+LlmClient</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2760</x>
+      <y>140</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:ResponseParser</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2960</x>
+      <y>140</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:CitationVerifier</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>3150</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:MainWindow</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>3340</x>
+      <y>140</y>
+      <w>130</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:DetailPane</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>270</y>
+      <w>380</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+selects two results, chooses "Compare"</panel_attributes>
+    <additional_attributes>10.0;10.0;370.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>310</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+onCompareRequested(oldFile, newFile)</panel_attributes>
+    <additional_attributes>10.0;10.0;345.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>815</x>
+      <y>350</y>
+      <w>350</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+compare(oldFile, newFile)</panel_attributes>
+    <additional_attributes>10.0;10.0;340.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1155</x>
+      <y>390</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+diff(oldFile, newFile)</panel_attributes>
+    <additional_attributes>10.0;10.0;345.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1190</x>
+      <y>430</y>
+      <w>260</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>submitted to backgroundExecutor
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>815</x>
+      <y>480</y>
+      <w>350</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+future</panel_attributes>
+    <additional_attributes>340.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1495</x>
+      <y>580</y>
+      <w>295</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+getChunks(oldFile)</panel_attributes>
+    <additional_attributes>10.0;10.0;285.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1495</x>
+      <y>620</y>
+      <w>295</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+oldChunks</panel_attributes>
+    <additional_attributes>285.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1495</x>
+      <y>660</y>
+      <w>295</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+getChunks(newFile)</panel_attributes>
+    <additional_attributes>10.0;10.0;285.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1495</x>
+      <y>700</y>
+      <w>295</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+newChunks</panel_attributes>
+    <additional_attributes>285.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1150</x>
+      <y>790</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+NoTextException(file)</panel_attributes>
+    <additional_attributes>345.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>810</x>
+      <y>830</y>
+      <w>360</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+future fails</panel_attributes>
+    <additional_attributes>350.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>810</x>
+      <y>870</y>
+      <w>2420</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+showError(message)</panel_attributes>
+    <additional_attributes>10.0;10.0;2410.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>850</x>
+      <y>754</y>
+      <w>250</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[either file has no extracted text]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1495</x>
+      <y>958</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+rebuild both texts from
+their chunks, in order</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1495</x>
+      <y>998</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+compute a line diff</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1150</x>
+      <y>1038</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+diffResult</panel_attributes>
+    <additional_attributes>345.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>810</x>
+      <y>1146</y>
+      <w>360</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+cpos=0,-20
+future completes with
+Comparison(diffResult, no summary)</panel_attributes>
+    <additional_attributes>350.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1150</x>
+      <y>1236</y>
+      <w>815</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+summarizeDiff(diffResult, llmClient)</panel_attributes>
+    <additional_attributes>10.0;10.0;805.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1180</x>
+      <y>1276</y>
+      <w>280</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>llmClient for the current settings,
+from LlmClientFactory.createClient()
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1336</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+buildDiffSummaryRequest(diffResult)</panel_attributes>
+    <additional_attributes>10.0;10.0;345.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1376</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+request</panel_attributes>
+    <additional_attributes>345.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2320</x>
+      <y>1416</y>
+      <w>290</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>only the diff is sent, never the full
+files; a very large diff is split by section
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1476</y>
+      <w>710</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+complete(request)</panel_attributes>
+    <additional_attributes>10.0;10.0;700.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>2600</x>
+      <y>1516</y>
+      <w>110</w>
+      <h>70</h>
+    </coordinates>
+    <panel_attributes>ref
+--
+SD04
+halign=center
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1596</y>
+      <w>710</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+response</panel_attributes>
+    <additional_attributes>700.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1636</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+parseAnswer(response)</panel_attributes>
+    <additional_attributes>10.0;10.0;885.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1676</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+summary</panel_attributes>
+    <additional_attributes>885.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1716</y>
+      <w>1095</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+verify(summary)</panel_attributes>
+    <additional_attributes>10.0;10.0;1085.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1756</y>
+      <w>1095</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+verified summary</panel_attributes>
+    <additional_attributes>1085.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1150</x>
+      <y>1796</y>
+      <w>815</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+summary</panel_attributes>
+    <additional_attributes>805.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>810</x>
+      <y>1854</y>
+      <w>360</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+cpos=0,-20
+future completes with
+Comparison(diffResult, summary)</panel_attributes>
+    <additional_attributes>350.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>850</x>
+      <y>1092</y>
+      <w>180</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[diffResult.isEmpty()]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>800</x>
+      <y>1210</y>
+      <w>160</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[differences found]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>810</x>
+      <y>1984</y>
+      <w>2600</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+showComparison(comparison)</panel_attributes>
+    <additional_attributes>10.0;10.0;2590.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>90</x>
+      <y>2024</y>
+      <w>760</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>In Ask mode the agent reaches the same
+DocumentComparator.diff() through CompareTool (SD03).
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1155</x>
+      <y>360</y>
+      <w>10</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>815</x>
+      <y>320</y>
+      <w>10</w>
+      <h>200</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1495</x>
+      <y>580</y>
+      <w>10</w>
+      <h>498</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2655</x>
+      <y>1486</y>
+      <w>10</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1955</x>
+      <y>1246</y>
+      <w>10</w>
+      <h>570</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1670</x>
+      <y>230</y>
+      <w>170</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>*JavaFX UI thread*
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1580</x>
+      <y>540</y>
+      <w>340</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>*Background thread (backgroundExecutor)*
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1590</x>
+      <y>1944</y>
+      <w>330</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>*JavaFX UI thread (via Platform.runLater)*
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

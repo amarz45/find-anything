@@ -1,0 +1,569 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>20</x>
+      <y>20</y>
+      <w>600</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*Class diagram 3: indexing (Observer, Adapter)*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLPackage</id>
+    <coordinates>
+      <x>30</x>
+      <y>90</y>
+      <w>1040</w>
+      <h>830</h>
+    </coordinates>
+    <panel_attributes>indexing
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>120</x>
+      <y>140</y>
+      <w>240</w>
+      <h>170</h>
+    </coordinates>
+    <panel_attributes>FileWatcher
+--
+-indexConfig: IndexConfig
+-changeQueue: ChangeQueue
+-watchedFolders: Set&lt;Path&gt;
+--
++start()
++stop()
++watch(folder: Path)
++unwatch(folder: Path)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>670</x>
+      <y>140</y>
+      <w>290</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>ChangeQueue
+--
+-lastChangeTimes: Map&lt;Path, Instant&gt;
+-quietPeriod: Duration
+--
++offer(path: Path)
++takeReady(timeout: Duration): Path
++size(): int</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>60</x>
+      <y>350</y>
+      <w>360</w>
+      <h>400</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Subject&gt;&gt;
+Indexer
+--
+-indexConfig: IndexConfig
+-changeQueue: ChangeQueue
+-textExtractor: TextExtractor
+-chunker: Chunker
+-embeddingModel: EmbeddingModel
+-searchIndex: SearchIndex
+-contentStore: ContentStore
+-statusListeners: List&lt;IndexStatusListener&gt;
+-workerThread: Thread
+-state: IndexerState
+--
++start()
++stop()
++requestUpdate(path: Path)
++rebuild()
++getStatus(): IndexStatus
++addStatusListener(listener: IndexStatusListener)
+-indexFile(file: Path)
+-rescanFolder(folder: Path)
+-embedNextBatch(): boolean
+-notifyStatus()</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>690</x>
+      <y>320</y>
+      <w>250</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>IndexStatus
+--
+-state: IndexerState
+-pendingFiles: int
+-failedFiles: int
+-chunksWithoutEmbeddings: int
+--
++isUpToDate(): boolean</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>670</x>
+      <y>510</y>
+      <w>300</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;interface&gt;&gt;
+&lt;&lt;Observer&gt;&gt;
+/IndexStatusListener/
+--
++onStatusChanged(status: IndexStatus)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>670</x>
+      <y>650</y>
+      <w>300</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;interface&gt;&gt;
+/TextExtractor/
+--
++extract(file: Path): ExtractedDocument</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>140</x>
+      <y>800</y>
+      <w>200</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Adapter&gt;&gt;
+IsolatedTextExtractor
+--
+-timeout: Duration
+-maxMemoryBytes: long</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>590</x>
+      <y>810</y>
+      <w>450</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>Chunker
+--
+-maxChunkChars: int
+--
++split(file: Path, document: ExtractedDocument): List&lt;Chunk&gt;</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>730</x>
+      <y>1140</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>config.IndexConfig
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>700</x>
+      <y>1500</y>
+      <w>230</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>/embedding.EmbeddingModel/
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1350</x>
+      <y>830</y>
+      <w>130</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>storage.Chunk
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>720</x>
+      <y>1590</y>
+      <w>190</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>storage.ContentStore
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>730</x>
+      <y>1680</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>storage.SearchIndex
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>620</x>
+      <y>960</y>
+      <w>390</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>Watches each search folder recursively, including
+subfolders created later, on its own watcher thread.
+For each change it offers the path to ChangeQueue if
+IndexConfig includes it; when the operating system
+reports lost events (overflow), it offers the whole
+search folder instead. A rename arrives as a delete
+plus a create; ContentStore makes that cheap.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1190</x>
+      <y>140</y>
+      <w>440</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>Thread-safe. offer() is called from the watcher thread and
+records the latest change time for each path, so a burst of
+events for one file becomes a single entry.
+takeReady() is called by the indexing worker. It returns a path
+only once it has been unchanged for quietPeriod (about 2 s),
+or null when nothing is ready before the timeout.
+A folder in the queue means "rescan this folder".</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>570</x>
+      <y>1230</y>
+      <w>500</w>
+      <h>220</h>
+    </coordinates>
+    <panel_attributes>Only started in WRITER mode. Its worker thread is the only
+writer of SearchIndex and ContentStore. requestUpdate() only
+offers a path to the queue, so it returns immediately and is
+safe from any thread.
+Phase 1, indexFile(), makes a file keyword-searchable. If
+ContentStore already has its content, the stored chunks and
+embeddings are copied instead of extracting again.
+Phase 2, embedNextBatch(), embeds content that has no embeddings
+yet when no file is ready, and prunes ContentStore when there
+is nothing to embed.
+Status listeners are called on the worker thread.
+state takes the values of the states in SM01.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1210</x>
+      <y>590</y>
+      <w>410</w>
+      <h>190</h>
+    </coordinates>
+    <panel_attributes>Detects the file type from the file's contents and
+returns its text page by page, with its type and
+metadata (an ExtractedDocument).
+Must not be able to crash or hang the application:
+parsing runs isolated from the app's process, with a
+time limit and a memory limit.
+Throws UnsupportedFormatException for formats it can't
+read, an IOException if the file is locked, and
+ExtractionException if the file is corrupt or
+password-protected, or parsing hit a limit or crashed.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>630</x>
+      <y>1780</y>
+      <w>370</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>Adapts a document-parsing library that can run
+in a separate process (for example, Apache Tika's
+forked parser) to TextExtractor. The rest of the
+system never sees the library's types.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1270</x>
+      <y>920</y>
+      <w>280</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>Splits each page separately, so every
+chunk keeps its page number.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>350</x>
+      <y>210</y>
+      <w>330</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1
+offers paths</panel_attributes>
+    <additional_attributes>10.0;10.0;320.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>410</x>
+      <y>540</y>
+      <w>270</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;-
+m1=1
+m2=0..*
+notifies</panel_attributes>
+    <additional_attributes>10.0;10.0;260.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1030</x>
+      <y>840</y>
+      <w>330</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+creates</panel_attributes>
+    <additional_attributes>10.0;10.0;320.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>410</x>
+      <y>650</y>
+      <w>270</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;260.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>410</x>
+      <y>440</y>
+      <w>290</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+creates</panel_attributes>
+    <additional_attributes>10.0;10.0;280.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>330</x>
+      <y>710</y>
+      <w>350</w>
+      <h>110</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;&gt;</panel_attributes>
+    <additional_attributes>10.0;100.0;240.0;100.0;240.0;10.0;340.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>400</x>
+      <y>740</y>
+      <w>200</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;80.0;190.0;80.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>400</x>
+      <y>260</y>
+      <w>280</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;90.0;10.0;10.0;270.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>370</x>
+      <y>740</y>
+      <w>370</w>
+      <h>420</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;410.0;360.0;410.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>350</x>
+      <y>290</y>
+      <w>390</w>
+      <h>900</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;210.0;10.0;210.0;890.0;380.0;890.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>410</x>
+      <y>720</y>
+      <w>300</w>
+      <h>800</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;140.0;10.0;140.0;790.0;290.0;790.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>340</x>
+      <y>740</y>
+      <w>390</w>
+      <h>870</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;40.0;30.0;40.0;30.0;860.0;380.0;860.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>740</y>
+      <w>630</w>
+      <h>960</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;950.0;620.0;950.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>950</x>
+      <y>200</y>
+      <w>250</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>240.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>960</x>
+      <y>670</y>
+      <w>260</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>250.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1030</x>
+      <y>880</y>
+      <w>260</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>250.0;40.0;250.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>410</x>
+      <y>690</y>
+      <w>170</w>
+      <h>560</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>160.0;550.0;30.0;550.0;30.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>330</x>
+      <y>300</y>
+      <w>300</w>
+      <h>680</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>290.0;670.0;120.0;670.0;120.0;30.0;10.0;30.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>320</x>
+      <y>890</y>
+      <w>320</w>
+      <h>910</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>310.0;900.0;10.0;900.0;10.0;10.0</additional_attributes>
+  </element>
+</diagram>

@@ -1,0 +1,757 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>20</x>
+      <y>20</y>
+      <w>600</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*Class diagram 1: ui and core (MVC, Facade)*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLPackage</id>
+    <coordinates>
+      <x>30</x>
+      <y>90</y>
+      <w>2040</w>
+      <h>610</h>
+    </coordinates>
+    <panel_attributes>ui
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLPackage</id>
+    <coordinates>
+      <x>580</x>
+      <y>740</y>
+      <w>870</w>
+      <h>740</h>
+    </coordinates>
+    <panel_attributes>core
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>830</x>
+      <y>400</y>
+      <w>370</w>
+      <h>170</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;View&gt;&gt;
+MainWindow
+--
+-resultsView: ResultsView
+-detailPane: DetailPane
+--
++setMode(mode: SearchMode)
++showFolders(searchFolders: List&lt;SearchFolder&gt;)
++showStatus(status: IndexStatus)
++showError(message: String)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1720</x>
+      <y>240</y>
+      <w>320</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;View&gt;&gt;
+ResultsView
+--
++setResults(results: List&lt;SearchResult&gt;)
++getSelectedResults(): List&lt;SearchResult&gt;</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1710</x>
+      <y>480</y>
+      <w>340</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;View&gt;&gt;
+DetailPane
+--
++showPreview(preview: Preview)
++showAnswer(answer: Answer)
++showComparison(comparison: Comparison)
++showAgentStep(step: String)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>810</x>
+      <y>240</y>
+      <w>410</w>
+      <h>120</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;View&gt;&gt;
+SettingsDialog
+--
++showGlobalRules(rules: List&lt;ExclusionRule&gt;)
++showTestResult(succeeded: boolean, message: String)
++showPrivacyLog(entries: List&lt;PrivacyLogEntry&gt;)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>60</x>
+      <y>140</y>
+      <w>420</w>
+      <h>380</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Controller&gt;&gt;
+GuiController
+--
+-findAnythingService: FindAnythingService
+-conversation: Conversation
+-searchFilters: SearchFilters
+-latestQueryId: long
+--
++onQueryChanged(query: String)
++onFiltersChanged(searchFilters: SearchFilters)
++onAskSubmitted(request: String)
++onResultSelected(result: SearchResult)
++onCitationClicked(citation: Citation)
++onCompareRequested(oldFile: Path, newFile: Path)
++onAddFolder(folder: Path)
++onAddExclusion(pattern: String, folder: Path)
++onSetLocalOnly(folder: Path, localOnly: boolean)
++onRedactionToggled(category: String, enabled: boolean)
++onTestBackend(modelSettings: ModelSettings)
++onShowPrivacyLog()
++onNewConversation()
++onOpenConversation(id: String)
++onStatusChanged(status: IndexStatus)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>110</x>
+      <y>560</y>
+      <w>320</w>
+      <h>110</h>
+    </coordinates>
+    <panel_attributes>CliApp
+--
+-findAnythingService: FindAnythingService
+--
+_+main(args: String[])_
++run(args: String[]): int</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>610</x>
+      <y>790</y>
+      <w>820</w>
+      <h>670</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Facade&gt;&gt;
+FindAnythingService
+--
+-indexConfig: IndexConfig
+-settingsStore: SettingsStore
+-searchIndex: SearchIndex
+-indexMode: IndexMode
+-modelSettings: ModelSettings
+-indexer: Indexer
+-fileWatcher: FileWatcher
+-searchEngine: SearchEngine
+-documentComparator: DocumentComparator
+-agentController: AgentController
+-conversationStore: ConversationStore
+-llmClientFactory: LlmClientFactory
+-folderPolicy: FolderPolicy
+-redactor: Redactor
+-privacyLog: PrivacyLog
+-backgroundExecutor: ExecutorService
+--
++open(watchFiles: boolean): IndexMode
++close()
++addSearchFolder(folder: Path): SearchFolder
++removeSearchFolder(folder: Path)
++setFolderPaused(folder: Path, paused: boolean)
++addExclusion(pattern: String, folder: Path)
++search(query: String, searchFilters: SearchFilters): CompletableFuture&lt;List&lt;SearchResult&gt;&gt;
++ask(request: String, conversation: Conversation, progressListener: Consumer&lt;String&gt;): CompletableFuture&lt;Answer&gt;
++compare(oldFile: Path, newFile: Path): CompletableFuture&lt;Comparison&gt;
++preview(file: Path, highlight: String): CompletableFuture&lt;Preview&gt;
++newConversation(): Conversation
++listConversations(): List&lt;Conversation&gt;
++openConversation(id: String): Conversation
++testBackend(modelSettings: ModelSettings): CompletableFuture&lt;Boolean&gt;
++setBackend(modelSettings: ModelSettings)
++setLocalOnly(folder: Path, localOnly: boolean)
++setRedaction(category: String, enabled: boolean)
++getPrivacyLog(limit: int): List&lt;PrivacyLogEntry&gt;
++getIndexStatus(): IndexStatus
++rebuildIndex()
++addStatusListener(listener: IndexStatusListener)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1780</x>
+      <y>1280</y>
+      <w>190</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>agent.AgentController
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>930</x>
+      <y>1670</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>agent.Conversation
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1770</x>
+      <y>1370</y>
+      <w>210</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>agent.ConversationStore
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1790</x>
+      <y>1460</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>config.IndexConfig
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1790</x>
+      <y>1560</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>config.SettingsStore
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1790</x>
+      <y>1650</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>indexing.FileWatcher
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>900</x>
+      <y>1760</y>
+      <w>230</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>/indexing.IndexStatusListener/
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1800</x>
+      <y>1740</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>indexing.Indexer
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1790</x>
+      <y>1830</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>llm.LlmClientFactory
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1790</x>
+      <y>1930</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>privacy.FolderPolicy
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1790</x>
+      <y>2020</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>privacy.PrivacyLog
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1800</x>
+      <y>2110</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>privacy.Redactor
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1760</x>
+      <y>730</y>
+      <w>230</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>search.DocumentComparator
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1780</x>
+      <y>830</y>
+      <w>190</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>search.SearchEngine
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1790</x>
+      <y>920</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>storage.SearchIndex
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>790</x>
+      <y>1520</y>
+      <w>460</w>
+      <h>110</h>
+    </coordinates>
+    <panel_attributes>Runs on the JavaFX UI thread. Facade calls that return a
+CompletableFuture never block it; results come back through
+Platform.runLater(). onStatusChanged() is called on the
+indexing worker thread, so it hands updates over the same way.
+latestQueryId lets it discard results from outdated searches.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1640</x>
+      <y>1010</y>
+      <w>470</w>
+      <h>220</h>
+    </coordinates>
+    <panel_attributes>The only entry point for the GUI and the CLI.
+Methods that return a CompletableFuture start their work on
+backgroundExecutor and return immediately. The GUI never waits
+on a future; the CLI simply calls join().
+Other methods are quick and synchronous. Folder and exclusion
+changes are rejected when indexMode is READ_ONLY, because
+another process owns the index (see SM01).
+modelSettings is the model for new conversations; setBackend()
+changes it, and existing conversations keep their own model.
+A saved conversation whose model is no longer configured
+opens read-only.
+Preview and Comparison are simple result records.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>320</y>
+      <w>350</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1
+updates</panel_attributes>
+    <additional_attributes>10.0;10.0;340.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>400</y>
+      <w>370</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1
+updates</panel_attributes>
+    <additional_attributes>10.0;10.0;360.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1190</x>
+      <y>480</y>
+      <w>530</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;520.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1420</x>
+      <y>950</y>
+      <w>380</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;370.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1420</x>
+      <y>1280</y>
+      <w>370</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;360.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1190</x>
+      <y>330</y>
+      <w>550</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;80.0;540.0;80.0;540.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1420</x>
+      <y>860</y>
+      <w>370</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;360.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1420</x>
+      <y>1370</y>
+      <w>360</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;350.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1420</x>
+      <y>1430</y>
+      <w>390</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;380.0;10.0;380.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1420</x>
+      <y>770</y>
+      <w>360</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;30.0;350.0;30.0;350.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>410</x>
+      <y>660</y>
+      <w>210</w>
+      <h>150</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;140.0;200.0;140.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1410</x>
+      <y>1450</y>
+      <w>390</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;120.0;380.0;120.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1380</x>
+      <y>1450</y>
+      <w>420</w>
+      <h>220</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=0..1
+only in WRITER mode</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;210.0;410.0;210.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1350</x>
+      <y>1450</y>
+      <w>460</w>
+      <h>310</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=0..1
+only in WRITER mode</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;300.0;450.0;300.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>500</y>
+      <w>170</w>
+      <h>300</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;160.0;10.0;160.0;290.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1320</x>
+      <y>1450</y>
+      <w>480</w>
+      <h>400</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;390.0;470.0;390.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>210</y>
+      <w>1270</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1
+updates</panel_attributes>
+    <additional_attributes>10.0;10.0;1260.0;10.0;1260.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1290</x>
+      <y>1450</y>
+      <w>510</w>
+      <h>500</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;490.0;500.0;490.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1260</x>
+      <y>1450</y>
+      <w>540</w>
+      <h>590</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;580.0;530.0;580.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>450</x>
+      <y>510</y>
+      <w>1270</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1
+updates</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;80.0;1260.0;80.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1230</x>
+      <y>1450</y>
+      <w>580</w>
+      <h>680</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;50.0;60.0;50.0;60.0;670.0;570.0;670.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>420</x>
+      <y>510</y>
+      <w>520</w>
+      <h>1180</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=0..1
+current</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;30.0;30.0;30.0;30.0;1170.0;510.0;1170.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>470</y>
+      <w>440</w>
+      <h>1310</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;100.0;10.0;100.0;1300.0;430.0;1300.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1420</x>
+      <y>1110</y>
+      <w>230</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>220.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>470</x>
+      <y>440</y>
+      <w>330</w>
+      <h>1100</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>320.0;1090.0;30.0;1090.0;30.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+</diagram>

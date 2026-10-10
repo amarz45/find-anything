@@ -1,0 +1,745 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>816</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*SD04: Send a request to a cloud model (F13, F14; Decorator, Adapter)*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>320</x>
+      <y>390</y>
+      <w>370</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>loop
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>800</x>
+      <y>748</y>
+      <w>280</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>loop
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>320</x>
+      <y>550</y>
+      <w>780</w>
+      <h>408</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>310</x>
+      <y>658</y>
+      <w>800</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;790.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>300</x>
+      <y>340</y>
+      <w>820</w>
+      <h>648</h>
+    </coordinates>
+    <panel_attributes>loop
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>90</x>
+      <y>1276</y>
+      <w>1860</w>
+      <h>470</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>80</x>
+      <y>1526</y>
+      <w>1880</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;1870.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>330</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>650</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>810</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>990</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1190</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1370</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1570</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1910</x>
+      <y>200</y>
+      <w>20</w>
+      <h>1666</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;1656.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>40</x>
+      <y>150</y>
+      <w>170</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>caller:
+AgentController</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>250</x>
+      <y>160</y>
+      <w>190</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:RedactingLlmClient</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>590</x>
+      <y>160</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:FolderPolicy</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>760</x>
+      <y>160</y>
+      <w>130</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:Redactor</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>920</x>
+      <y>150</y>
+      <w>170</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>pattern:
+SensitivePattern</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1120</x>
+      <y>160</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:LoggingLlmClient</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1320</x>
+      <y>160</y>
+      <w>130</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:PrivacyLog</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1490</x>
+      <y>150</y>
+      <w>190</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>:LangChain4jClient
+(cloud ChatModel)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLActor</id>
+    <coordinates>
+      <x>1850</x>
+      <y>70</y>
+      <w>150</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>LLM Provider
+(cloud API)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>0</x>
+      <y>230</y>
+      <w>240</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>runs on the background thread
+that is handling the request
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>290</y>
+      <w>235</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+complete(request)</panel_attributes>
+    <additional_attributes>10.0;10.0;225.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>430</y>
+      <w>335</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+isLocalOnly(file)</panel_attributes>
+    <additional_attributes>10.0;10.0;325.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>470</y>
+      <w>335</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+localOnly</panel_attributes>
+    <additional_attributes>325.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>380</x>
+      <y>394</y>
+      <w>280</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[for each source file of the message]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>608</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+replace the content with
+"[withheld: local-only source]"</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>698</y>
+      <w>490</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+redact(message content)</panel_attributes>
+    <additional_attributes>10.0;10.0;480.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>815</x>
+      <y>788</y>
+      <w>195</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+findAll(text)</panel_attributes>
+    <additional_attributes>10.0;10.0;185.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>815</x>
+      <y>828</y>
+      <w>195</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+matches</panel_attributes>
+    <additional_attributes>185.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>860</x>
+      <y>752</y>
+      <w>210</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[for each enabled pattern]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>898</y>
+      <w>490</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+redactionResult</panel_attributes>
+    <additional_attributes>480.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>380</x>
+      <y>554</y>
+      <w>230</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[any source file is local-only]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>360</x>
+      <y>344</y>
+      <w>230</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[for each message in request]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>998</y>
+      <w>870</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+complete(redactedRequest)</panel_attributes>
+    <additional_attributes>10.0;10.0;860.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>370</x>
+      <y>1038</y>
+      <w>170</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>calls wrappedClient
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1195</x>
+      <y>1088</y>
+      <w>195</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+append(entry)</panel_attributes>
+    <additional_attributes>10.0;10.0;185.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1195</x>
+      <y>1128</y>
+      <w>390</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+complete(redactedRequest)</panel_attributes>
+    <additional_attributes>10.0;10.0;380.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1575</x>
+      <y>1186</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+convert the request to the
+library's messages and tool types</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1575</x>
+      <y>1226</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+HTTPS request (sent by the library)</panel_attributes>
+    <additional_attributes>10.0;10.0;345.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1575</x>
+      <y>1316</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+response</panel_attributes>
+    <additional_attributes>345.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1575</x>
+      <y>1356</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+convert to LlmResponse</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1195</x>
+      <y>1396</y>
+      <w>390</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+response</panel_attributes>
+    <additional_attributes>380.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>1436</y>
+      <w>870</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+response</panel_attributes>
+    <additional_attributes>860.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>1476</y>
+      <w>235</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+response</panel_attributes>
+    <additional_attributes>225.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1575</x>
+      <y>1566</y>
+      <w>355</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+error</panel_attributes>
+    <additional_attributes>345.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1195</x>
+      <y>1606</y>
+      <w>390</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+LlmException</panel_attributes>
+    <additional_attributes>380.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>335</x>
+      <y>1646</y>
+      <w>870</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+LlmException</panel_attributes>
+    <additional_attributes>860.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>1686</y>
+      <w>235</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+LlmException</panel_attributes>
+    <additional_attributes>225.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>150</x>
+      <y>1280</y>
+      <w>100</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[success]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>100</x>
+      <y>1540</y>
+      <w>290</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[timeout, network error, or HTTP error]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>90</x>
+      <y>1756</y>
+      <w>1860</w>
+      <h>70</h>
+    </coordinates>
+    <panel_attributes>The caller only sees the LlmClient interface. For a conversation with a local model, LlmClientFactory returns a
+LangChain4jClient wrapping an Ollama ChatModel, without the decorators, because nothing leaves the computer. A conversation
+never changes model, so text a local model saw can't reach a cloud model through the conversation history.
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>815</x>
+      <y>708</y>
+      <w>10</w>
+      <h>210</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1575</x>
+      <y>1138</y>
+      <w>10</w>
+      <h>488</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1195</x>
+      <y>1008</y>
+      <w>10</w>
+      <h>658</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>335</x>
+      <y>300</y>
+      <w>10</w>
+      <h>1406</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

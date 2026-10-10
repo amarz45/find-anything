@@ -1,0 +1,1489 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>800</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*SD01: Keep the index updated (UC11; F02, F03, F05; Observer)*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>300</x>
+      <y>660</y>
+      <w>1130</w>
+      <h>160</h>
+    </coordinates>
+    <panel_attributes>opt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>280</x>
+      <y>380</y>
+      <w>1170</w>
+      <h>470</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>270</x>
+      <y>530</y>
+      <w>1190</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;1180.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>600</x>
+      <y>1340</y>
+      <w>2130</w>
+      <h>360</h>
+    </coordinates>
+    <panel_attributes>loop
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>580</x>
+      <y>1290</y>
+      <w>2170</w>
+      <h>590</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>570</x>
+      <y>1720</y>
+      <w>2190</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2180.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>600</x>
+      <y>2828</y>
+      <w>2230</w>
+      <h>770</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>590</x>
+      <y>2958</y>
+      <w>2250</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2240.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>590</x>
+      <y>3148</y>
+      <w>2250</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2240.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>590</x>
+      <y>3278</y>
+      <w>2250</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2240.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>580</x>
+      <y>2508</y>
+      <w>2320</w>
+      <h>1120</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>570</x>
+      <y>2678</y>
+      <w>2340</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2330.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>560</x>
+      <y>1120</y>
+      <w>2360</w>
+      <h>2538</h>
+    </coordinates>
+    <panel_attributes>alt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>550</x>
+      <y>1900</y>
+      <w>2380</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2370.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>550</x>
+      <y>2090</y>
+      <w>2380</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2370.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>550</x>
+      <y>2280</y>
+      <w>2380</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;2370.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>600</x>
+      <y>3678</y>
+      <w>1970</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>opt
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>540</x>
+      <y>930</y>
+      <w>2730</w>
+      <h>3058</h>
+    </coordinates>
+    <panel_attributes>loop
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>310</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>610</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1010</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1190</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1490</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1830</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2030</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2230</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2530</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2930</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>3230</x>
+      <y>180</y>
+      <w>20</w>
+      <h>3848</h>
+    </coordinates>
+    <panel_attributes>lt=.
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;3838.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>0</x>
+      <y>235</y>
+      <w>3365</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-
+lw=2
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;3355.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>0</x>
+      <y>885</y>
+      <w>3365</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-
+lw=2
+layer=-1</panel_attributes>
+    <additional_attributes>10.0;10.0;3355.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLActor</id>
+    <coordinates>
+      <x>50</x>
+      <y>70</y>
+      <w>150</w>
+      <h>120</h>
+    </coordinates>
+    <panel_attributes>File System</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>250</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:FileWatcher</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>570</x>
+      <y>140</y>
+      <w>110</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:Indexer</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>950</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:IndexConfig</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1130</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:ChangeQueue</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1430</x>
+      <y>130</y>
+      <w>150</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>textExtractor:
+TextExtractor</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1780</x>
+      <y>140</y>
+      <w>130</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:Chunker</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1950</x>
+      <y>140</y>
+      <w>190</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:EmbeddingModel</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2170</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:ContentStore</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2470</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:SearchIndex</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>2850</x>
+      <y>110</y>
+      <w>190</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>listener:
+IndexStatusListener
+(GuiController)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>3170</x>
+      <y>140</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>:MainWindow</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>110</x>
+      <y>270</y>
+      <w>220</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+file event</panel_attributes>
+    <additional_attributes>10.0;10.0;210.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>350</x>
+      <y>310</y>
+      <w>230</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>subfolders, including ones
+created later, are watched too
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>315</x>
+      <y>420</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+offer(searchFolder)</panel_attributes>
+    <additional_attributes>10.0;10.0;885.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1220</x>
+      <y>460</y>
+      <w>210</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>a folder in the queue
+means "rescan this folder"
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>315</x>
+      <y>570</y>
+      <w>715</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+isIncluded(path)</panel_attributes>
+    <additional_attributes>10.0;10.0;705.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>315</x>
+      <y>610</y>
+      <w>715</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+included</panel_attributes>
+    <additional_attributes>705.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>315</x>
+      <y>700</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+offer(path)</panel_attributes>
+    <additional_attributes>10.0;10.0;885.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1220</x>
+      <y>740</y>
+      <w>190</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>repeated events for one
+path become one entry
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>360</x>
+      <y>664</y>
+      <w>100</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[included]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>340</x>
+      <y>384</y>
+      <w>230</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[events were lost (overflow)]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>290</x>
+      <y>544</y>
+      <w>200</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[a file or folder changed]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>610</x>
+      <y>970</y>
+      <w>600</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+takeReady(timeout)</panel_attributes>
+    <additional_attributes>10.0;10.0;590.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1220</x>
+      <y>1010</y>
+      <w>240</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>waits until some path has been
+unchanged for the quiet period
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>610</x>
+      <y>1070</y>
+      <w>600</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+path, or null after the timeout</panel_attributes>
+    <additional_attributes>590.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1160</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+embedNextBatch()</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1200</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+findContentWithoutEmbeddings(batchSize)</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1240</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+contentHashes</panel_attributes>
+    <additional_attributes>1925.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1380</y>
+      <w>1635</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+get(contentHash)</panel_attributes>
+    <additional_attributes>10.0;10.0;1625.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1420</y>
+      <w>1635</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+chunks</panel_attributes>
+    <additional_attributes>1625.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1460</y>
+      <w>1435</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+embed(chunk texts)</panel_attributes>
+    <additional_attributes>10.0;10.0;1425.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1500</y>
+      <w>1435</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+vectors</panel_attributes>
+    <additional_attributes>1425.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1540</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+addEmbeddings(contentHash, vectors)</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2560</x>
+      <y>1580</y>
+      <w>150</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>updates every file
+with this content
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1640</y>
+      <w>1635</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+addEmbeddings(contentHash, vectors)</panel_attributes>
+    <additional_attributes>10.0;10.0;1625.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>660</x>
+      <y>1344</y>
+      <w>190</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[for each contentHash]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1760</y>
+      <w>1635</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+pruneUnreferenced(maxAge, searchIndex)</panel_attributes>
+    <additional_attributes>10.0;10.0;1625.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2260</x>
+      <y>1800</y>
+      <w>240</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>deletes content that no indexed
+file has used for maxAge
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>640</x>
+      <y>1294</y>
+      <w>230</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[contentHashes is not empty]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>590</x>
+      <y>1734</y>
+      <w>260</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[nothing to embed (occasionally)]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>1940</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+remove(path)</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2560</x>
+      <y>1980</y>
+      <w>290</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>removes the file, or every file under
+a folder, from results immediately;
+ContentStore keeps their chunks, so a
+rename or move reuses them
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2130</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+rescanFolder(path)</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>650</x>
+      <y>2170</y>
+      <w>330</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>compares sizes and modification times
+with the index, offers changed files to
+ChangeQueue, and removes entries for files
+that are gone or now excluded
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2320</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+indexFile(path)</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2378</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+compute contentHash
+(reads the bytes; no extraction)</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2418</y>
+      <w>1635</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+get(contentHash)</panel_attributes>
+    <additional_attributes>10.0;10.0;1625.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2458</y>
+      <w>1635</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+storedChunks</panel_attributes>
+    <additional_attributes>1625.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2548</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+put(file, storedChunks)</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2560</x>
+      <y>2588</y>
+      <w>320</w>
+      <h>70</h>
+    </coordinates>
+    <panel_attributes>copies the stored chunks and embeddings
+under this path; nothing is extracted
+or embedded again
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2718</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+extract(path)</panel_attributes>
+    <additional_attributes>10.0;10.0;885.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1520</x>
+      <y>2758</y>
+      <w>270</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>parses in isolation from the app,
+with a time limit and a memory limit
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2868</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+UnsupportedFormatException</panel_attributes>
+    <additional_attributes>885.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2908</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+put(file [METADATA_ONLY], no chunks)</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>2998</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+IOException</panel_attributes>
+    <additional_attributes>885.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3038</y>
+      <w>595</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+offer(path)</panel_attributes>
+    <additional_attributes>10.0;10.0;585.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1220</x>
+      <y>3078</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>retried after another
+quiet period
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3188</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+ExtractionException</panel_attributes>
+    <additional_attributes>885.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3228</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+put(file [FAILED], no chunks)</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3318</y>
+      <w>895</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+document (pages, file type, metadata)</panel_attributes>
+    <additional_attributes>885.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3358</y>
+      <w>1235</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+split(path, document)</panel_attributes>
+    <additional_attributes>10.0;10.0;1225.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3398</y>
+      <w>1235</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+chunks (no embeddings yet)</panel_attributes>
+    <additional_attributes>1225.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3438</y>
+      <w>1635</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+put(contentHash, chunks)</panel_attributes>
+    <additional_attributes>10.0;10.0;1625.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3478</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+put(file, chunks)</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2560</x>
+      <y>3518</y>
+      <w>250</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>the file is keyword-searchable
+now; phase 2 adds embeddings
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>660</x>
+      <y>2832</y>
+      <w>180</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[unsupported format]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>610</x>
+      <y>2972</y>
+      <w>260</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[file is locked by another program]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>610</x>
+      <y>3162</y>
+      <w>450</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[corrupt, password-protected, or parsing hit a limit or crashed]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>610</x>
+      <y>3292</y>
+      <w>100</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[success]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>640</x>
+      <y>2512</y>
+      <w>570</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[storedChunks is not empty (unchanged, renamed, moved, restored, or a copy)]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>590</x>
+      <y>2692</y>
+      <w>130</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[new content]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>620</x>
+      <y>1124</y>
+      <w>280</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[path is null (nothing ready): phase 2]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>570</x>
+      <y>1914</y>
+      <w>470</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[path no longer exists (deleted, moved away, or a temporary file)]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>570</x>
+      <y>2104</y>
+      <w>450</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[path is a folder (startup, new folder, overflow, or rule change)]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>570</x>
+      <y>2294</y>
+      <w>180</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[path is a file: phase 1]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3718</y>
+      <w>1935</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+commit()</panel_attributes>
+    <additional_attributes>10.0;10.0;1925.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>660</x>
+      <y>3682</y>
+      <w>480</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[the queue is empty, or several files changed since the last commit]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3788</y>
+      <w>60</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+notifyStatus()</panel_attributes>
+    <additional_attributes>10.0;10.0;50.0;10.0;50.0;30.0;10.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>615</x>
+      <y>3828</y>
+      <w>2335</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;
+onStatusChanged(status)</panel_attributes>
+    <additional_attributes>10.0;10.0;2325.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2930</x>
+      <y>3868</y>
+      <w>320</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+showStatus(status)</panel_attributes>
+    <additional_attributes>10.0;10.0;310.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2960</x>
+      <y>3908</y>
+      <w>230</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>handed to the JavaFX thread
+with Platform.runLater()
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>600</x>
+      <y>934</y>
+      <w>170</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>[until stop() is called]
+bg=white
+layer=3</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>315</x>
+      <y>310</y>
+      <w>10</w>
+      <h>550</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>615</x>
+      <y>1110</y>
+      <w>10</w>
+      <h>2858</h>
+    </coordinates>
+    <panel_attributes>bg=white
+layer=1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1450</x>
+      <y>230</y>
+      <w>460</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>*Watcher thread: record the change and return immediately*
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLGeneric</id>
+    <coordinates>
+      <x>1430</x>
+      <y>880</y>
+      <w>490</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>*Indexing worker thread: the only thread that writes to the index*
+bg=white
+layer=2</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

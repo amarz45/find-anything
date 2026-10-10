@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>20</x>
+      <y>20</y>
+      <w>700</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*SM01: Index lifecycle in one process (IndexerState)*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLSpecialState</id>
+    <coordinates>
+      <x>550</x>
+      <y>80</y>
+      <w>20</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>type=initial</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>450</x>
+      <y>150</y>
+      <w>220</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>Opening
+--
+SearchIndex.open() tries
+to take the write lock</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>1150</x>
+      <y>150</y>
+      <w>330</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>ReadOnly
+--
+searches only; no watcher or worker
+every few seconds / SearchIndex.refresh()</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>120</x>
+      <y>300</y>
+      <w>980</w>
+      <h>470</h>
+    </coordinates>
+    <panel_attributes>Writer
+valign=top
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>440</x>
+      <y>830</y>
+      <w>240</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>Stopping
+--
+finish the current task,
+commit, release the write lock</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLSpecialState</id>
+    <coordinates>
+      <x>550</x>
+      <y>990</y>
+      <w>20</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>type=final</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>550</x>
+      <y>90</y>
+      <w>20</w>
+      <h>70</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+FindAnythingService.open()</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;60.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>660</x>
+      <y>180</y>
+      <w>500</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=0,-20
+lock held by
+another process</panel_attributes>
+    <additional_attributes>10.0;10.0;490.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>510</x>
+      <y>220</y>
+      <w>20</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+lock acquired</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;80.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>550</x>
+      <y>760</y>
+      <w>20</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+close()</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;70.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>550</x>
+      <y>900</y>
+      <w>20</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>560</x>
+      <y>220</y>
+      <w>760</w>
+      <h>790</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+close()</panel_attributes>
+    <additional_attributes>750.0;10.0;750.0;780.0;10.0;780.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLSpecialState</id>
+    <coordinates>
+      <x>550</x>
+      <y>340</y>
+      <w>20</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>type=initial</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLSpecialState</id>
+    <coordinates>
+      <x>520</x>
+      <y>420</y>
+      <w>80</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>type=decision</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>160</x>
+      <y>420</y>
+      <w>170</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>Reconciling
+--
+rescanning a folder</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>790</x>
+      <y>420</y>
+      <w>270</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>Idle
+--
+occasionally prunes unreferenced
+content; waits in takeReady()</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>170</x>
+      <y>650</y>
+      <w>260</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>Indexing
+--
+indexing a file, or linking it to
+content already stored (phase 1)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>690</x>
+      <y>650</y>
+      <w>320</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>Embedding
+--
+embedding a batch of chunks (phase 2)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>550</x>
+      <y>350</y>
+      <w>20</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=0,-10
+search folders offered
+to ChangeQueue</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;70.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>320</x>
+      <y>440</y>
+      <w>220</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+[a folder is ready]</panel_attributes>
+    <additional_attributes>210.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>320</x>
+      <y>460</y>
+      <w>220</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=0,30
+done</panel_attributes>
+    <additional_attributes>10.0;10.0;210.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>580</x>
+      <y>440</y>
+      <w>220</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+[nothing to do]</panel_attributes>
+    <additional_attributes>10.0;10.0;210.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>580</x>
+      <y>460</y>
+      <w>220</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=0,30
+a path becomes ready</panel_attributes>
+    <additional_attributes>210.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>310</x>
+      <y>475</y>
+      <w>245</w>
+      <h>185</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=-70,0
+[a file is ready]</panel_attributes>
+    <additional_attributes>235.0;10.0;10.0;175.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>370</x>
+      <y>485</y>
+      <w>195</w>
+      <h>175</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=30,10
+done</panel_attributes>
+    <additional_attributes>10.0;165.0;185.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>565</x>
+      <y>475</y>
+      <w>245</w>
+      <h>185</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=100,-10
+[nothing ready,
+chunks need embeddings]</panel_attributes>
+    <additional_attributes>10.0;10.0;235.0;175.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>555</x>
+      <y>485</y>
+      <w>195</w>
+      <h>175</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+cpos=-50,10
+batch done</panel_attributes>
+    <additional_attributes>185.0;165.0;10.0;10.0</additional_attributes>
+  </element>
+</diagram>

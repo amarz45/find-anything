@@ -1,0 +1,25 @@
+# Pandoc settings for building stage1-report.pdf. See the repository README.
+# Run from this folder (docs/), so the diagram paths in the report resolve:
+#   pandoc -d pdf.yaml
+from: gfm
+to: pdf
+pdf-engine: typst
+input-files:
+  - stage1-report.md
+output-file: stage1-report.pdf
+# The report's first "#" heading becomes the PDF's title.
+shift-heading-level-by: -1
+variables:
+  papersize: us-letter
+  margin:
+    x: 2cm
+    y: 2cm
+  fontsize: 10pt
+  # Typst rules: let long tables break across pages, and keep table text
+  # small, left-aligned, and unhyphenated so class and method names stay intact.
+  header-includes: |
+    #show figure: set block(breakable: true)
+    #show table: set text(size: 7.5pt, hyphenate: false)
+    #show table: set par(justify: false)
+filters:
+  - table-widths.lua

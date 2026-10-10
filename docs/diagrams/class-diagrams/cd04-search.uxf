@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>20</x>
+      <y>20</y>
+      <w>600</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*Class diagram 4: search*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLPackage</id>
+    <coordinates>
+      <x>30</x>
+      <y>90</y>
+      <w>1140</w>
+      <h>360</h>
+    </coordinates>
+    <panel_attributes>search
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>60</x>
+      <y>270</y>
+      <w>650</w>
+      <h>150</h>
+    </coordinates>
+    <panel_attributes>SearchEngine
+--
+-searchIndex: SearchIndex
+-embeddingModel: EmbeddingModel
+-semanticSearchEnabled: boolean
+--
++search(query: String, searchFilters: SearchFilters, limit: int): List&lt;SearchResult&gt;
++setSemanticSearchEnabled(enabled: boolean)
+-fuseRankings(keywordHits: List&lt;ChunkHit&gt;, semanticHits: List&lt;ChunkHit&gt;): List&lt;ChunkHit&gt;</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>960</x>
+      <y>300</y>
+      <w>160</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>SearchResult
+--
+-file: IndexedFile
+-bestChunk: Chunk
+-score: double</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>220</x>
+      <y>140</y>
+      <w>330</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>DocumentComparator
+--
+-searchIndex: SearchIndex
+--
++diff(oldFile: Path, newFile: Path): DiffResult</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>940</x>
+      <y>140</y>
+      <w>210</w>
+      <h>120</h>
+    </coordinates>
+    <panel_attributes>DiffResult
+--
+-oldFile: Path
+-newFile: Path
+-changes: List&lt;DiffHunk&gt;
+--
++isEmpty(): boolean</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>920</x>
+      <y>800</y>
+      <w>230</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>/embedding.EmbeddingModel/
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1410</x>
+      <y>280</y>
+      <w>130</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>storage.Chunk
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1390</x>
+      <y>380</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>storage.IndexedFile
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>960</x>
+      <y>480</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>storage.SearchIndex
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>830</x>
+      <y>580</y>
+      <w>420</w>
+      <h>180</h>
+    </coordinates>
+    <panel_attributes>Safe to call from several background threads at once:
+it only reads the index. fuseRankings() merges keyword
+and semantic hits by rank (reciprocal rank fusion).
+If the embedding model is unavailable, or the CLI gets
+--keyword-only, semanticSearchEnabled is false and only
+keyword hits are used. The ranked ChunkHits are grouped
+by file path into SearchResults, so copies of a file are
+separate results.
+Each DiffHunk in a DiffResult is one changed region.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1110</x>
+      <y>310</y>
+      <w>310</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1
+bestChunk</panel_attributes>
+    <additional_attributes>10.0;10.0;300.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1110</x>
+      <y>380</y>
+      <w>290</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;280.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>700</x>
+      <y>330</y>
+      <w>270</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+creates</panel_attributes>
+    <additional_attributes>10.0;10.0;260.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>540</x>
+      <y>170</y>
+      <w>410</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+creates</panel_attributes>
+    <additional_attributes>10.0;10.0;400.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>690</x>
+      <y>410</y>
+      <w>280</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;80.0;270.0;80.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>540</x>
+      <y>210</y>
+      <w>430</w>
+      <h>320</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;380.0;10.0;380.0;310.0;420.0;310.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>660</x>
+      <y>410</y>
+      <w>270</w>
+      <h>410</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;400.0;260.0;400.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>700</x>
+      <y>390</y>
+      <w>150</w>
+      <h>200</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>140.0;190.0;140.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+</diagram>
