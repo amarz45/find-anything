@@ -1,0 +1,40 @@
+# Every library and plugin version used by the build, in one place.
+# Versions checked against the projects' release tags on 2026-10-23.
+
+[versions]
+lucene = "10.5.2"
+tika = "4.1.0"
+langchain4j = "1.22.0"
+jackson = "2.22.4"            # the same 2.x line that Tika and LangChain4j use
+picocli = "4.7.7"
+directoryWatcher = "0.19.1"
+javafx = "27"                 # JavaFX 27 needs JDK 25 or newer
+junit = "6.1.3"
+assertj = "3.27.7"
+googleJavaFormat = "1.36.1"   # same version as the google-java-format IntelliJ plugin
+spotless = "8.10.4"
+
+[libraries]
+lucene-core = { module = "org.apache.lucene:lucene-core", version.ref = "lucene" }
+lucene-analysis-common = { module = "org.apache.lucene:lucene-analysis-common", version.ref = "lucene" }
+lucene-queryparser = { module = "org.apache.lucene:lucene-queryparser", version.ref = "lucene" }
+
+tika-pipes-fork-parser = { module = "org.apache.tika:tika-pipes-fork-parser", version.ref = "tika" }
+
+langchain4j-bom = { module = "dev.langchain4j:langchain4j-bom", version.ref = "langchain4j" }
+langchain4j-open-ai = { module = "dev.langchain4j:langchain4j-open-ai" }   # OpenRouter (OpenAI-compatible)
+langchain4j-ollama = { module = "dev.langchain4j:langchain4j-ollama" }
+
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
+
+picocli = { module = "info.picocli:picocli", version.ref = "picocli" }
+directory-watcher = { module = "io.methvin:directory-watcher", version.ref = "directoryWatcher" }
+
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+
+[plugins]
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

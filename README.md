@@ -4,6 +4,41 @@ Find Anything is a cross-platform desktop application (JavaFX GUI and a `findany
 
 This is the EECS3311 (Fall 2026) course project.
 
+## Stage 2: implementation (in progress)
+
+The application is being built in Stage 2 (due November 10, 2026). This section will grow into
+full installation and usage instructions. `./gradlew build` works now; the run commands work once
+the CLI exists.
+
+### Prerequisites
+
+- Git.
+- Nothing else for building: the Gradle wrapper downloads Gradle, and Gradle downloads JDK 25 if it
+  isn't installed.
+- An [OpenRouter](https://openrouter.ai) API key for the cloud model, or [Ollama](https://ollama.com)
+  for a local model.
+
+### Local configuration (API keys)
+
+Real keys go only in a local `.env` file, which Git ignores. Start from the committed example:
+
+```
+cp .env.example .env
+```
+
+Then open `.env` and replace the placeholders with your own key and model names. Never commit
+`.env` or put a key anywhere else.
+
+### Build and run
+
+```
+./gradlew build                      # compile, check formatting, run tests
+./gradlew run --args="--help"        # run the app with findany arguments
+./gradlew installDist                # make the launcher: build/install/findany/bin/findany
+```
+
+On Windows, use `gradlew.bat` in Command Prompt, or `.\gradlew` in PowerShell.
+
 ## Stage 1: design
 
 **[Read the Stage 1 design report](docs/stage1-report.md)**
@@ -14,9 +49,17 @@ The report covers the project overview, feature specifications, UML class, use-c
 
 ```
 README.md                this file
+AGENTS.md                instructions for AI coding agents working on this repository
+build.gradle.kts         the Gradle build (versions in gradle/libs.versions.toml)
+.env.example             template for the local, git-ignored .env file with API keys
+src/                     application and test source code
+testdata/                fictional sample files for testing and demos, and their fact sheet
 docs/
   stage1-report.md       the Stage 1 design report (the main version)
   stage1-report.pdf      PDF copy of the report, built from the Markdown file
+  traceability.md        feature-to-implementation mapping, kept up to date during Stage 2
+  logs/                  AI collaboration log, design changes, defects found
+  notes/                 working notes (Tika findings, handoff notes between sessions)
   pdf.yaml               settings for building the PDF
   table-widths.lua       small filter that sizes table columns in the PDF
   diagrams/              UMLet sources (.uxf) and images (.png) of every diagram

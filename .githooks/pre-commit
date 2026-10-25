@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Stops a commit when Java code isn't formatted. Turn the hooks on once per clone:
+#   git config core.hooksPath .githooks
+# To fix a failure, run ./gradlew spotlessApply, stage the changes, and commit again.
+set -euo pipefail
+
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '\.java$'; then
+  if ! ./gradlew --quiet spotlessCheck; then
+    echo "Formatting check failed. Run ./gradlew spotlessApply, stage the changes, and commit again." >&2
+    exit 1
+  fi
+fi

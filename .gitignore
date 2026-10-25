@@ -1,0 +1,22 @@
+# Gradle and build output
+.gradle/
+build/
+out/
+
+# IntelliJ IDEA (each machine keeps its own project settings)
+.idea/
+*.iml
+
+# Local secrets: never commit real API keys (copy .env.example to .env instead)
+.env
+.env.*
+!.env.example
+config.local.json
+
+# Claude Code personal files (the shared .claude/settings.json is committed)
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Operating-system clutter
+.DS_Store
+Thumbs.db
