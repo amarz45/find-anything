@@ -9,7 +9,6 @@ import io.github.amarz45.findanything.storage.ExtractionStatus;
 import io.github.amarz45.findanything.storage.IndexedFile;
 import io.github.amarz45.findanything.storage.SearchFilters;
 import io.github.amarz45.findanything.storage.SearchIndex;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -25,33 +24,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** Drives the worker with a scripted extractor, so the tests are fast and deterministic. */
 class IndexerTest {
-
-    /** Reads text files; file names script the failures. */
-    static final class ScriptedExtractor implements TextExtractor {
-        @Override
-        public ExtractedDocument extract(Path file)
-                throws UnsupportedFormatException, IOException, ExtractionException {
-            String name = file.getFileName().toString();
-            if (name.endsWith(".bin")) {
-                throw new UnsupportedFormatException("application/octet-stream");
-            }
-            if (name.contains("corrupt")) {
-                throw new ExtractionException("the file is corrupt");
-            }
-            if (name.contains("locked")) {
-                throw new IOException("locked by another program");
-            }
-            String text = Files.readString(file);
-            if (name.endsWith(".pdf")) {
-                return new ExtractedDocument(
-                        "application/pdf", List.of(text.split("\f")), true, false);
-            }
-            return new ExtractedDocument("text/plain", List.of(text), false, false);
-        }
-
-        @Override
-        public void close() {}
-    }
 
     @TempDir Path home;
     Path docs;
