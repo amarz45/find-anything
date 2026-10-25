@@ -254,3 +254,14 @@ surprising.)*
   - Done: the user set up IntelliJ, JDK 25 and IDE Index MCP. The setup files and test corpus were
     created; this handoff was written.
   - Not done yet: everything from Session 1, step 1 onward.
+- **2026-10-24 (Session 1: setup, Claude Code):**
+  - Done: all of Session 1. The setup is committed (`c5e8319`) and pushed, and CI passed on both
+    OSes. The wrapper was refreshed for Gradle 9.8.2 with a distribution checksum.
+    `./gradlew build` passes with no sources. Every dependency resolves at the catalog's versions
+    with no fixes needed (Jackson conflicts settle on 2.22.4), and the only SLF4J backend is Tika's
+    Log4j 2 binding.
+  - Workflow from now on: `master` takes changes only through pull requests that pass both CI
+    checks. Group small commits into one PR, and don't squash merge, because each code commit has
+    to count toward the weekly five. `gh` is installed but needs `gh auth login` before Claude can
+    use it.
+  - Next: Slice 1, item 1 (the records). Period 1 ends Mon Oct 26: 5 code commits by then.
