@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Logging for the app's own process: warnings and errors only, on stderr, so the CLI's
+     stdout stays clean. The forked Tika parser has its own file, tika-fork-log4j2.xml. -->
+<Configuration status="WARN">
+  <Appenders>
+    <Console name="console" target="SYSTEM_ERR">
+      <PatternLayout pattern="%-5p %c{1}: %m%n"/>
+    </Console>
+  </Appenders>
+  <Loggers>
+    <!-- Tika warns about a missing plugins folder at every start; plugins come from the class path. -->
+    <Logger name="org.apache.tika" level="error"/>
+    <Root level="warn">
+      <AppenderRef ref="console"/>
+    </Root>
+  </Loggers>
+</Configuration>
