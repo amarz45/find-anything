@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.jackson.jsr310)
     implementation(libs.picocli)
     implementation(libs.directory.watcher)
+    implementation(libs.jul.to.slf4j)
 
     for (module in listOf("base", "graphics", "controls")) {
         implementation("org.openjfx:javafx-$module:${libs.versions.javafx.get()}:$javafxPlatform")

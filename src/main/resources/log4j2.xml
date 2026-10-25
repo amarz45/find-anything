@@ -10,6 +10,8 @@
   <Loggers>
     <!-- Tika warns about a missing plugins folder at every start; plugins come from the class path. -->
     <Logger name="org.apache.tika" level="error"/>
+    <!-- Lucene (through java.util.logging) suggests enabling the vector incubator module at every start. -->
+    <Logger name="org.apache.lucene" level="error"/>
     <Root level="warn">
       <AppenderRef ref="console"/>
     </Root>

@@ -32,6 +32,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.bridge.SLF4JBridgeHandler;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -77,6 +78,9 @@ public final class CliApp implements Callable<Integer> {
     }
 
     public static void main(String[] args) {
+        // Lucene logs through java.util.logging; send that through SLF4J so log4j2.xml governs it.
+        SLF4JBridgeHandler.removeHandlersForRootLogger();
+        SLF4JBridgeHandler.install();
         int exitCode;
         Path home =
                 resolveHome(
@@ -185,17 +189,18 @@ public final class CliApp implements Callable<Integer> {
     /** Waits until the index has caught up, showing progress when it takes more than a moment. */
     private void catchUp(PrintWriter err) throws InterruptedException {
         long started = System.nanoTime();
-        boolean shown = false;
+        int lastShown = -1;
         IndexStatus status;
         while (!(status = findAnythingService.getIndexStatus()).isUpToDate()) {
-            if (System.nanoTime() - started > PROGRESS_AFTER.toNanos()) {
-                err.print("\rIndexing... " + status.pendingFiles() + " pending   ");
+            if (System.nanoTime() - started > PROGRESS_AFTER.toNanos()
+                    && status.pendingFiles() != lastShown) {
+                lastShown = status.pendingFiles();
+                err.print("\rIndexing... " + lastShown + " pending   ");
                 err.flush();
-                shown = true;
             }
             Thread.sleep(100);
         }
-        if (shown) {
+        if (lastShown >= 0) {
             err.println();
         }
     }
@@ -623,9 +628,10 @@ public final class CliApp implements Callable<Integer> {
                         formatDate(file.modifiedTime()),
                         statusNote(file));
                 if (result.bestChunk() != null) {
+                    String unit = file.fileType().equals("pptx") ? "slide " : "page ";
                     String where =
                             result.bestChunk().pageNumber() > 0
-                                    ? "page " + result.bestChunk().pageNumber() + ": "
+                                    ? unit + result.bestChunk().pageNumber() + ": "
                                     : "";
                     out.println("   " + where + snippet(result.bestChunk().text(), 160));
                 }

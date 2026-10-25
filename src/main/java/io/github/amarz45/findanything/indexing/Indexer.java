@@ -21,6 +21,8 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -155,11 +157,11 @@ public final class Indexer {
     private void runLoop() {
         try {
             while (!stopRequested) {
-                if (rebuildRequested.getAndSet(false)) {
-                    dropEverything();
-                }
                 long seenRequests = requested.get(); // read before taking, see getStatus()
                 Path path = changeQueue.takeReady(POLL);
+                if (rebuildRequested.getAndSet(false)) {
+                    dropEverything(); // before rescanning the folders rebuild() just offered
+                }
                 if (path != null) {
                     handle(path);
                     if (changeQueue.size() == 0 || uncommittedChanges >= COMMIT_EVERY_FILES) {
@@ -270,7 +272,7 @@ public final class Indexer {
                                             && indexed.get().sizeBytes() == attrs.size()
                                             && indexed.get()
                                                     .modifiedTime()
-                                                    .equals(attrs.lastModifiedTime().toInstant());
+                                                    .equals(modifiedTime(attrs));
                             if (!unchanged) {
                                 changeQueue.offer(file);
                             }
@@ -354,7 +356,7 @@ public final class Indexer {
                         file.toAbsolutePath().normalize(),
                         IndexedFile.fileTypeOf(file),
                         attrs.size(),
-                        attrs.lastModifiedTime().toInstant(),
+                        modifiedTime(attrs),
                         contentHash,
                         status);
         searchIndex.put(indexed, chunks);
@@ -379,6 +381,14 @@ public final class Indexer {
                 log.error("A status listener failed: {}", e.toString());
             }
         }
+    }
+
+    /**
+     * The file's modification time at the precision the index stores (milliseconds). File systems
+     * report nanoseconds; comparing those with the stored value would see every file as changed.
+     */
+    private static Instant modifiedTime(BasicFileAttributes attrs) {
+        return attrs.lastModifiedTime().toInstant().truncatedTo(ChronoUnit.MILLIS);
     }
 
     private static String sha256(Path file) throws IOException {

@@ -123,6 +123,18 @@ class IndexerTest {
     }
 
     @Test
+    void aRescanWithNoChangesIndexesNothingAgain() throws Exception {
+        rescanAndWait();
+        IndexedFile before = index.getFile(docs.resolve("lease.pdf")).orElseThrow();
+        notifications.clear();
+        rescanAndWait();
+        assertThat(notifications)
+                .extracting(IndexStatus::state)
+                .doesNotContain(IndexerState.INDEXING);
+        assertThat(index.getFile(docs.resolve("lease.pdf")).orElseThrow()).isEqualTo(before);
+    }
+
+    @Test
     void aDeletedFileRequestedDirectlyIsRemoved() throws Exception {
         rescanAndWait();
         Path lease = docs.resolve("lease.pdf");
