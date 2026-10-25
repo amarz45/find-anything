@@ -60,6 +60,9 @@ application {
     applicationName = "findany"
     // `findany` alone prints help; `findany gui` opens the GUI (see docs/notes/handoff.md).
     mainClass = "io.github.amarz45.findanything.ui.CliApp"
+    // Lucene uses the foreign-function API for memory-mapped index files; without this flag the
+    // JDK prints a "restricted method" warning on every start.
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -69,6 +72,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
     // Tests never touch your real index or settings: FINDANY_HOME points at the build folder.
     environment("FINDANY_HOME", layout.buildDirectory.dir("test-findany-home").get().asFile.absolutePath)
     testLogging {
