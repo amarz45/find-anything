@@ -26,8 +26,8 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew build
-      - name: Upload reports when the build fails
-        if: failure()
+      - name: Upload the test reports (they hold the test output and timings)
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: reports-${{ matrix.os }}
