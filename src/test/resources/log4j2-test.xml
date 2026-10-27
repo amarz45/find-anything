@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Logging while tests run (Log4j prefers this file to log4j2.xml on the test class path).
+     The app's own packages log at INFO with a timestamp, so a test report from CI shows what
+     the indexing worker did and how long each file took. Libraries stay at ERROR. -->
+<Configuration status="WARN">
+  <Appenders>
+    <Console name="console" target="SYSTEM_ERR">
+      <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p %c{1}: %m%n"/>
+    </Console>
+  </Appenders>
+  <Loggers>
+    <Logger name="io.github.amarz45.findanything" level="info"/>
+    <Logger name="org.apache.tika" level="error"/>
+    <Logger name="org.apache.lucene" level="error"/>
+    <Root level="warn">
+      <AppenderRef ref="console"/>
+    </Root>
+  </Loggers>
+</Configuration>

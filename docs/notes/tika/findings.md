@@ -60,7 +60,11 @@ main branch (future 4.2.0) a plugins folder turns off class-path plugins.
 - Child start: ~4.4–5 s. Warm parses: small PDF 15–50 ms, DOCX 30–40 ms, PPTX 40–70 ms,
   MD 6–10 ms; 1,500-page PDF 3.3–5 s.
 - The child exits after ~60 s idle (`socketTimeoutMillis`); the next file pays the start again.
-- First PDF on a machine builds PDFBox's font cache at `~/.pdfbox.cache` (0.4–11 s here).
+- The first PDF with a non-embedded font (ReportLab's Helvetica, say) makes PDFBox scan every
+  system font once and write `.pdfbox.cache` (0.4–11 s here; **60 s on GitHub's Windows runner**,
+  where it timed out the corpus test on 2026-10-27). The cache lives in `user.home` unless
+  `-Dpdfbox.fontcache=<folder>` is set; `IsolatedTextExtractor` puts it in the app's Tika folder,
+  since an unwritable home folder would mean a rescan at every child restart.
 - Interrupting the calling thread: `parse()` throws `InterruptedException` within ~0.5 s and the
   interrupt flag stays set. The next parse replaces the child (~5 s).
 - `close()` stops the child in ~30 ms. If the app is killed (`kill -9`), the child exits within
