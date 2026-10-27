@@ -30,6 +30,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -52,18 +53,24 @@ class FindAnythingServiceTest {
                 Executors.newFixedThreadPool(2));
     }
 
-    static void await(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+    /** Generous because CI's Windows runner starts the Tika child JVM and parses far slower. */
+    static final Duration WAIT = Duration.ofSeconds(180);
+
+    static void await(BooleanSupplier condition, Supplier<String> state)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + WAIT.toNanos();
         while (!condition.getAsBoolean()) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("timed out waiting");
+                throw new AssertionError("timed out waiting; " + state.get());
             }
             Thread.sleep(20);
         }
     }
 
     static void awaitUpToDate(FindAnythingService service) throws InterruptedException {
-        await(() -> service.getIndexStatus().isUpToDate());
+        await(
+                () -> service.getIndexStatus().isUpToDate(),
+                () -> "index status " + service.getIndexStatus());
     }
 
     @Test
@@ -200,10 +207,8 @@ class FindAnythingServiceTest {
             assertThat(reader.search("alpha", SearchFilters.NONE).join()).isEmpty();
             reader.getIndexConfig().addFolder(docs);
             await(
-                    () ->
-                            !reader.search("alpha", SearchFilters.NONE)
-                                    .join()
-                                    .isEmpty()); // after a refresh
+                    () -> !reader.search("alpha", SearchFilters.NONE).join().isEmpty(),
+                    () -> "the reader has not seen the writer's commit"); // after a refresh
         }
     }
 }
