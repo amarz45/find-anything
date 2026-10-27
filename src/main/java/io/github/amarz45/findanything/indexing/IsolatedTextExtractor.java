@@ -99,7 +99,11 @@ public final class IsolatedTextExtractor implements TextExtractor {
                         .setUserConfigPath(tikaConfig)
                         .setTimeoutLimits(timeouts)
                         .addJvmArg("-Xmx" + Math.max(1, maxMemoryBytes / (1024 * 1024)) + "m")
-                        .addJvmArg("-Dlog4j2.configurationFile=classpath:tika-fork-log4j2.xml");
+                        .addJvmArg("-Dlog4j2.configurationFile=classpath:tika-fork-log4j2.xml")
+                        // PDFBox scans every system font once for PDFs with non-embedded fonts
+                        // (about a minute on Windows) and caches the result; keep the cache with
+                        // the app's data rather than in the home folder, which may not be writable.
+                        .addJvmArg("-Dpdfbox.fontcache=" + appDataFolder.toAbsolutePath());
         this.detector = new DefaultDetector();
         try {
             this.parser = new PipesForkParser(config); // owns the child process
