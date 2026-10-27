@@ -84,4 +84,9 @@ on its diagnostics.
 
 Small commits with descriptive messages, each one building and passing tests. The course requires
 at least five meaningful **code** commits per week (implementation or test code; documentation,
-formatting-only and empty commits don't count), so commit each finished piece of code separately.
+formatting-only and empty commits don't count), so each finished piece of code is its own commit.
+
+**Work one commit at a time, and don't commit it yourself.** Prepare the changes for a single
+commit (one piece of code with its tests, `./gradlew build` green), propose the commit message,
+then stop so Amar can review the diff and commit it. Only start the next piece after that one is
+dealt with. **Never push** unless Amar asks you to.

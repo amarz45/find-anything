@@ -7,8 +7,8 @@ This is the EECS3311 (Fall 2026) course project.
 ## Stage 2: implementation (in progress)
 
 The application is being built in Stage 2 (due November 10, 2026). This section will grow into
-full installation and usage instructions. `./gradlew build` works now; the run commands work once
-the CLI exists.
+full installation and usage instructions. The indexing and keyword-search commands work now; the
+agent (`ask`) and the GUI come next.
 
 ### Prerequisites
 
@@ -38,6 +38,23 @@ Then open `.env` and replace the placeholders with your own key and model names.
 ```
 
 On Windows, use `gradlew.bat` in Command Prompt, or `.\gradlew` in PowerShell.
+
+### Using the command line (so far)
+
+```
+findany folders add ~/Documents          # add a folder; it is indexed right away
+findany search lease ends                # keyword search; accents are ignored
+findany show ~/Documents/lease.pdf --highlight "August 31"
+findany index status --failed            # what is indexed, and which files couldn't be read
+findany exclude add "*.tmp"              # keep files out (globally, or with --folder)
+findany folders list
+```
+
+Every command first catches up on files that changed since the last run. If another Find Anything
+process is updating the index, the command runs read-only and says so. The index and settings
+live in `FINDANY_HOME` (default: the platform's app-data folder, for example
+`~/.local/share/find-anything`); set that variable to try the app on test data without touching
+your own index.
 
 ## Stage 1: design
 

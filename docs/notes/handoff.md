@@ -265,3 +265,25 @@ surprising.)*
     to count toward the weekly five. `gh` is installed but needs `gh auth login` before Claude can
     use it.
   - Next: Slice 1, item 1 (the records). Period 1 ends Mon Oct 26: 5 code commits by then.
+- **2026-10-25 (Session 2: Slice 1, Claude Code):**
+  - Done: all seven Slice 1 items, on branch `slice1-indexing` (8 code commits, pushed; see the
+    Period 1 row in `docs/traceability.md`). `findany folders|exclude|index|search|show` work on
+    `testdata/corpus`: edits and deletions are picked up by the rescan, excluded files never get
+    indexed, a second process opens read-only and is refused folder changes, 67 tests pass.
+    `docs/traceability.md`, `docs/logs/design-changes.md` and `docs/logs/test-failures.md` are
+    updated.
+  - Not done: the PR `slice1-indexing` → `master` (open it, wait for both CI checks, merge
+    without squashing). The live `FileWatcher` (Tier 2) and `ContentStore` (postponed) are out.
+  - Surprises worth knowing:
+    - Lucene stores times in milliseconds but the file system reports nanoseconds; the rescan
+      must compare truncated values (see `docs/logs/test-failures.md`).
+    - Spotless rewraps lines, so an edit script that matches text written moments before can
+      silently miss; check the file after `spotlessApply`.
+    - Lucene logs through `java.util.logging`; the CLI installs `jul-to-slf4j` so `log4j2.xml`
+      governs it. The run and test JVMs get `--enable-native-access=ALL-UNNAMED` for Lucene's mmap.
+    - The CLI uses a zero quiet period (`ChangeQueue`), the GUI should use about two seconds.
+    - `SearchFilters` is already applied inside `SearchIndex` queries, so F04 is mostly the CLI
+      options and the GUI menu.
+  - Next: Slice 2 (the agent), starting with `LlmRequest`/`LlmResponse`, `LlmClient`,
+    `LangChain4jClient`, `ModelSettings`, `LlmClientFactory`. Period 2 (Oct 27–Nov 2) needs 5
+    code commits.
