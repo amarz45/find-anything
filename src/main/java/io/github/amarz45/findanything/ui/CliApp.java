@@ -1,7 +1,10 @@
 package io.github.amarz45.findanything.ui;
 
+import io.github.amarz45.findanything.config.BackendType;
+import io.github.amarz45.findanything.config.EnvFile;
 import io.github.amarz45.findanything.config.ExclusionRule;
 import io.github.amarz45.findanything.config.IndexConfig;
+import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.config.SettingsStore;
 import io.github.amarz45.findanything.core.FindAnythingService;
@@ -11,6 +14,7 @@ import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.IndexStatus;
 import io.github.amarz45.findanything.indexing.IsolatedTextExtractor;
 import io.github.amarz45.findanything.indexing.TextExtractor;
+import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.IndexMode;
 import io.github.amarz45.findanything.storage.IndexedFile;
@@ -45,7 +49,8 @@ import picocli.CommandLine.Spec;
  * The {@code findany} command line. With no arguments it prints help; every subcommand first
  * catches up on files changed since the last run (F03), then does its work through {@link
  * FindAnythingService} and waits for the result. {@code main} is the composition root: it resolves
- * the data folder ({@code FINDANY_HOME}) and builds the service and its collaborators.
+ * the data folder ({@code FINDANY_HOME}), reads {@code .env}, and builds the service and its
+ * collaborators.
  */
 @Command(
         name = "findany",
@@ -58,7 +63,8 @@ import picocli.CommandLine.Spec;
             CliApp.Exclude.class,
             CliApp.Index.class,
             CliApp.Search.class,
-            CliApp.Show.class
+            CliApp.Show.class,
+            CliApp.Model.class
         })
 public final class CliApp implements Callable<Integer> {
 
@@ -87,7 +93,7 @@ public final class CliApp implements Callable<Integer> {
                         System.getenv(),
                         System.getProperty("os.name", ""),
                         System.getProperty("user.home"));
-        try (FindAnythingService service = createService(home)) {
+        try (FindAnythingService service = createService(home, loadEnvironment(home))) {
             exitCode = new CliApp(service).run(args);
         } catch (IOException e) {
             System.err.println("findany: " + e.getMessage());
@@ -107,6 +113,7 @@ public final class CliApp implements Callable<Integer> {
         commandLine.setOut(out);
         commandLine.setErr(err);
         commandLine.setExecutionExceptionHandler(CliApp::reportFailure);
+        commandLine.setCaseInsensitiveEnumValuesAllowed(true);
         return commandLine.execute(args);
     }
 
@@ -146,9 +153,19 @@ public final class CliApp implements Callable<Integer> {
         return base.resolve("find-anything");
     }
 
+    /**
+     * The API key and model defaults: {@code .env} in the data folder, overridden by {@code .env}
+     * in the working directory (the one {@code .env.example} is copied to), overridden by the
+     * environment variables.
+     */
+    static Map<String, String> loadEnvironment(Path home) throws IOException {
+        return EnvFile.load(System.getenv(), home.resolve(".env"), Path.of(".env"));
+    }
+
     /** Builds the facade and everything behind it for one CLI run. */
-    static FindAnythingService createService(Path home) throws IOException {
-        SettingsStore settingsStore = new SettingsStore(home.resolve("settings.json"));
+    static FindAnythingService createService(Path home, Map<String, String> environment)
+            throws IOException {
+        SettingsStore settingsStore = new SettingsStore(home.resolve("settings.json"), environment);
         IndexConfig indexConfig = settingsStore.loadIndexConfig();
         TextExtractor textExtractor =
                 new IsolatedTextExtractor(
@@ -166,6 +183,7 @@ public final class CliApp implements Callable<Integer> {
         return new FindAnythingService(
                 indexConfig,
                 settingsStore,
+                new LlmClientFactory(),
                 textExtractor,
                 new Chunker(1_500),
                 changeQueue,
@@ -715,6 +733,104 @@ public final class CliApp implements Callable<Integer> {
                 from = range.end();
             }
             return marked.append(text.substring(from)).toString();
+        }
+    }
+
+    // ------------------------------------------------------------------ findany model
+
+    /** {@code findany model set cloud|local [--model <name>]} and {@code model test} (F13). */
+    @Command(
+            name = "model",
+            description = "Choose and test the model that answers questions.",
+            synopsisSubcommandLabel = "COMMAND",
+            subcommands = {Model.Set.class, Model.Test.class})
+    static final class Model implements Callable<Integer> {
+        @ParentCommand CliApp app;
+        @Spec CommandSpec spec;
+
+        @Override
+        public Integer call() {
+            spec.commandLine().usage(spec.commandLine().getOut());
+            return 0;
+        }
+
+        /** How the settings are described to the user; never includes the key. */
+        static String describe(ModelSettings settings) {
+            return switch (settings.backendType()) {
+                case CLOUD -> "cloud model " + settings.modelName() + " through OpenRouter";
+                case LOCAL ->
+                        "local model "
+                                + settings.modelName()
+                                + " through Ollama at "
+                                + settings.baseUrl();
+            };
+        }
+
+        /** Tests the backend and reports; true when it answered. */
+        static boolean test(CliApp app, ModelSettings settings, PrintWriter out) {
+            out.println("Testing the " + describe(settings) + "...");
+            if (settings.backendType() == BackendType.CLOUD) {
+                out.println(
+                        "API key: "
+                                + (settings.hasApiKey()
+                                        ? "set (from .env or the environment)"
+                                        : "none"));
+            }
+            boolean answered = app.findAnythingService.testBackend(settings).join();
+            if (answered) {
+                out.println("Connection OK.");
+            } else {
+                out.println("The backend was reached but answered nothing.");
+            }
+            return answered;
+        }
+
+        @Command(
+                name = "set",
+                description = "Test a backend and, if it answers, use it for new conversations.")
+        static final class Set implements Callable<Integer> {
+            @ParentCommand Model model;
+            @Spec CommandSpec spec;
+
+            @Parameters(
+                    index = "0",
+                    paramLabel = "<backend>",
+                    description = "cloud (OpenRouter) or local (Ollama).")
+            BackendType backendType;
+
+            @Option(
+                    names = "--model",
+                    paramLabel = "<name>",
+                    description =
+                            "The model: an OpenRouter model ID or an Ollama model name. Otherwise"
+                                    + " the saved one, or OPENROUTER_MODEL / OLLAMA_MODEL from .env.")
+            String modelName;
+
+            @Override
+            public Integer call() throws Exception {
+                PrintWriter out = spec.commandLine().getOut();
+                ModelSettings settings =
+                        model.app.findAnythingService.resolveModelSettings(backendType, modelName);
+                if (!test(model.app, settings, out)) {
+                    spec.commandLine().getErr().println("Nothing saved.");
+                    return FAILURE;
+                }
+                model.app.findAnythingService.setBackend(settings);
+                out.println("Saved. New conversations use the " + describe(settings) + ".");
+                return 0;
+            }
+        }
+
+        @Command(name = "test", description = "Test the connection to the current backend.")
+        static final class Test implements Callable<Integer> {
+            @ParentCommand Model model;
+            @Spec CommandSpec spec;
+
+            @Override
+            public Integer call() throws Exception {
+                ModelSettings settings = model.app.findAnythingService.getModelSettings();
+                return test(model.app, settings, spec.commandLine().getOut()) ? 0 : FAILURE;
+            }
         }
     }
 }

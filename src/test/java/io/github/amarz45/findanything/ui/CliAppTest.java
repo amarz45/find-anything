@@ -8,11 +8,17 @@ import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.ScriptedExtractor;
+import io.github.amarz45.findanything.llm.LlmClientFactory;
+import io.github.amarz45.findanything.llm.LlmException;
+import io.github.amarz45.findanything.llm.LlmResponse;
+import io.github.amarz45.findanything.llm.ScriptedLlmClient;
+import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
@@ -36,18 +42,33 @@ class CliAppTest {
                 docs.resolve("lecture.pdf"), "Slide one.\fMerge sort runs in O(n log n) time.");
         Files.writeString(docs.resolve("photo.bin"), "binary");
         Files.writeString(docs.resolve("corrupt.txt"), "bad");
-        SettingsStore store = new SettingsStore(home.resolve("app/settings.json"));
-        IndexConfig config = store.loadIndexConfig();
         service =
-                new FindAnythingService(
-                        config,
-                        store,
-                        new ScriptedExtractor(),
-                        new Chunker(300),
-                        new ChangeQueue(Duration.ZERO),
-                        home.resolve("app/index"),
-                        Executors.newFixedThreadPool(2));
+                service(
+                        home.resolve("app"),
+                        new ScriptedLlmClientFactory(
+                                new ScriptedLlmClient(new LlmResponse("OK", List.of()))));
         app = new CliApp(service);
+    }
+
+    /** The environment a user gets after copying .env.example and filling it in. */
+    static final Map<String, String> ENV =
+            Map.of(
+                    "OPENROUTER_API_KEY", "sk-or-test-key",
+                    "OPENROUTER_MODEL", "vendor/model",
+                    "OLLAMA_MODEL", "llama");
+
+    static FindAnythingService service(Path appData, LlmClientFactory factory) throws Exception {
+        SettingsStore store = new SettingsStore(appData.resolve("settings.json"), ENV);
+        IndexConfig config = store.loadIndexConfig();
+        return new FindAnythingService(
+                config,
+                store,
+                factory,
+                new ScriptedExtractor(),
+                new Chunker(300),
+                new ChangeQueue(Duration.ZERO),
+                appData.resolve("index"),
+                Executors.newFixedThreadPool(2));
     }
 
     @AfterEach
@@ -175,5 +196,73 @@ class CliAppTest {
         assertThat(CliApp.formatSize(900)).isEqualTo("900 B");
         assertThat(CliApp.formatSize(90_000)).isEqualTo("88 KB");
         assertThat(CliApp.formatSize(3_000_000)).isEqualTo("2.9 MB");
+    }
+
+    @Test
+    void modelSetTestsTheBackendThenSavesItWithoutTheKey() throws Exception {
+        Run set = run("model", "set", "local", "--model", "tiny");
+        assertThat(set.exitCode()).isZero();
+        assertThat(set.out())
+                .contains("Testing the local model tiny through Ollama at http://localhost:11434")
+                .contains("Connection OK.")
+                .contains("Saved. New conversations use the local model tiny");
+        String saved = Files.readString(home.resolve("app/settings.json"));
+        assertThat(saved).contains("\"LOCAL\"").contains("\"tiny\"").doesNotContain("sk-or");
+
+        Run test = run("model", "test");
+        assertThat(test.exitCode()).isZero();
+        assertThat(test.out()).contains("local model tiny").contains("Connection OK.");
+
+        Run cloud = run("model", "set", "CLOUD");
+        assertThat(cloud.exitCode()).isZero();
+        assertThat(cloud.out())
+                .contains("cloud model vendor/model through OpenRouter")
+                .contains("API key: set")
+                .doesNotContain("sk-or");
+        assertThat(Files.readString(home.resolve("app/settings.json")))
+                .contains("\"CLOUD\"")
+                .doesNotContain("sk-or");
+        assertThat(run("model", "set", "cloud", "--model", "vendor/other").out())
+                .contains("Saved. New conversations use the cloud model vendor/other");
+        assertThat(run("model", "test").out()).contains("vendor/other");
+    }
+
+    @Test
+    void modelSetReportsAFailedTestAndSavesNothing() throws Exception {
+        Path appData = home.resolve("failing");
+        try (FindAnythingService failing =
+                service(
+                        appData,
+                        new ScriptedLlmClientFactory(
+                                new ScriptedLlmClient(
+                                        new LlmException(
+                                                "Can't reach Ollama at http://localhost:11434."))))) {
+            Run run = new Run(0, "", "");
+            StringWriter out = new StringWriter();
+            StringWriter err = new StringWriter();
+            int code =
+                    new CliApp(failing)
+                            .run(
+                                    new String[] {"model", "set", "local"},
+                                    new PrintWriter(out, true),
+                                    new PrintWriter(err, true));
+            run = new Run(code, out.toString(), err.toString());
+            assertThat(run.exitCode()).isEqualTo(CliApp.FAILURE);
+            assertThat(run.err())
+                    .contains("findany: Can't reach Ollama at http://localhost:11434.");
+            assertThat(run.out()).doesNotContain("Saved");
+            assertThat(appData.resolve("settings.json")).doesNotExist();
+        }
+    }
+
+    @Test
+    void modelAloneAndABadBackendPrintUsage() {
+        assertThat(run("model").out())
+                .contains("Usage: findany model")
+                .contains("set")
+                .contains("test");
+        Run bad = run("model", "set", "remote");
+        assertThat(bad.exitCode()).isEqualTo(2);
+        assertThat(bad.err()).contains("cloud").contains("local");
     }
 }

@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.amarz45.findanything.config.AlreadyCoveredException;
+import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.config.InvalidPatternException;
+import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.config.SettingsStore;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
@@ -14,6 +16,10 @@ import io.github.amarz45.findanything.indexing.IndexerState;
 import io.github.amarz45.findanything.indexing.IsolatedTextExtractor;
 import io.github.amarz45.findanything.indexing.ScriptedExtractor;
 import io.github.amarz45.findanything.indexing.TextExtractor;
+import io.github.amarz45.findanything.llm.LlmClientFactory;
+import io.github.amarz45.findanything.llm.LlmException;
+import io.github.amarz45.findanything.llm.ScriptedLlmClient;
+import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.ExtractionStatus;
 import io.github.amarz45.findanything.storage.IndexMode;
@@ -25,6 +31,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -41,11 +48,21 @@ class FindAnythingServiceTest {
     @TempDir Path home;
 
     FindAnythingService service(Path appData, TextExtractor extractor) throws Exception {
-        SettingsStore store = new SettingsStore(appData.resolve("settings.json"));
+        return service(appData, extractor, new LlmClientFactory(), Map.of());
+    }
+
+    FindAnythingService service(
+            Path appData,
+            TextExtractor extractor,
+            LlmClientFactory llmClientFactory,
+            Map<String, String> environment)
+            throws Exception {
+        SettingsStore store = new SettingsStore(appData.resolve("settings.json"), environment);
         IndexConfig config = store.loadIndexConfig();
         return new FindAnythingService(
                 config,
                 store,
+                llmClientFactory,
                 extractor,
                 new Chunker(300),
                 new ChangeQueue(Duration.ZERO),
@@ -209,6 +226,45 @@ class FindAnythingServiceTest {
             await(
                     () -> !reader.search("alpha", SearchFilters.NONE).join().isEmpty(),
                     () -> "the reader has not seen the writer's commit"); // after a refresh
+        }
+    }
+
+    @Test
+    void testsAndSetsTheModelBackendWithoutOpeningTheIndex() throws Exception {
+        Map<String, String> env =
+                Map.of("OPENROUTER_API_KEY", "sk-or-test", "OPENROUTER_MODEL", "vendor/model");
+        ScriptedLlmClientFactory failing =
+                new ScriptedLlmClientFactory(
+                        new ScriptedLlmClient(new LlmException("rejected the API key")));
+        try (FindAnythingService service =
+                service(home.resolve("app"), new ScriptedExtractor(), failing, env)) {
+            ModelSettings current = service.getModelSettings();
+            assertThat(current.backendType()).isEqualTo(BackendType.CLOUD);
+            assertThat(current.modelName()).isEqualTo("vendor/model");
+
+            assertThatThrownBy(() -> service.testBackend(current).join())
+                    .isInstanceOf(CompletionException.class)
+                    .cause()
+                    .isInstanceOf(LlmException.class)
+                    .hasMessage("rejected the API key");
+            assertThat(failing.requested).containsExactly(current);
+
+            ModelSettings local = service.resolveModelSettings(BackendType.LOCAL, " mistral ");
+            assertThat(local.backendType()).isEqualTo(BackendType.LOCAL);
+            assertThat(local.modelName()).isEqualTo("mistral");
+            assertThat(local.hasApiKey()).isFalse();
+            assertThat(service.resolveModelSettings(BackendType.CLOUD, null)).isEqualTo(current);
+
+            service.setBackend(local);
+            assertThat(service.getModelSettings()).isEqualTo(local);
+            assertThat(service.resolveModelSettings(BackendType.LOCAL, null)).isEqualTo(local);
+            assertThat(Files.readString(home.resolve("app/settings.json")))
+                    .contains("mistral")
+                    .doesNotContain("sk-or-test");
+        }
+        try (FindAnythingService reopened =
+                service(home.resolve("app"), new ScriptedExtractor(), failing, env)) {
+            assertThat(reopened.getModelSettings().modelName()).isEqualTo("mistral");
         }
     }
 }
