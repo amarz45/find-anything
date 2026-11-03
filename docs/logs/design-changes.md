@@ -118,6 +118,73 @@ Diagrams updated:
   facade must know which folder a path belongs to.
 - **Impact:** none on the patterns. The class diagram gets these at the freeze.
 
+### `testConnection()` says why it failed (2026-10-29, Slice 2)
+- **Original design:** `LlmClient.testConnection()` returns a boolean (cd06, SD04), while F13 and
+  UC08 (3a) want the user told that the key is invalid, or that the local runtime isn't running,
+  with setup instructions.
+- **Implemented change:** `testConnection()` still returns a boolean, but throws `LlmException`
+  when the backend can't be used. `true` means the backend answered, `false` that it was reached
+  but replied with nothing; the exception's message says what to fix (wrong key, unknown model,
+  unreachable server, timeout, rate limit, no credits). `LangChain4jClient` maps the library's
+  exceptions to those messages, with cloud and local wording.
+- **Reason:** a bare `false` would be a silent error.
+- **Impact:** F13; `LlmClient`, `LangChain4jClient`, `FindAnythingService.testBackend()` (the
+  future fails with the exception), `findany model set|test`, `SettingsDialog` in Slice 3.
+
+### `LlmException` is checked (2026-10-29, Slice 2)
+- **Original design:** SD03 names `LlmException` without saying whether it's checked.
+- **Implemented change:** a checked exception, like `ExtractionException`, thrown by
+  `LlmClient.complete()` and `testConnection()`, by the `LangChain4jClient` constructor (no key,
+  no model name) and so by `LlmClientFactory.createClient()`.
+- **Reason:** the agent loop must handle it explicitly, since SD03's fallback to instant search
+  depends on catching it.
+- **Impact:** F07, F13; `AgentController`, `FindAnythingService`.
+
+### `Message` carries the system prompt and tool calls (2026-10-29, Slice 2)
+- **Original design:** the cd06 note gives `Message` a role (user, assistant or tool), the content
+  and the source files.
+- **Implemented change:** `Message.Role` also has `SYSTEM`; an assistant message carries its
+  `toolCalls`, and a tool result carries the `toolCallId` and `toolName` it answers. Two records
+  describe tools in the design's own terms: `ToolCall` (id, name, arguments; the id is null when
+  the backend gives none) and `ToolSpec` with nested `Parameter` and `Type` (string, integer,
+  boolean, or one of listed values). All three live in `llm` with `LlmRequest`, so `llm` never
+  depends on `agent` (`ToolResult` stays in `agent`).
+- **Reason:** OpenAI-style APIs (OpenRouter) require the assistant's tool calls to be replayed and
+  each tool result matched to a call by id; Ollama returns no ids. The system prompt has its own
+  role in both APIs.
+- **Impact:** F07, F08, F12; `LlmRequest`, `LangChain4jClient`, and later `PromptBuilder`,
+  `AgentController` and `ToolRegistry`, which build these records.
+
+### OpenRouter requests opt out of provider data collection (2026-10-29, Slice 2)
+- **Original design:** the "Cloud model reached through OpenRouter" entry above relies on the
+  OpenRouter account settings (no prompt logging, no training providers).
+- **Implemented change:** `LangChain4jClient` also sends `provider.data_collection = deny` with
+  every OpenRouter request, so a provider that trains on prompts is never routed to, whatever the
+  account says. Prompt logging has no per-request switch and stays an account setting (the README
+  says so). The client sends no referer or title headers.
+- **Reason:** the code enforces the privacy claim instead of trusting a dashboard setting.
+- **Impact:** F13, F14; `LangChain4jClient`.
+
+### Small members added for the model settings (2026-10-29 to 2026-11-02, Slice 2)
+- **Original design:** cd06 and cd07 draw `ModelSettings` (backend type, model name, base URL, API
+  key), `LlmClientFactory.createClient()`, `SettingsStore.saveModelSettings()` and
+  `FindAnythingService.testBackend()` and `setBackend()`; the `.env` entry above moves the key out
+  of the settings file.
+- **Implemented change:** `config/EnvFile` reads `.env`; `BackendType` is the enum the cd07 note
+  names; `SettingsStore` gains a constructor taking the environment, `loadModelSettings()` and
+  `defaultModelSettings()`; `ModelSettings` gains `hasApiKey()`, the two base-URL constants and a
+  `toString()` that hides the key; `LlmRequest.withMessages()`, `LlmResponse.hasToolCalls()`;
+  `LangChain4jClient` has a package-private constructor taking the library's chat model, for tests;
+  `LlmClientFactory.build()` is the protected hook that Slice 3 wraps in the decorator chain and
+  tests override; `FindAnythingService.getModelSettings()` and `resolveModelSettings()` give the
+  CLI the settings to test. Precedence: saved settings (backend, model, URL) win; `.env` in
+  `FINDANY_HOME`, then `.env` in the working directory, then environment variables fill the rest
+  and always supply the key; with nothing saved the backend is cloud when a key is configured,
+  else local. The key is never written to the settings file.
+- **Reason:** `findany model set|test` (pulled forward from Slice 2, item 5) and the tests need
+  them, and the design didn't say where the defaults come from once the key left Settings.
+- **Impact:** none on the patterns. The class diagram gets these at the freeze.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
