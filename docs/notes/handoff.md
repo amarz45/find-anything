@@ -287,3 +287,27 @@ surprising.)*
   - Next: Slice 2 (the agent), starting with `LlmRequest`/`LlmResponse`, `LlmClient`,
     `LangChain4jClient`, `ModelSettings`, `LlmClientFactory`. Period 2 (Oct 27–Nov 2) needs 5
     code commits.
+- **2026-10-29 to 2026-11-02 (Session 3: Slice 2, item 1, Claude Code):**
+  - Done: Slice 2, item 1 plus `findany model set|test` (pulled forward from item 5), on branch
+    `agent` (5 code commits, not pushed; see the Period 2 row in `docs/traceability.md`).
+    The `llm` package (`Message`, `ToolCall`, `ToolSpec`, `LlmRequest`, `LlmResponse`,
+    `LlmException`, `LlmClient`, `LangChain4jClient`, `LlmClientFactory`), `ModelSettings`,
+    `BackendType`, `EnvFile` and the model-settings half of `SettingsStore`;
+    `FindAnythingService.getModelSettings()`, `resolveModelSettings()`, `testBackend()`,
+    `setBackend()`. Test doubles for the agent work: `ScriptedLlmClient`,
+    `ScriptedLlmClientFactory`, `FakeChatModel`. `docs/traceability.md` and
+    `docs/logs/design-changes.md` are updated.
+  - Verified: the error paths (no key, no model name, Ollama unreachable, nothing saved on
+    failure) from the CLI. **Not yet verified:** a successful `findany model set cloud` with the
+    real key, because the session couldn't see `.env`; run it from the repo root with a scratch
+    `FINDANY_HOME` first. Ollama over Tailscale and the five-question model check are still to do.
+  - Surprises worth knowing:
+    - LangChain4j's `RetryUtils` logs a WARN with a stack trace on every retry; `log4j2.xml` sets
+      `dev.langchain4j` to `error` so the CLI prints one clean message.
+    - OpenRouter answers 404 for a model whose endpoints don't support tool calling, so the
+      `testConnection()` request includes a dummy tool and the 404 is reported as model not found.
+    - `LangChain4jClient` doesn't call `think()` (some models reject it) and `numCtx` for Ollama is
+      a placeholder (16k) until the model is picked.
+  - Next: Slice 2, item 2 (`Tool`, `ToolResult`, `ToolRegistry`, `SearchTool`,
+    `ReadExcerptTool`), then items 3 and 4, then `ask` in the CLI. Period 3 (Nov 3–9) needs 5
+    code commits by Nov 5, and `agent` still has to be pushed and merged through a PR.

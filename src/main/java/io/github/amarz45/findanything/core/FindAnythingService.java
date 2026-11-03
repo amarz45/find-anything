@@ -1,9 +1,11 @@
 package io.github.amarz45.findanything.core;
 
 import io.github.amarz45.findanything.config.AlreadyCoveredException;
+import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.config.ExclusionRule;
 import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.config.InvalidPatternException;
+import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.config.SettingsStore;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
@@ -13,6 +15,8 @@ import io.github.amarz45.findanything.indexing.IndexStatusListener;
 import io.github.amarz45.findanything.indexing.Indexer;
 import io.github.amarz45.findanything.indexing.IndexerState;
 import io.github.amarz45.findanything.indexing.TextExtractor;
+import io.github.amarz45.findanything.llm.LlmClientFactory;
+import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.search.SearchEngine;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.Chunk;
@@ -60,6 +64,7 @@ public final class FindAnythingService implements AutoCloseable {
 
     private final IndexConfig indexConfig;
     private final SettingsStore settingsStore;
+    private final LlmClientFactory llmClientFactory;
     private final TextExtractor textExtractor;
     private final Chunker chunker;
     private final ChangeQueue changeQueue;
@@ -72,10 +77,12 @@ public final class FindAnythingService implements AutoCloseable {
     private Indexer indexer; // only in WRITER mode
     private SearchEngine searchEngine;
     private ScheduledExecutorService refresher; // only in READ_ONLY mode
+    private ModelSettings modelSettings; // loaded on first use; the model for new conversations
 
     public FindAnythingService(
             IndexConfig indexConfig,
             SettingsStore settingsStore,
+            LlmClientFactory llmClientFactory,
             TextExtractor textExtractor,
             Chunker chunker,
             ChangeQueue changeQueue,
@@ -83,6 +90,7 @@ public final class FindAnythingService implements AutoCloseable {
             ExecutorService backgroundExecutor) {
         this.indexConfig = Objects.requireNonNull(indexConfig, "indexConfig");
         this.settingsStore = Objects.requireNonNull(settingsStore, "settingsStore");
+        this.llmClientFactory = Objects.requireNonNull(llmClientFactory, "llmClientFactory");
         this.textExtractor = Objects.requireNonNull(textExtractor, "textExtractor");
         this.chunker = Objects.requireNonNull(chunker, "chunker");
         this.changeQueue = Objects.requireNonNull(changeQueue, "changeQueue");
@@ -460,6 +468,53 @@ public final class FindAnythingService implements AutoCloseable {
         if (indexer != null) {
             indexer.addStatusListener(listener);
         }
+    }
+
+    // ------------------------------------------------------------------ model backend (F13)
+
+    /** The model new conversations use: the saved choice, or the environment's defaults. */
+    public synchronized ModelSettings getModelSettings() throws IOException {
+        if (modelSettings == null) {
+            modelSettings = settingsStore.loadModelSettings();
+        }
+        return modelSettings;
+    }
+
+    /**
+     * The settings to test for a backend the user picked: the current settings when they are for
+     * the same backend, otherwise the environment's defaults for it, with the model name replaced
+     * when one is given.
+     */
+    public synchronized ModelSettings resolveModelSettings(
+            BackendType backendType, String modelName) throws IOException {
+        ModelSettings current = getModelSettings();
+        ModelSettings base =
+                current.backendType() == backendType
+                        ? current
+                        : settingsStore.defaultModelSettings(backendType);
+        if (modelName == null || modelName.isBlank()) {
+            return base;
+        }
+        return new ModelSettings(backendType, modelName.strip(), base.baseUrl(), base.apiKey());
+    }
+
+    /**
+     * Sends a minimal request to the backend on a background thread (UC08). The future completes
+     * with true when it answered, false when it answered nothing, and fails with {@link
+     * LlmException} when it can't be used; the message says what to fix.
+     */
+    public CompletableFuture<Boolean> testBackend(ModelSettings settings) {
+        Objects.requireNonNull(settings, "settings");
+        return supply(() -> llmClientFactory.createClient(settings).testConnection());
+    }
+
+    /**
+     * Saves the settings and uses them for new conversations. Existing conversations keep the model
+     * they were created with. The API key is not saved; it stays in the environment.
+     */
+    public synchronized void setBackend(ModelSettings settings) throws IOException {
+        settingsStore.saveModelSettings(Objects.requireNonNull(settings, "settings"));
+        modelSettings = settings;
     }
 
     // ------------------------------------------------------------------ helpers

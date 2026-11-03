@@ -12,6 +12,9 @@
     <Logger name="org.apache.tika" level="error"/>
     <!-- Lucene (through java.util.logging) suggests enabling the vector incubator module at every start. -->
     <Logger name="org.apache.lucene" level="error"/>
+    <!-- LangChain4j logs a stack trace for every retried request; the CLI reports the final
+         error itself, in the user's terms. -->
+    <Logger name="dev.langchain4j" level="error"/>
     <Root level="warn">
       <AppenderRef ref="console"/>
     </Root>

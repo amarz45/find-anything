@@ -29,6 +29,17 @@ cp .env.example .env
 Then open `.env` and replace the placeholders with your own key and model names. Never commit
 `.env` or put a key anywhere else.
 
+The app reads `.env` from its data folder (`FINDANY_HOME`) and from the directory it is started in,
+and environment variables override both. The key is never written anywhere else: `findany model
+set` saves only the backend, the model name and the base URL.
+
+For the cloud backend, create the key at [openrouter.ai/keys](https://openrouter.ai/keys) and copy
+a model ID that supports tool calling from [openrouter.ai/models](https://openrouter.ai/models).
+Every request tells OpenRouter not to route to providers that train on prompts; prompt logging is
+an account setting, so turn it off in your OpenRouter account's privacy settings. For the
+local backend, install [Ollama](https://ollama.com), run `ollama pull <model>` and leave
+`OLLAMA_BASE_URL` at its default unless Ollama runs on another machine.
+
 ### Build and run
 
 ```
@@ -48,6 +59,9 @@ findany show ~/Documents/lease.pdf --highlight "August 31"
 findany index status --failed            # what is indexed, and which files couldn't be read
 findany exclude add "*.tmp"              # keep files out (globally, or with --folder)
 findany folders list
+findany model set cloud                  # test the OpenRouter model from .env, then use it
+findany model set local --model llama3.1 # or a model from Ollama
+findany model test                       # check the current backend
 ```
 
 Every command first catches up on files that changed since the last run. If another Find Anything
