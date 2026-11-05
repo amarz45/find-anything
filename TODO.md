@@ -20,6 +20,20 @@ report describes.
   needs), so one match on page 3 of a long PDF means scrolling past pages 1 and 2. A
   `--context <lines>` or `--matches-only` option would print just the lines around each match.
 
+## Conversation history
+
+- **Handle a latest exchange that is too long by itself.** `Conversation.trimToFit()` drops whole
+  old exchanges and never the latest one, so one request that gathers a lot of tool output can
+  exceed the model's context. The model request then fails and the agent falls back to instant
+  search. Today only the step limit and the excerpt size bound it. A better version would shorten
+  or drop the oldest tool results inside the latest exchange, keeping each call paired with a
+  result.
+- **Trim what is sent, not what is kept.** `trimToFit()` changes the conversation itself (as SD03
+  draws it), so dropped exchanges also disappear from the saved conversation and from the GUI's
+  view of it. A better version would keep the full history and trim only the copy that
+  `PromptBuilder.buildRequest()` sends. This changes behaviour the report describes, so log it in
+  `docs/logs/design-changes.md`.
+
 ## Extraction
 
 - **Stop Tika appending PDF link annotations to page text.** PDFBox adds every link annotation's
