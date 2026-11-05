@@ -34,6 +34,23 @@ report describes.
   `PromptBuilder.buildRequest()` sends. This changes behaviour the report describes, so log it in
   `docs/logs/design-changes.md`.
 
+## Citation verification
+
+Amar may change these later; undecided.
+
+- **Decide what an answer without citations reports.** `Answer.isVerified()` is true only when
+  the answer has at least one citation and all of them are verified. That covers the design's
+  case of citations that couldn't be parsed, but it also means a clarifying question, or "I found
+  nothing about that", reports as not verified, and the GUI or `ask --json` would show it as
+  unverified although nothing in it claims a source. A better version might tell "nothing to
+  verify" apart from "failed to verify".
+- **Consider forgiving typographic differences in quotes.** `CitationVerifier` matches a quote
+  exactly apart from whitespace, as the report says ("close but not exact" stays unverified).
+  Models often turn curly quotes, apostrophes and dashes into plain ones (and PDFs contain
+  ligatures), so a true quote can come back unverified. Check how often this happens with the
+  real models first. Folding those characters before comparing changes behaviour the report
+  describes, so log it in `docs/logs/design-changes.md`.
+
 ## Extraction
 
 - **Stop Tika appending PDF link annotations to page text.** PDFBox adds every link annotation's
