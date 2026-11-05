@@ -185,6 +185,57 @@ Diagrams updated:
   them, and the design didn't say where the defaults come from once the key left Settings.
 - **Impact:** none on the patterns. The class diagram gets these at the freeze.
 
+### `ToolRegistry` checks every call against the tool's spec first (2026-11-04, Slice 2)
+- **Original design:** `ToolRegistry.execute()` calls `Tool.validate()` and then `Tool.execute()`
+  (SD03); an invalid call returns `ToolResult.failure()` with the errors.
+- **Implemented change:** before `Tool.validate()`, the registry checks the arguments against the
+  tool's `ToolSpec`: every required parameter is present, no parameter is unknown, and each value
+  has its parameter's type and, for a choice, one of its allowed values. `Tool.validate()` then
+  covers only what the spec can't express (a malformed date, a limit out of range) and is skipped
+  when the spec check already failed. A tool name that isn't registered also returns a failure,
+  naming the tools that exist. A tool that throws a runtime exception is logged and returned as a
+  failure, so one broken call can't end the request. Every call is logged, including the rejected
+  ones.
+- **Reason:** the Command pattern's point is that every tool gets the same validation and error
+  handling; without the shared check, each tool would repeat the type checks.
+- **Impact:** F07, F08; `ToolRegistry`, `Tool` (its `validate()` contract). SD03's order
+  (validate, then execute) is unchanged.
+
+### The agent's search filters by type and date only (2026-11-04, Slice 2)
+- **Original design:** F04: "The agent can apply the same filters through its search tool": type,
+  modification date, size and location.
+- **Implemented change:** `SearchTool` takes `query`, `file_type`, `modified_after`,
+  `modified_before` and `limit` (1 to 20, default 5). `file_type` is one of the formats whose text
+  is indexed (pdf, docx, pptx, txt, md); other files are found by name without a type filter.
+  There are no size or location parameters. An empty query lists the newest files.
+- **Reason:** a fixed type list makes "unknown file type" a rejectable error (F07) instead of a
+  search that silently finds nothing. A location has to be checked against `IndexConfig`, which
+  the class diagram doesn't give `SearchTool`, and size is rarely part of a request.
+- **Impact:** F04, F07; `SearchTool`. The CLI and GUI filters (F04, Tier 2) are unaffected.
+
+### `ReadExcerptTool` reads a long file in parts (2026-11-04, Slice 2)
+- **Original design:** `ReadExcerptTool` reads a file's chunks from `SearchIndex`, limited to
+  `maxExcerptChars`; the parameters aren't specified.
+- **Implemented change:** the parameters are `file` (the full path from the search results),
+  `page` (start at this page or slide) and `position` (start at this chunk; not together with
+  `page`). An excerpt is whole chunks in order while they fit in `maxExcerptChars`, with a
+  `[page N]` or `[slide N]` line before each numbered page, and ends by giving the position to
+  continue from or by saying the text has ended. A file that isn't indexed or has no text, and a
+  page or position the file doesn't have, are failures with the reason.
+- **Reason:** Word, text and Markdown files have no pages, so a long one needs another way to be
+  read past the first excerpt.
+- **Impact:** F08; `ReadExcerptTool`.
+
+### Small members added for the tools (2026-11-04, Slice 2)
+- **Original design:** cd05 draws `ToolResult` with `failure()` and `ToolRegistry` with its
+  `callLog` field.
+- **Implemented change:** `ToolResult` is a record with a `success()` factory beside `failure()`;
+  `ToolRegistry.getCallLog()` returns a copy of the log; `SearchTool.NAME` and
+  `ReadExcerptTool.NAME` are the tools' names.
+- **Reason:** the call log has to be readable (for `ask --json` and Stage 3's traces), and tools
+  need a way to build a successful result.
+- **Impact:** none on the patterns. The class diagram gets these at the freeze.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
