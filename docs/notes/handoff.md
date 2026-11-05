@@ -289,7 +289,8 @@ surprising.)*
     code commits.
 - **2026-10-29 to 2026-11-02 (Session 3: Slice 2, item 1, Claude Code):**
   - Done: Slice 2, item 1 plus `findany model set|test` (pulled forward from item 5), on branch
-    `agent` (5 code commits, not pushed; see the Period 2 row in `docs/traceability.md`).
+    `agent` (5 code commits, pushed and merged into `master` as PR #4 on Nov 2; see the Period 2
+    row in `docs/traceability.md`).
     The `llm` package (`Message`, `ToolCall`, `ToolSpec`, `LlmRequest`, `LlmResponse`,
     `LlmException`, `LlmClient`, `LangChain4jClient`, `LlmClientFactory`), `ModelSettings`,
     `BackendType`, `EnvFile` and the model-settings half of `SettingsStore`;
@@ -310,4 +311,26 @@ surprising.)*
       a placeholder (16k) until the model is picked.
   - Next: Slice 2, item 2 (`Tool`, `ToolResult`, `ToolRegistry`, `SearchTool`,
     `ReadExcerptTool`), then items 3 and 4, then `ask` in the CLI. Period 3 (Nov 3–9) needs 5
-    code commits by Nov 5, and `agent` still has to be pushed and merged through a PR.
+    code commits by Nov 5.
+- **2026-11-04 (Session 4: Slice 2, item 2, Claude Code):**
+  - Done: Slice 2, item 2, on branch `agent` continued from its merged tip (3 code commits, not
+    pushed; see the Period 3 row in `docs/traceability.md`): `Tool`, `ToolResult`,
+    `ToolRegistry` (shared spec checks, call log), `SearchTool` and `ReadExcerptTool`, in the new
+    `agent` package. Test double for the agent loop: `ScriptedTool`. The tools aren't wired into
+    `FindAnythingService` yet; that comes with `AgentController`.
+  - Decisions to remember (all in `docs/logs/design-changes.md`):
+    - `ToolRegistry` checks arguments against the `ToolSpec` (required, unknown, types, allowed
+      values) before `Tool.validate()`, so a tool's `validate()` and `execute()` can rely on the
+      types.
+    - `SearchTool` returns each file's whole best chunk (up to 1,500 characters) and defaults to
+      5 files; `file_type` is a fixed list.
+    - `ReadExcerptTool` takes `maxExcerptChars` in its constructor; the value isn't chosen yet
+      (the facade sets it when the agent is wired up).
+  - Open question for item 4: `Answer.sourceFiles` and `Conversation.lastResults` are
+    `List<SearchResult>`, but a `ToolResult` carries only paths (`sourceFiles`), so
+    `AgentController` needs a way to turn the paths it collected into `SearchResult`s.
+  - Still not verified: a successful `findany model set cloud` with the real key (see Session 3).
+  - Next: Slice 2, item 3 (`Conversation`, `ConversationStore`, `PromptBuilder`,
+    `ResponseParser`, `Answer`, `Citation`, `CitationVerifier`), then item 4 (`AgentController`)
+    and item 5 (`ask`). Period 3 needs 2 more code commits, pushed, by Nov 5; `agent` needs a new
+    pull request.
