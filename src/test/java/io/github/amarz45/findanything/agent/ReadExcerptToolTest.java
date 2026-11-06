@@ -3,6 +3,8 @@ package io.github.amarz45.findanything.agent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.amarz45.findanything.config.IndexConfig;
+import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.llm.ToolSpec;
 import io.github.amarz45.findanything.storage.Chunk;
@@ -34,6 +36,8 @@ class ReadExcerptToolTest {
 
     @TempDir Path folder;
     SearchIndex index;
+    SearchFolder searchFolder;
+    IndexConfig indexConfig;
     ToolRegistry registry;
 
     @BeforeEach
@@ -56,7 +60,25 @@ class ReadExcerptToolTest {
         index.put(file(LONG, ExtractionStatus.PARTIAL), List.of(chunk(0, 1, "x".repeat(100))));
         index.commit();
         registry = new ToolRegistry();
-        registry.register(new ReadExcerptTool(index, MAX_EXCERPT_CHARS));
+        searchFolder = new SearchFolder(ROOT, false, true, List.of());
+        indexConfig = new IndexConfig(folder, List.of(searchFolder), List.of());
+        registry.register(new ReadExcerptTool(index, indexConfig, MAX_EXCERPT_CHARS));
+    }
+
+    @Test
+    void refusesAFileInAPausedFolder() {
+        searchFolder.setPaused(true);
+        ToolResult paused = read(Map.of("file", LEASE.toString()));
+        assertThat(paused.succeeded()).isFalse();
+        assertThat(paused.sourceFiles()).isEmpty();
+        assertThat(paused.errorMessage())
+                .isEqualTo(
+                        LEASE
+                                + " is in a search folder that is paused or unavailable, so it"
+                                + " can't be read now.");
+
+        searchFolder.setPaused(false);
+        assertThat(read(Map.of("file", LEASE.toString())).succeeded()).isTrue();
     }
 
     @AfterEach
@@ -85,7 +107,7 @@ class ReadExcerptToolTest {
                 .extracting(ToolSpec.Parameter::name)
                 .containsExactly("file", "page", "position");
         assertThat(spec.parameters().get(0).required()).isTrue();
-        assertThatThrownBy(() -> new ReadExcerptTool(index, 0))
+        assertThatThrownBy(() -> new ReadExcerptTool(index, indexConfig, 0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

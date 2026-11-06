@@ -1,5 +1,6 @@
 package io.github.amarz45.findanything.search;
 
+import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.storage.ChunkHit;
 import io.github.amarz45.findanything.storage.IndexedFile;
 import io.github.amarz45.findanything.storage.SearchFilters;
@@ -14,9 +15,10 @@ import java.util.Objects;
 
 /**
  * Instant search (F06): ranks the index's matches and groups them by file, so each file appears
- * once with its best passage. Safe to call from several background threads at once, because it only
- * reads the index. Semantic search (F05) is off until an embedding model is available; with it off,
- * the keyword hits are used as they are.
+ * once with its best passage. Files in paused or unreachable folders are left out here, so every
+ * caller, the agent's search tool included, skips them. Safe to call from several background
+ * threads at once, because it only reads the index. Semantic search (F05) is off until an embedding
+ * model is available; with it off, the keyword hits are used as they are.
  */
 public final class SearchEngine {
 
@@ -29,15 +31,23 @@ public final class SearchEngine {
     static final int RRF_K = 60;
 
     private final SearchIndex searchIndex;
+    private final IndexConfig indexConfig;
     private volatile boolean semanticSearchEnabled;
 
-    public SearchEngine(SearchIndex searchIndex) {
+    /**
+     * @param searchIndex the index to search
+     * @param indexConfig the search folders, for which of them are active at the time of a search
+     */
+    public SearchEngine(SearchIndex searchIndex, IndexConfig indexConfig) {
         this.searchIndex = Objects.requireNonNull(searchIndex, "searchIndex");
+        this.indexConfig = Objects.requireNonNull(indexConfig, "indexConfig");
     }
 
     /**
      * Ranks files for a query. An empty query lists the indexed files, newest first, with no best
-     * chunk. The filters apply inside the index query.
+     * chunk. The filters apply inside the index query. Files in paused or unreachable folders are
+     * dropped from what the index returns, so there can be fewer than {@code limit} results even
+     * when more files match.
      *
      * @return at most {@code limit} results, best first
      */
@@ -47,6 +57,7 @@ public final class SearchEngine {
         Objects.requireNonNull(searchFilters, "searchFilters");
         if (query.isBlank()) {
             return searchIndex.listFiles(searchFilters, limit).stream()
+                    .filter(file -> indexConfig.isInActiveFolder(file.path()))
                     .map(file -> new SearchResult(file, null, 0))
                     .toList();
         }
@@ -55,6 +66,9 @@ public final class SearchEngine {
         List<ChunkHit> ranked = fuseRankings(keywordHits, List.of());
         Map<Path, SearchResult> byFile = new LinkedHashMap<>();
         for (ChunkHit hit : ranked) {
+            if (!indexConfig.isInActiveFolder(hit.file().path())) {
+                continue;
+            }
             byFile.putIfAbsent(
                     hit.file().path(), new SearchResult(hit.file(), hit.chunk(), hit.score()));
             if (byFile.size() == limit) {

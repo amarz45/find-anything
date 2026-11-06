@@ -419,6 +419,48 @@ class FindAnythingServiceTest {
     }
 
     @Test
+    void theAgentsToolsSkipAPausedFolder() throws Exception {
+        Path docs = leaseFolder();
+        Path lease = docs.resolve("lease.pdf");
+        ScriptedLlmClient client =
+                new ScriptedLlmClient(
+                        new LlmResponse(
+                                "",
+                                List.of(
+                                        new ToolCall(
+                                                "call-1", "search", Map.of("query", "lease ends")),
+                                        new ToolCall(
+                                                "call-2",
+                                                "read_excerpt",
+                                                Map.of("file", lease.toString())))),
+                        new LlmResponse("None of your files says when the lease ends.", List.of()));
+        try (FindAnythingService service =
+                service(
+                        home.resolve("app"),
+                        new ScriptedExtractor(),
+                        new ScriptedLlmClientFactory(client),
+                        Map.of("OLLAMA_MODEL", "llama"))) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+            service.setFolderPaused(docs, true);
+
+            Conversation conversation = service.newConversation();
+            Answer answer = service.ask(QUESTION, conversation, step -> {}).join();
+            assertThat(answer.sourceFiles()).isEmpty();
+            // What went back to the model holds nothing from the paused folder.
+            List<Message> sent = client.requests.get(1).messages();
+            assertThat(sent.get(sent.size() - 2).content())
+                    .contains("No files match \"lease ends\".");
+            assertThat(sent.get(sent.size() - 1).content())
+                    .startsWith("Error: " + lease + " is in a search folder that is paused");
+            assertThat(sent)
+                    .extracting(Message::content)
+                    .noneMatch(content -> content.contains("August 31, 2026"));
+        }
+    }
+
+    @Test
     void answersWithInstantSearchWhenTheModelsClientCannotBeBuilt() throws Exception {
         Path docs = leaseFolder();
         ScriptedLlmClientFactory factory =

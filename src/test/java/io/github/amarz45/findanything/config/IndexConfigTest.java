@@ -84,8 +84,12 @@ class IndexConfigTest {
         folder.setPaused(true);
         assertThat(config.getActiveFolders()).isEmpty();
         assertThat(config.isIncluded(CORPUS.resolve("notes/dentist.txt"))).isTrue();
+        assertThat(config.isInActiveFolder(CORPUS.resolve("notes/dentist.txt"))).isFalse();
         folder.setPaused(false);
         assertThat(config.getActiveFolders()).containsExactly(folder);
+        assertThat(config.isInActiveFolder(CORPUS.resolve("notes/dentist.txt"))).isTrue();
+        assertThat(config.isInActiveFolder(gone.resolve("a.txt"))).isFalse();
+        assertThat(config.isInActiveFolder(appData.resolve("outside.txt"))).isFalse();
         config.removeFolder(CORPUS);
         assertThat(config.findFolder(CORPUS)).isEmpty();
         assertThatThrownBy(() -> config.removeFolder(CORPUS))

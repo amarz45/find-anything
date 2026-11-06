@@ -188,6 +188,15 @@ public final class IndexConfig {
         return searchFolders.stream().filter(f -> !f.isPaused() && f.isAvailable()).toList();
     }
 
+    /**
+     * Whether the file lies in a folder searches cover. A file in a paused or unreachable folder
+     * stays in the index, but nothing may return it or read it until the folder is active again.
+     */
+    public boolean isInActiveFolder(Path file) {
+        Objects.requireNonNull(file, "file");
+        return getActiveFolders().stream().anyMatch(folder -> folder.contains(file));
+    }
+
     /** A snapshot of every search folder. */
     public List<SearchFolder> getSearchFolders() {
         return List.copyOf(searchFolders);

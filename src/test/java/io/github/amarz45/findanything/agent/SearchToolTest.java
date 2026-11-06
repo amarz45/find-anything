@@ -2,6 +2,8 @@ package io.github.amarz45.findanything.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.amarz45.findanything.config.IndexConfig;
+import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.llm.ToolSpec;
 import io.github.amarz45.findanything.search.SearchEngine;
@@ -30,6 +32,7 @@ class SearchToolTest {
 
     @TempDir Path folder;
     SearchIndex index;
+    SearchFolder searchFolder;
     ToolRegistry registry;
 
     @BeforeEach
@@ -51,7 +54,21 @@ class SearchToolTest {
                 file(PHOTO, LocalDate.of(2025, 8, 15), ExtractionStatus.METADATA_ONLY), List.of());
         index.commit();
         registry = new ToolRegistry();
-        registry.register(new SearchTool(new SearchEngine(index)));
+        searchFolder = new SearchFolder(ROOT, false, true, List.of());
+        IndexConfig indexConfig = new IndexConfig(folder, List.of(searchFolder), List.of());
+        registry.register(new SearchTool(new SearchEngine(index, indexConfig)));
+    }
+
+    @Test
+    void findsNothingInAPausedFolder() {
+        searchFolder.setPaused(true);
+        ToolResult paused = search(Map.of("query", "lease ends"));
+        assertThat(paused.succeeded()).isTrue();
+        assertThat(paused.sourceFiles()).isEmpty();
+        assertThat(paused.content()).startsWith("No files match \"lease ends\".");
+
+        searchFolder.setPaused(false);
+        assertThat(search(Map.of("query", "lease ends")).sourceFiles()).contains(LEASE);
     }
 
     @AfterEach

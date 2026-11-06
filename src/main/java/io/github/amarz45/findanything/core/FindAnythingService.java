@@ -164,10 +164,10 @@ public final class FindAnythingService implements AutoCloseable {
         }
         searchIndex = SearchIndex.open(indexDirectory);
         indexMode = searchIndex.getMode();
-        searchEngine = new SearchEngine(searchIndex);
+        searchEngine = new SearchEngine(searchIndex, indexConfig);
         ToolRegistry toolRegistry = new ToolRegistry();
         toolRegistry.register(new SearchTool(searchEngine));
-        toolRegistry.register(new ReadExcerptTool(searchIndex, MAX_EXCERPT_CHARS));
+        toolRegistry.register(new ReadExcerptTool(searchIndex, indexConfig, MAX_EXCERPT_CHARS));
         agentController =
                 new AgentController(
                         toolRegistry,
@@ -381,16 +381,7 @@ public final class FindAnythingService implements AutoCloseable {
         if (!errors.isEmpty()) {
             return CompletableFuture.failedFuture(new InvalidFiltersException(errors));
         }
-        return supply(() -> searchActiveFolders(query, searchFilters, limit));
-    }
-
-    /** Searches, leaving out the files in paused or unavailable folders. */
-    private List<SearchResult> searchActiveFolders(
-            String query, SearchFilters searchFilters, int limit) throws IOException {
-        List<SearchFolder> active = indexConfig.getActiveFolders();
-        return searchEngine.search(query, searchFilters, limit).stream()
-                .filter(result -> active.stream().anyMatch(f -> f.contains(result.file().path())))
-                .toList();
+        return supply(() -> searchEngine.search(query, searchFilters, limit));
     }
 
     /**
@@ -536,7 +527,7 @@ public final class FindAnythingService implements AutoCloseable {
     private Answer instantSearchInstead(
             String request, Conversation conversation, LlmException failure) throws IOException {
         List<SearchResult> results =
-                searchActiveFolders(request, SearchFilters.NONE, FALLBACK_RESULT_LIMIT);
+                searchEngine.search(request, SearchFilters.NONE, FALLBACK_RESULT_LIMIT);
         conversation.addAssistantMessage(new LlmResponse(FALLBACK_TEXT, List.of()));
         conversation.setLastResults(results);
         return new Answer(
