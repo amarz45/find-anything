@@ -236,6 +236,152 @@ Diagrams updated:
   need a way to build a successful result.
 - **Impact:** none on the patterns. The class diagram gets these at the freeze.
 
+### The answer format, and `AnswerFormatException` (2026-11-04, Slice 2)
+- **Original design:** the model "writes an answer with citations in a structured format, which
+  is parsed" (F08); the format isn't specified. SD03: if parsing fails, the model is asked once to
+  reformat.
+- **Implemented change:** the final reply is the answer's text with `[n]` markers, then a
+  `CITATIONS:` line and one entry per marker with `file:`, `page:` and `quote:` on their own
+  lines. `ResponseParser.parseAnswer()` forgives layout (Markdown decoration, code fences,
+  "Sources", a quote in quotation marks or over several lines) and renumbers markers to the
+  citations' order. It throws the new checked `AnswerFormatException`, listing every problem, when
+  the reply is empty, a marker has no entry, an entry is listed twice, or an entry has no file, a
+  relative path, or a page that isn't a number. A reply with no markers and no entries is an
+  answer without citations (a clarifying question). A citation without a quote is kept and left
+  for the verifier to mark unverified. The parser leaves `Answer.sourceFiles` empty, because it
+  has no index to build `SearchResult`s from; `AgentController` fills it.
+- **Reason:** plain lines need no escaping, and escaping Windows paths and quotation marks is
+  where models break JSON. The exception's message tells the model what to fix.
+- **Impact:** F08, F09; `ResponseParser`, `PromptBuilder` (describes the format),
+  `AgentController` (catches the exception).
+
+### `PromptBuilder`: file text marked as data, and a wider `buildReformatRequest()` (2026-11-04, Slice 2)
+- **Original design:** `buildRequest(conversation, toolSpecs, today)`,
+  `buildReformatRequest(conversation)` and `buildDiffSummaryRequest(diffResult)` (cd05).
+- **Implemented change:** `buildRequest()` sends a system message (the role, today's date with
+  the weekday, how to work, the answer format) and then the conversation. A tool result that
+  carries file text is wrapped between `[FILE CONTENT START]` and `[FILE CONTENT END]`, the
+  system message says that text is data and never instructions, and an end marker inside file
+  text is altered so a file can't close the block. A failed call's error stays outside the
+  markers. `buildReformatRequest(conversation, toolSpecs, today, problems)` is the same request
+  plus a closing user message with the parser's problems and the format; that message isn't added
+  to the conversation. `buildDiffSummaryRequest()` isn't implemented (F10, Tier 2).
+- **Reason:** the test corpus has a prompt-injection note, and files are untrusted input. The
+  reformat request needs the tools because the history holds tool calls, which some providers
+  reject when no tools are defined, and the problems tell the model what to correct.
+- **Impact:** F07, F08, F09, F12; `PromptBuilder`, `AgentController`.
+
+### Citation verification rules made exact (2026-11-04, Slice 2)
+- **Original design:** F09: the quote is searched on the cited page, ignoring whitespace, and
+  each citation is `VERIFIED`, `UNVERIFIED` or `SOURCE_CHANGED`; `Answer.isVerified()` is false
+  when the citations couldn't be parsed.
+- **Implemented change:** `SOURCE_CHANGED` when the file is gone, or its size or modification
+  time (to the millisecond) differs from the index, which is the rescan's own test; it wins over
+  the other statuses. Whitespace includes non-breaking spaces. A quote may run across chunks of
+  one page. A citation with page 0 is searched in the whole file (see "Files without pages"); a
+  page number on a file without pages, a file that isn't indexed and an empty quote are
+  `UNVERIFIED`. `Answer.isVerified()` is true only when there is at least one citation and all
+  are `VERIFIED`. `verify()` and `verifyCitation()` throw `IOException` when the index can't be
+  read.
+- **Reason:** the report leaves these cases open, and an unreadable index must not look like an
+  unverified quote.
+- **Impact:** F09; `CitationVerifier`, `Answer`. `TODO.md` lists two of these rules to reconsider.
+
+### Conversations: trimming by exchange, and saving without the key (2026-11-04, Slice 2)
+- **Original design:** `Conversation.trimToFit(maxChars)` drops the oldest exchanges (F12);
+  `ConversationStore` has only its `conversationsDirectory`.
+- **Implemented change:** an exchange is a request and everything up to the next request, and is
+  dropped whole, so a tool result never loses the call it answers; the latest exchange is always
+  kept. A failed tool call is stored as `Error: <reason>`. `ConversationStore` writes one JSON
+  file per conversation (model, messages, tool calls, latest results), never the API key, and
+  takes a `SettingsStore` to supply the key when loading. `listAll()` is ordered by the files'
+  modification times and skips a file it can't read, with a warning in the log. An id must be a
+  safe file name.
+- **Reason:** providers reject a tool result without its call; the key lives only in `.env`.
+- **Impact:** F12; `Conversation`, `ConversationStore`. `TODO.md` lists two weaknesses of the
+  trimming.
+
+### Small members added for conversations and answers (2026-11-04, Slice 2)
+- **Original design:** cd05 draws `Conversation`, `Answer` and `Citation` with their fields, and
+  names the three statuses in a note.
+- **Implemented change:** `Conversation.getId()`, `getLastResults()`, `setLastResults()` and a
+  constructor that restores a saved conversation; `VerificationStatus` is the enum for the note's
+  statuses; `Answer` and `Citation` are records, with `Answer.withCitations()`,
+  `Citation.withStatus()` and a `Citation` constructor that starts unverified;
+  `ConversationStore.getConversationsDirectory()`; `ResponseParser.CITATIONS_HEADER`.
+- **Reason:** the store, the verifier and the prompt need them.
+- **Impact:** none on the patterns. The class diagram gets these at the freeze.
+
+### `AgentController`: three more collaborators, and what each ending returns (2026-11-05, Slice 2)
+- **Original design:** cd05 gives `AgentController` a `ToolRegistry`, `PromptBuilder`,
+  `ResponseParser`, `CitationVerifier` and `maxSteps`. SD03 ends the loop with a verified answer,
+  or with "best results so far, with a notice" at the step limit.
+- **Implemented change:** the constructor also takes the `SearchIndex` (to turn the paths of an
+  answer's files into the `SearchResult`s that `Answer.sourceFiles` and
+  `Conversation.lastResults` hold), `maxConversationChars` (the limit for `trimToFit()`) and a
+  `Clock` (today's date for the prompt). `run()` throws `LlmException` and `IOException`. What it
+  returns:
+  - a parsed answer lists the files it cites, each once, in citation order;
+  - at the step limit, and when the reply can't be parsed even after the one reformat request,
+    it lists every file the tools returned, with a notice; the unparsed reply is returned as it
+    is, with no citations, so `isVerified()` is false;
+  - an empty reply is asked for again once, then reported as "The model gave no answer."
+
+  The reformat request doesn't count against `maxSteps`, and a tool call sent in reply to it
+  isn't run. The conversation gets exactly one closing reply per request, the one the answer came
+  from; a rejected reply is shown to the model through a copy of the conversation. At the step
+  limit a fixed sentence is stored as the reply. `summarizeDiff()` waits for F10.
+- **Reason:** the design leaves these cases open. One closing reply per request keeps the history
+  a sequence of complete exchanges, which strict chat formats require.
+- **Impact:** F07, F08, F09, F12; `AgentController`. cd05 and SD03 get these at the freeze.
+
+### The instant-search fallback, conversation ids, and the agent's limits (2026-11-05, Slice 2)
+- **Original design:** when the client throws `LlmException`, `FindAnythingService.ask()`
+  completes the future with instant search results and a "model unavailable" notice (SD03).
+  `newConversation()` returns a `Conversation`.
+- **Implemented change:** as designed, with these details. The fallback also covers a client that
+  can't be built (for example no API key). Its answer has a fixed text, at most 10 files, and a
+  notice that starts with `FindAnythingService.MODEL_UNAVAILABLE` and gives the model's error.
+  The fallback is recorded in the conversation as the reply, and its files become `lastResults`.
+  A conversation's id is the time and four random hex digits, such as `20261105-143012-3f9a`, and
+  the conversation is first saved with its first answer. The facade's constructor takes a
+  `ConversationStore` and a `Clock`. `open()` builds the `ToolRegistry` (with `SearchTool` and
+  `ReadExcerptTool`) and the `AgentController`, with these limits as constants: 8 steps, 6,000
+  characters per excerpt, 40,000 characters of history.
+- **Reason:** the design names the behaviour but not these values; a missing key is as much
+  "model unavailable" as a refused connection.
+- **Impact:** F07, F12; `FindAnythingService`, `CliApp` (composition root).
+
+### Paused and unavailable folders are skipped inside `SearchEngine` (2026-11-05, Slice 2)
+- **Original design:** `SearchEngine` holds only the `SearchIndex` (cd04), and `ReadExcerptTool`
+  only the `SearchIndex` and `maxExcerptChars` (cd05). The report doesn't say where a paused
+  folder is left out of searches; Slice 1 did it in `FindAnythingService.search()`.
+- **Implemented change:** `SearchEngine` takes the `IndexConfig` and drops files that aren't in
+  an active folder, so the facade, the fallback and the agent's `SearchTool` all skip them
+  through the one method; the facade's own filter is gone. `ReadExcerptTool` takes the
+  `IndexConfig` too and refuses a file in such a folder with an error for the model. New method:
+  `IndexConfig.isInActiveFolder(Path)`.
+- **Reason:** the agent's tools call `SearchEngine` and `SearchIndex` directly, so with the
+  filter in the facade they returned and read files from paused folders. Found in review while
+  writing `ask()`, before any release.
+- **Impact:** F01, F06, F07, F08; `SearchEngine`, `ReadExcerptTool`, `IndexConfig`,
+  `FindAnythingService`.
+
+### `findany ask`: no interactive session, and statuses in words (2026-11-05, Slice 2)
+- **Original design:** `findany ask "<request>"` prints the answer with numbered citations
+  marked `[✓]` or `[?]`; `--verbose` prints the agent's steps; `findany ask` with no arguments
+  starts an interactive session; `--continue` continues the last conversation (F07–F09, F12).
+- **Implemented change:** `ask` needs a request; there is no interactive session, and follow-ups
+  use `--continue`. Each source line also gives its status in words ("verified", "unverified: the
+  quote was not found there", "unverified: the file has changed since it was indexed"); a changed
+  source is marked `[?]`. `--verbose` prints the steps on standard error. `--json` (added for
+  Stage 3's behaviour tests) prints the conversation id, model, request, answer, `verified`,
+  `fallback`, citations with statuses, source files, notices and the request's tool calls. A
+  fallback exits with 0.
+- **Reason:** a console that can't show the check mark prints `?` in its place, which would make
+  a verified citation look unverified. The interactive session is left out for time.
+- **Impact:** F07, F08, F09, F12; `CliApp`.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

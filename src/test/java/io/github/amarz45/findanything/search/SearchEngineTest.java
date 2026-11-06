@@ -2,6 +2,8 @@ package io.github.amarz45.findanything.search;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.amarz45.findanything.config.IndexConfig;
+import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.storage.Chunk;
 import io.github.amarz45.findanything.storage.ChunkHit;
 import io.github.amarz45.findanything.storage.ExtractionStatus;
@@ -30,6 +32,56 @@ class SearchEngineTest {
         return new Chunk(position, position + 1, text, new float[0]);
     }
 
+    /** A configuration with these search folders; with none, {@code ROOT} is the one folder. */
+    IndexConfig config(SearchFolder... searchFolders) {
+        List<SearchFolder> folders =
+                searchFolders.length == 0
+                        ? List.of(new SearchFolder(ROOT, false, true, List.of()))
+                        : List.of(searchFolders);
+        return new IndexConfig(folder, folders, List.of());
+    }
+
+    @Test
+    void leavesOutFilesInPausedOrUnavailableFolders() throws Exception {
+        SearchFolder docs = new SearchFolder(ROOT.resolve("docs"), false, true, List.of());
+        SearchFolder archive = new SearchFolder(ROOT.resolve("archive"), true, true, List.of());
+        SearchFolder usb = new SearchFolder(ROOT.resolve("usb"), false, false, List.of());
+        try (SearchIndex index = SearchIndex.open(folder)) {
+            // The paused folder holds the best match and the newest file.
+            index.put(
+                    file("archive/old.txt", Instant.ofEpochSecond(9)),
+                    List.of(chunk(0, "merge sort merge sort merge sort")));
+            index.put(
+                    file("docs/a.txt", Instant.ofEpochSecond(1)),
+                    List.of(chunk(0, "a note about merge sort")));
+            index.put(
+                    file("usb/b.txt", Instant.ofEpochSecond(2)),
+                    List.of(chunk(0, "merge sort on a stick")));
+            index.put(
+                    file("removed/c.txt", Instant.ofEpochSecond(3)),
+                    List.of(chunk(0, "merge sort in a folder that was removed")));
+            index.commit();
+            SearchEngine engine = new SearchEngine(index, config(docs, archive, usb));
+
+            assertThat(engine.search("merge sort", SearchFilters.NONE, 10))
+                    .extracting(r -> r.file().path())
+                    .containsExactly(ROOT.resolve("docs/a.txt"));
+            assertThat(engine.search("", SearchFilters.NONE, 10))
+                    .extracting(r -> r.file().path())
+                    .containsExactly(ROOT.resolve("docs/a.txt"));
+            // The limit counts the files that are returned, not the ones passed over.
+            assertThat(engine.search("merge sort", SearchFilters.NONE, 1))
+                    .extracting(r -> r.file().path())
+                    .containsExactly(ROOT.resolve("docs/a.txt"));
+
+            // The folders are read at the time of each search.
+            archive.setPaused(false);
+            assertThat(engine.search("merge sort", SearchFilters.NONE, 10))
+                    .extracting(r -> r.file().path())
+                    .containsExactly(ROOT.resolve("archive/old.txt"), ROOT.resolve("docs/a.txt"));
+        }
+    }
+
     @Test
     void groupsHitsByFileKeepingTheBestChunk() throws Exception {
         try (SearchIndex index = SearchIndex.open(folder)) {
@@ -44,7 +96,7 @@ class SearchEngineTest {
                     List.of(chunk(0, "a note about merge sort")));
             index.put(file("c.txt", Instant.ofEpochSecond(3)), List.of(chunk(0, "unrelated")));
             index.commit();
-            SearchEngine engine = new SearchEngine(index);
+            SearchEngine engine = new SearchEngine(index, config());
 
             List<SearchResult> results = engine.search("merge sort", SearchFilters.NONE, 10);
             assertThat(results)
@@ -67,7 +119,7 @@ class SearchEngineTest {
     @Test
     void fusesTwoRankingsByReciprocalRank() throws Exception {
         try (SearchIndex index = SearchIndex.open(folder)) {
-            SearchEngine engine = new SearchEngine(index);
+            SearchEngine engine = new SearchEngine(index, config());
             IndexedFile a = file("a.txt", Instant.EPOCH);
             IndexedFile b = file("b.txt", Instant.EPOCH);
             IndexedFile c = file("c.txt", Instant.EPOCH);

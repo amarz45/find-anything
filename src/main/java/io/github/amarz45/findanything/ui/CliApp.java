@@ -1,5 +1,14 @@
 package io.github.amarz45.findanything.ui;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.amarz45.findanything.agent.Answer;
+import io.github.amarz45.findanything.agent.Citation;
+import io.github.amarz45.findanything.agent.Conversation;
+import io.github.amarz45.findanything.agent.ConversationStore;
+import io.github.amarz45.findanything.agent.VerificationStatus;
 import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.config.EnvFile;
 import io.github.amarz45.findanything.config.ExclusionRule;
@@ -15,6 +24,8 @@ import io.github.amarz45.findanything.indexing.IndexStatus;
 import io.github.amarz45.findanything.indexing.IsolatedTextExtractor;
 import io.github.amarz45.findanything.indexing.TextExtractor;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
+import io.github.amarz45.findanything.llm.Message;
+import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.IndexMode;
 import io.github.amarz45.findanything.storage.IndexedFile;
@@ -25,6 +36,7 @@ import java.nio.file.AccessDeniedException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -36,6 +48,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -46,11 +59,11 @@ import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
 /**
- * The {@code findany} command line. With no arguments it prints help; every subcommand first
- * catches up on files changed since the last run (F03), then does its work through {@link
- * FindAnythingService} and waits for the result. {@code main} is the composition root: it resolves
- * the data folder ({@code FINDANY_HOME}), reads {@code .env}, and builds the service and its
- * collaborators.
+ * The {@code findany} command line. With no arguments it prints help; every subcommand that uses
+ * the index first catches up on files changed since the last run (F03), then does its work through
+ * {@link FindAnythingService} and waits for the result. {@code main} is the composition root: it
+ * resolves the data folder ({@code FINDANY_HOME}), reads {@code .env}, and builds the service and
+ * its collaborators.
  */
 @Command(
         name = "findany",
@@ -63,6 +76,7 @@ import picocli.CommandLine.Spec;
             CliApp.Exclude.class,
             CliApp.Index.class,
             CliApp.Search.class,
+            CliApp.Ask.class,
             CliApp.Show.class,
             CliApp.Model.class
         })
@@ -184,11 +198,13 @@ public final class CliApp implements Callable<Integer> {
                 indexConfig,
                 settingsStore,
                 new LlmClientFactory(),
+                new ConversationStore(home.resolve("conversations"), settingsStore),
                 textExtractor,
                 new Chunker(1_500),
                 changeQueue,
                 home.resolve("index"),
-                backgroundExecutor);
+                backgroundExecutor,
+                Clock.systemDefaultZone());
     }
 
     // ------------------------------------------------------------------ shared steps
@@ -634,6 +650,12 @@ public final class CliApp implements Callable<Integer> {
                                 : "No results.");
                 return 0;
             }
+            printResults(out, results);
+            return 0;
+        }
+
+        /** Prints a numbered list of files, each with its details and its best passage, if any. */
+        static void printResults(PrintWriter out, List<SearchResult> results) {
             int number = 0;
             for (SearchResult result : results) {
                 IndexedFile file = result.file();
@@ -654,7 +676,6 @@ public final class CliApp implements Callable<Integer> {
                     out.println("   " + where + snippet(result.bestChunk().text(), 160));
                 }
             }
-            return 0;
         }
 
         private static String statusNote(IndexedFile file) {
@@ -665,6 +686,195 @@ public final class CliApp implements Callable<Integer> {
                 case NO_TEXT -> " (no extractable text)";
                 case FAILED -> " (extraction failed)";
             };
+        }
+    }
+
+    // ------------------------------------------------------------------ findany ask
+
+    /** {@code findany ask [--continue] [--verbose] [--json] <request>} (F07, F08, F09, F12). */
+    @Command(
+            name = "ask",
+            description = "Ask the AI agent to find files or to answer a question from them.")
+    static final class Ask implements Callable<Integer> {
+        @ParentCommand CliApp app;
+        @Spec CommandSpec spec;
+
+        @Parameters(
+                arity = "1..*",
+                paramLabel = "<request>",
+                description = "What to find or answer, in your own words.")
+        List<String> words;
+
+        @Option(
+                names = "--continue",
+                description =
+                        "Continue the most recent conversation, so the request can build on its"
+                                + " earlier answers. Otherwise a new conversation starts.")
+        boolean continueLast;
+
+        @Option(
+                names = "--verbose",
+                description = "Also print each step of the agent, on standard error.")
+        boolean verbose;
+
+        @Option(
+                names = "--json",
+                description =
+                        "Print the result as JSON: the answer, each citation's status, the tool"
+                                + " calls, the model, and whether instant search stood in for an"
+                                + " unavailable model.")
+        boolean json;
+
+        @Override
+        public Integer call() throws Exception {
+            PrintWriter out = spec.commandLine().getOut();
+            PrintWriter err = spec.commandLine().getErr();
+            app.openIndex(err);
+            app.catchUp(err);
+            FindAnythingService service = app.findAnythingService;
+            Conversation conversation;
+            if (continueLast) {
+                List<Conversation> saved = service.listConversations();
+                if (saved.isEmpty()) {
+                    throw new IllegalStateException(
+                            "There is no conversation to continue. Ask once without --continue.");
+                }
+                conversation = saved.get(0);
+            } else {
+                conversation = service.newConversation();
+            }
+            String request = String.join(" ", words);
+            Consumer<String> progressListener = verbose ? err::println : step -> {};
+            Answer answer = service.ask(request, conversation, progressListener).join();
+            if (json) {
+                out.println(toJson(request, conversation, answer));
+            } else {
+                printAnswer(out, answer);
+            }
+            return 0;
+        }
+
+        /**
+         * Prints the answer, then its sources, each marked {@code [✓]} when its quote was found in
+         * the file and {@code [?]} when it wasn't. The status is also written out in words, since a
+         * console that can't show the check mark prints a question mark in its place.
+         */
+        static void printAnswer(PrintWriter out, Answer answer) {
+            out.println(answer.text());
+            List<Citation> citations = answer.citations();
+            if (!citations.isEmpty()) {
+                out.println();
+                out.println("Sources:");
+                int number = 0;
+                int unverified = 0;
+                for (Citation citation : citations) {
+                    number++;
+                    boolean verified = citation.status() == VerificationStatus.VERIFIED;
+                    unverified += verified ? 0 : 1;
+                    out.printf(
+                            "[%d] %s %s%s (%s)%n",
+                            number,
+                            verified ? "[✓]" : "[?]",
+                            citation.file(),
+                            place(citation),
+                            describe(citation.status()));
+                    if (!citation.quote().isBlank()) {
+                        out.println("    \"" + snippet(citation.quote(), 300) + "\"");
+                    }
+                }
+                out.println();
+                if (unverified == 0) {
+                    out.println(
+                            citations.size() == 1
+                                    ? "The citation was found in its file."
+                                    : "All "
+                                            + citations.size()
+                                            + " citations were found in their files.");
+                } else {
+                    out.printf(
+                            "%d of %d citation%s could not be verified.%n",
+                            unverified, citations.size(), citations.size() == 1 ? "" : "s");
+                }
+            } else if (!answer.sourceFiles().isEmpty()) {
+                out.println();
+                out.println("Files:");
+                Search.printResults(out, answer.sourceFiles());
+            }
+            for (String notice : answer.notices()) {
+                out.println();
+                out.println("Note: " + notice);
+            }
+        }
+
+        private static String place(Citation citation) {
+            if (citation.pageNumber() == 0) {
+                return "";
+            }
+            String unit = IndexedFile.fileTypeOf(citation.file()).equals("pptx") ? "slide" : "page";
+            return ", " + unit + " " + citation.pageNumber();
+        }
+
+        private static String describe(VerificationStatus status) {
+            return switch (status) {
+                case VERIFIED -> "verified";
+                case UNVERIFIED -> "unverified: the quote was not found there";
+                case SOURCE_CHANGED -> "unverified: the file has changed since it was indexed";
+            };
+        }
+
+        /**
+         * The result as JSON, for scripts and behaviour tests. {@code toolCalls} are the calls the
+         * model made for this request, in order, including any that were rejected.
+         */
+        static String toJson(String request, Conversation conversation, Answer answer)
+                throws JsonProcessingException {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode root = mapper.createObjectNode();
+            root.put("conversation", conversation.getId());
+            ModelSettings settings = conversation.getModelSettings();
+            ObjectNode model = root.putObject("model");
+            model.put("backend", settings.backendType().name().toLowerCase(Locale.ROOT));
+            model.put("name", settings.modelName());
+            root.put("request", request);
+            root.put("answer", answer.text());
+            root.put("verified", answer.isVerified());
+            root.put(
+                    "fallback",
+                    answer.notices().stream()
+                            .anyMatch(n -> n.startsWith(FindAnythingService.MODEL_UNAVAILABLE)));
+            ArrayNode citations = root.putArray("citations");
+            int number = 0;
+            for (Citation citation : answer.citations()) {
+                ObjectNode node = citations.addObject();
+                node.put("number", ++number);
+                node.put("file", citation.file().toString());
+                if (citation.pageNumber() > 0) {
+                    node.put("page", citation.pageNumber());
+                } else {
+                    node.putNull("page");
+                }
+                node.put("quote", citation.quote());
+                node.put("status", citation.status().name().toLowerCase(Locale.ROOT));
+            }
+            ArrayNode sourceFiles = root.putArray("sourceFiles");
+            answer.sourceFiles()
+                    .forEach(result -> sourceFiles.add(result.file().path().toString()));
+            ArrayNode notices = root.putArray("notices");
+            answer.notices().forEach(notices::add);
+            ArrayNode toolCalls = root.putArray("toolCalls");
+            List<Message> messages = conversation.getMessages();
+            int start = messages.size();
+            while (start > 0 && messages.get(start - 1).role() != Message.Role.USER) {
+                start--;
+            }
+            for (Message message : messages.subList(start, messages.size())) {
+                for (ToolCall toolCall : message.toolCalls()) {
+                    ObjectNode node = toolCalls.addObject();
+                    node.put("name", toolCall.name());
+                    node.set("arguments", mapper.valueToTree(toolCall.arguments()));
+                }
+            }
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         }
     }
 

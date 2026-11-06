@@ -1,5 +1,6 @@
 package io.github.amarz45.findanything.agent;
 
+import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.llm.ToolSpec;
 import io.github.amarz45.findanything.llm.ToolSpec.Parameter;
 import io.github.amarz45.findanything.storage.Chunk;
@@ -54,14 +55,17 @@ public final class ReadExcerptTool implements Tool {
                                     false)));
 
     private final SearchIndex searchIndex;
+    private final IndexConfig indexConfig;
     private final int maxExcerptChars;
 
     /**
      * @param searchIndex the index to read from
+     * @param indexConfig the search folders; a file in a paused or unreachable folder isn't read
      * @param maxExcerptChars the most characters of file text one excerpt may hold; at least 1
      */
-    public ReadExcerptTool(SearchIndex searchIndex, int maxExcerptChars) {
+    public ReadExcerptTool(SearchIndex searchIndex, IndexConfig indexConfig, int maxExcerptChars) {
         this.searchIndex = Objects.requireNonNull(searchIndex, "searchIndex");
+        this.indexConfig = Objects.requireNonNull(indexConfig, "indexConfig");
         if (maxExcerptChars < 1) {
             throw new IllegalArgumentException("maxExcerptChars must be at least 1");
         }
@@ -119,6 +123,12 @@ public final class ReadExcerptTool implements Tool {
                     "No indexed file has the path "
                             + path
                             + ". Use a path exactly as the search tool gave it.");
+        }
+        if (!indexConfig.isInActiveFolder(path)) {
+            return ToolResult.failure(
+                    path
+                            + " is in a search folder that is paused or unavailable, so it can't be"
+                            + " read now.");
         }
         IndexedFile file = indexed.get();
         if (chunks.isEmpty()) {
