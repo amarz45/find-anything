@@ -3,6 +3,9 @@ package io.github.amarz45.findanything.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.amarz45.findanything.agent.Answer;
+import io.github.amarz45.findanything.agent.Conversation;
+import io.github.amarz45.findanything.agent.ConversationStore;
 import io.github.amarz45.findanything.config.AlreadyCoveredException;
 import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.config.IndexConfig;
@@ -18,18 +21,25 @@ import io.github.amarz45.findanything.indexing.ScriptedExtractor;
 import io.github.amarz45.findanything.indexing.TextExtractor;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
+import io.github.amarz45.findanything.llm.LlmResponse;
+import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
+import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.ExtractionStatus;
 import io.github.amarz45.findanything.storage.IndexMode;
 import io.github.amarz45.findanything.storage.InvalidFiltersException;
 import io.github.amarz45.findanything.storage.SearchFilters;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,11 +73,32 @@ class FindAnythingServiceTest {
                 config,
                 store,
                 llmClientFactory,
+                new ConversationStore(appData.resolve("conversations"), store),
                 extractor,
                 new Chunker(300),
                 new ChangeQueue(Duration.ZERO),
                 appData.resolve("index"),
-                Executors.newFixedThreadPool(2));
+                Executors.newFixedThreadPool(2),
+                CLOCK);
+    }
+
+    static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-05T14:30:12Z"), ZoneOffset.UTC);
+    static final String QUESTION = "When does my lease end?";
+
+    /** Writes a two-page lease into a new folder; {@link ScriptedExtractor} splits it at \f. */
+    Path leaseFolder() throws Exception {
+        Path docs = home.resolve("docs");
+        Files.createDirectories(docs);
+        Files.writeString(
+                docs.resolve("lease.pdf"),
+                "This lease is between the landlord and the tenant.\f"
+                        + "The lease ends on August 31, 2026.");
+        Files.writeString(docs.resolve("groceries.txt"), "Milk, eggs and bread.");
+        return docs;
+    }
+
+    static List<Message.Role> roles(Conversation conversation) {
+        return conversation.getMessages().stream().map(Message::role).toList();
     }
 
     /** Generous because CI's Windows runner starts the Tika child JVM and parses far slower. */
@@ -265,6 +296,149 @@ class FindAnythingServiceTest {
         try (FindAnythingService reopened =
                 service(home.resolve("app"), new ScriptedExtractor(), failing, env)) {
             assertThat(reopened.getModelSettings().modelName()).isEqualTo("mistral");
+        }
+    }
+
+    @Test
+    void asksTheAgentWithTheConversationsOwnModelAndSavesTheConversation() throws Exception {
+        Path docs = leaseFolder();
+        Path lease = docs.resolve("lease.pdf");
+        ScriptedLlmClient client =
+                new ScriptedLlmClient(
+                        new LlmResponse(
+                                "",
+                                List.of(
+                                        new ToolCall(
+                                                "call-1",
+                                                "search",
+                                                Map.of("query", "lease ends")))),
+                        new LlmResponse(
+                                "Your lease ends on August 31, 2026 [1].\n\nCITATIONS:\n[1] file: "
+                                        + lease
+                                        + "\npage: 2\nquote: The lease ends on August 31, 2026.",
+                                List.of()),
+                        new LlmResponse("Ask me about one of your files.", List.of()));
+        ScriptedLlmClientFactory factory = new ScriptedLlmClientFactory(client);
+        Path appData = home.resolve("app");
+        Map<String, String> env = Map.of("OLLAMA_MODEL", "llama");
+        List<String> progress = new CopyOnWriteArrayList<>();
+        String id;
+        try (FindAnythingService service =
+                service(appData, new ScriptedExtractor(), factory, env)) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+
+            Conversation conversation = service.newConversation();
+            id = conversation.getId();
+            assertThat(id).matches("20261105-143012-[0-9a-f]{4}");
+            assertThat(conversation.getModelSettings().modelName()).isEqualTo("llama");
+            assertThat(service.listConversations()).isEmpty(); // saved with its first answer
+
+            Answer answer = service.ask(QUESTION, conversation, progress::add).join();
+            assertThat(answer.text()).isEqualTo("Your lease ends on August 31, 2026 [1].");
+            assertThat(answer.isVerified()).isTrue();
+            assertThat(answer.citations().get(0).pageNumber()).isEqualTo(2);
+            assertThat(answer.sourceFiles())
+                    .extracting(r -> r.file().path())
+                    .containsExactly(lease);
+            assertThat(answer.notices()).isEmpty();
+            // The real search tool ran on the index and its result went back to the model.
+            assertThat(client.requests.get(1).messages())
+                    .last()
+                    .extracting(Message::content)
+                    .asString()
+                    .contains(lease.toString())
+                    .contains("Best passage (page 2)");
+            assertThat(progress).contains("Step 1: search(query=\"lease ends\")");
+
+            // The current model changes; the conversation still talks to the one it started with.
+            service.setBackend(service.resolveModelSettings(BackendType.LOCAL, "mistral"));
+            service.ask("Thanks!", conversation, progress::add).join();
+            assertThat(factory.requested).containsOnly(conversation.getModelSettings());
+            assertThat(service.newConversation().getModelSettings().modelName())
+                    .isEqualTo("mistral");
+
+            assertThatThrownBy(() -> service.ask(" ", conversation, progress::add).join())
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        }
+        try (FindAnythingService reopened =
+                service(appData, new ScriptedExtractor(), factory, env)) {
+            assertThat(reopened.listConversations())
+                    .extracting(Conversation::getId)
+                    .containsExactly(id);
+            Conversation saved = reopened.openConversation(id);
+            assertThat(saved.getModelSettings().modelName()).isEqualTo("llama");
+            assertThat(roles(saved))
+                    .containsExactly(
+                            Message.Role.USER,
+                            Message.Role.ASSISTANT,
+                            Message.Role.TOOL,
+                            Message.Role.ASSISTANT,
+                            Message.Role.USER,
+                            Message.Role.ASSISTANT);
+            assertThatThrownBy(() -> reopened.openConversation("no-such-conversation"))
+                    .isInstanceOf(IOException.class);
+        }
+    }
+
+    @Test
+    void answersWithInstantSearchWhenTheModelIsUnavailable() throws Exception {
+        Path docs = leaseFolder();
+        String reason =
+                "Can't reach Ollama at http://localhost:11434. Start it with `ollama serve`.";
+        ScriptedLlmClientFactory factory =
+                new ScriptedLlmClientFactory(new ScriptedLlmClient(new LlmException(reason)));
+        try (FindAnythingService service =
+                service(home.resolve("app"), new ScriptedExtractor(), factory, Map.of())) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+            Conversation conversation = service.newConversation();
+
+            Answer answer = service.ask(QUESTION, conversation, step -> {}).join();
+            assertThat(answer.text()).isEqualTo(FindAnythingService.FALLBACK_TEXT);
+            assertThat(answer.notices())
+                    .containsExactly(FindAnythingService.MODEL_UNAVAILABLE + reason);
+            assertThat(answer.citations()).isEmpty();
+            assertThat(answer.isVerified()).isFalse();
+            assertThat(answer.sourceFiles())
+                    .extracting(r -> r.file().path())
+                    .containsExactly(docs.resolve("lease.pdf"));
+            assertThat(conversation.getLastResults()).isEqualTo(answer.sourceFiles());
+            assertThat(roles(conversation))
+                    .containsExactly(Message.Role.USER, Message.Role.ASSISTANT);
+            assertThat(service.openConversation(conversation.getId()).getMessages())
+                    .isEqualTo(conversation.getMessages());
+
+            // A paused folder is left out of the fallback, as it is from any search.
+            service.setFolderPaused(docs, true);
+            assertThat(service.ask(QUESTION, conversation, step -> {}).join().sourceFiles())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void answersWithInstantSearchWhenTheModelsClientCannotBeBuilt() throws Exception {
+        Path docs = leaseFolder();
+        ScriptedLlmClientFactory factory =
+                new ScriptedLlmClientFactory(new LlmException("No OpenRouter API key."));
+        try (FindAnythingService service =
+                service(home.resolve("app"), new ScriptedExtractor(), factory, Map.of())) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+            Conversation conversation = service.newConversation();
+
+            Answer answer = service.ask(QUESTION, conversation, step -> {}).join();
+            assertThat(answer.notices())
+                    .containsExactly(
+                            FindAnythingService.MODEL_UNAVAILABLE + "No OpenRouter API key.");
+            assertThat(answer.sourceFiles()).hasSize(1);
+            // The request is recorded even though the agent never ran.
+            assertThat(conversation.getMessages().get(0).content()).isEqualTo(QUESTION);
+            assertThat(roles(conversation))
+                    .containsExactly(Message.Role.USER, Message.Role.ASSISTANT);
         }
     }
 }

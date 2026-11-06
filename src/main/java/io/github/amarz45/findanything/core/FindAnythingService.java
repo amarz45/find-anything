@@ -1,5 +1,15 @@
 package io.github.amarz45.findanything.core;
 
+import io.github.amarz45.findanything.agent.AgentController;
+import io.github.amarz45.findanything.agent.Answer;
+import io.github.amarz45.findanything.agent.CitationVerifier;
+import io.github.amarz45.findanything.agent.Conversation;
+import io.github.amarz45.findanything.agent.ConversationStore;
+import io.github.amarz45.findanything.agent.PromptBuilder;
+import io.github.amarz45.findanything.agent.ReadExcerptTool;
+import io.github.amarz45.findanything.agent.ResponseParser;
+import io.github.amarz45.findanything.agent.SearchTool;
+import io.github.amarz45.findanything.agent.ToolRegistry;
 import io.github.amarz45.findanything.config.AlreadyCoveredException;
 import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.config.ExclusionRule;
@@ -15,8 +25,10 @@ import io.github.amarz45.findanything.indexing.IndexStatusListener;
 import io.github.amarz45.findanything.indexing.Indexer;
 import io.github.amarz45.findanything.indexing.IndexerState;
 import io.github.amarz45.findanything.indexing.TextExtractor;
+import io.github.amarz45.findanything.llm.LlmClient;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
+import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.search.SearchEngine;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.Chunk;
@@ -30,18 +42,23 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,20 +79,49 @@ public final class FindAnythingService implements AutoCloseable {
     /** Results per search unless the caller asks for a different number. */
     public static final int DEFAULT_RESULT_LIMIT = 50;
 
+    /** How many times the agent may call the model for one request. */
+    static final int MAX_AGENT_STEPS = 8;
+
+    /** The most file text one {@code read_excerpt} call returns: four full chunks. */
+    static final int MAX_EXCERPT_CHARS = 6_000;
+
+    /**
+     * The most conversation history sent to a model, about 10,000 tokens, which leaves room for the
+     * instructions and the reply in a local model's context.
+     */
+    static final int MAX_CONVERSATION_CHARS = 40_000;
+
+    /** How many files the instant search lists when it stands in for an unavailable model. */
+    static final int FALLBACK_RESULT_LIMIT = 10;
+
+    /** The answer's text when instant search stands in for an unavailable model. */
+    static final String FALLBACK_TEXT =
+            "The model is unavailable, so there is no answer. These are the files that match the"
+                    + " words of your request.";
+
+    /** What the notice on such an answer starts with; the model's error follows. */
+    public static final String MODEL_UNAVAILABLE = "The model is unavailable: ";
+
+    private static final DateTimeFormatter CONVERSATION_ID_TIME =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+
     private final IndexConfig indexConfig;
     private final SettingsStore settingsStore;
     private final LlmClientFactory llmClientFactory;
+    private final ConversationStore conversationStore;
     private final TextExtractor textExtractor;
     private final Chunker chunker;
     private final ChangeQueue changeQueue;
     private final Path indexDirectory;
     private final ExecutorService backgroundExecutor;
+    private final Clock clock;
     private final List<IndexStatusListener> statusListeners = new CopyOnWriteArrayList<>();
 
     private SearchIndex searchIndex;
     private IndexMode indexMode;
     private Indexer indexer; // only in WRITER mode
     private SearchEngine searchEngine;
+    private AgentController agentController;
     private ScheduledExecutorService refresher; // only in READ_ONLY mode
     private ModelSettings modelSettings; // loaded on first use; the model for new conversations
 
@@ -83,19 +129,23 @@ public final class FindAnythingService implements AutoCloseable {
             IndexConfig indexConfig,
             SettingsStore settingsStore,
             LlmClientFactory llmClientFactory,
+            ConversationStore conversationStore,
             TextExtractor textExtractor,
             Chunker chunker,
             ChangeQueue changeQueue,
             Path indexDirectory,
-            ExecutorService backgroundExecutor) {
+            ExecutorService backgroundExecutor,
+            Clock clock) {
         this.indexConfig = Objects.requireNonNull(indexConfig, "indexConfig");
         this.settingsStore = Objects.requireNonNull(settingsStore, "settingsStore");
         this.llmClientFactory = Objects.requireNonNull(llmClientFactory, "llmClientFactory");
+        this.conversationStore = Objects.requireNonNull(conversationStore, "conversationStore");
         this.textExtractor = Objects.requireNonNull(textExtractor, "textExtractor");
         this.chunker = Objects.requireNonNull(chunker, "chunker");
         this.changeQueue = Objects.requireNonNull(changeQueue, "changeQueue");
         this.indexDirectory = Objects.requireNonNull(indexDirectory, "indexDirectory");
         this.backgroundExecutor = Objects.requireNonNull(backgroundExecutor, "backgroundExecutor");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -115,6 +165,19 @@ public final class FindAnythingService implements AutoCloseable {
         searchIndex = SearchIndex.open(indexDirectory);
         indexMode = searchIndex.getMode();
         searchEngine = new SearchEngine(searchIndex);
+        ToolRegistry toolRegistry = new ToolRegistry();
+        toolRegistry.register(new SearchTool(searchEngine));
+        toolRegistry.register(new ReadExcerptTool(searchIndex, MAX_EXCERPT_CHARS));
+        agentController =
+                new AgentController(
+                        toolRegistry,
+                        new PromptBuilder(),
+                        new ResponseParser(),
+                        new CitationVerifier(searchIndex),
+                        searchIndex,
+                        MAX_AGENT_STEPS,
+                        MAX_CONVERSATION_CHARS,
+                        clock);
         if (indexMode == IndexMode.WRITER) {
             indexer = new Indexer(indexConfig, changeQueue, textExtractor, chunker, searchIndex);
             statusListeners.forEach(indexer::addStatusListener);
@@ -318,17 +381,16 @@ public final class FindAnythingService implements AutoCloseable {
         if (!errors.isEmpty()) {
             return CompletableFuture.failedFuture(new InvalidFiltersException(errors));
         }
-        return supply(
-                () -> {
-                    List<SearchFolder> active = indexConfig.getActiveFolders();
-                    return searchEngine.search(query, searchFilters, limit).stream()
-                            .filter(
-                                    result ->
-                                            active.stream()
-                                                    .anyMatch(
-                                                            f -> f.contains(result.file().path())))
-                            .toList();
-                });
+        return supply(() -> searchActiveFolders(query, searchFilters, limit));
+    }
+
+    /** Searches, leaving out the files in paused or unavailable folders. */
+    private List<SearchResult> searchActiveFolders(
+            String query, SearchFilters searchFilters, int limit) throws IOException {
+        List<SearchFolder> active = indexConfig.getActiveFolders();
+        return searchEngine.search(query, searchFilters, limit).stream()
+                .filter(result -> active.stream().anyMatch(f -> f.contains(result.file().path())))
+                .toList();
     }
 
     /**
@@ -414,6 +476,100 @@ public final class FindAnythingService implements AutoCloseable {
             ranges.add(new Preview.Range(matcher.start(), matcher.end()));
         }
         return ranges;
+    }
+
+    // ------------------------------------------------------------------ ask and conversations
+    // (F07, F08, F12)
+
+    /**
+     * Answers a request in a conversation with the agent, on a background thread (SD03). The client
+     * is always the one for the conversation's own model, whatever the current settings are. The
+     * conversation is saved after the answer.
+     *
+     * <p>When the model can't be used (no network, an API error, the local runtime not running, no
+     * key), the future still completes: with the instant search results for the request's words and
+     * a notice that starts with {@link #MODEL_UNAVAILABLE} and gives the reason. The future fails
+     * only when the index or the conversation's file can't be read or written.
+     *
+     * @param conversation the conversation the request belongs to; one request at a time
+     * @param progressListener told each step of the agent, on the background thread
+     */
+    public CompletableFuture<Answer> ask(
+            String request, Conversation conversation, Consumer<String> progressListener) {
+        requireOpen();
+        Objects.requireNonNull(conversation, "conversation");
+        Objects.requireNonNull(progressListener, "progressListener");
+        if (Objects.requireNonNull(request, "request").isBlank()) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("The request is empty."));
+        }
+        return supply(
+                () -> {
+                    Answer answer;
+                    try {
+                        LlmClient llmClient;
+                        try {
+                            llmClient =
+                                    llmClientFactory.createClient(conversation.getModelSettings());
+                        } catch (LlmException e) {
+                            // The agent never ran, so the conversation doesn't hold the request.
+                            conversation.addUserMessage(request);
+                            throw e;
+                        }
+                        answer =
+                                agentController.run(
+                                        request, conversation, llmClient, progressListener);
+                    } catch (LlmException e) {
+                        log.warn("The model is unavailable: {}", e.getMessage());
+                        answer = instantSearchInstead(request, conversation, e);
+                    }
+                    conversationStore.save(conversation);
+                    return answer;
+                });
+    }
+
+    /**
+     * The answer when the model can't be used: the files instant search finds for the request, with
+     * the reason as a notice. The conversation records the request and this outcome, so its history
+     * stays a sequence of complete exchanges.
+     */
+    private Answer instantSearchInstead(
+            String request, Conversation conversation, LlmException failure) throws IOException {
+        List<SearchResult> results =
+                searchActiveFolders(request, SearchFilters.NONE, FALLBACK_RESULT_LIMIT);
+        conversation.addAssistantMessage(new LlmResponse(FALLBACK_TEXT, List.of()));
+        conversation.setLastResults(results);
+        return new Answer(
+                FALLBACK_TEXT,
+                List.of(),
+                results,
+                List.of(MODEL_UNAVAILABLE + failure.getMessage()));
+    }
+
+    /**
+     * Starts a conversation with the current model, which it keeps for life. It is first saved when
+     * its first request is answered.
+     */
+    public Conversation newConversation() throws IOException {
+        String id =
+                CONVERSATION_ID_TIME.format(LocalDateTime.now(clock))
+                        + "-"
+                        + UUID.randomUUID().toString().substring(0, 4);
+        return new Conversation(id, getModelSettings());
+    }
+
+    /** The saved conversations, the most recently used first. */
+    public List<Conversation> listConversations() throws IOException {
+        return conversationStore.listAll();
+    }
+
+    /**
+     * Loads a saved conversation, with the model it was started with.
+     *
+     * @throws IOException when there is no such conversation or its file can't be read
+     */
+    public Conversation openConversation(String id) throws IOException {
+        return conversationStore.load(id);
     }
 
     // ------------------------------------------------------------------ index status (F03)

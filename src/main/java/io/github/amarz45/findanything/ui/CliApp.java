@@ -1,5 +1,6 @@
 package io.github.amarz45.findanything.ui;
 
+import io.github.amarz45.findanything.agent.ConversationStore;
 import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.config.EnvFile;
 import io.github.amarz45.findanything.config.ExclusionRule;
@@ -25,6 +26,7 @@ import java.nio.file.AccessDeniedException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -184,11 +186,13 @@ public final class CliApp implements Callable<Integer> {
                 indexConfig,
                 settingsStore,
                 new LlmClientFactory(),
+                new ConversationStore(home.resolve("conversations"), settingsStore),
                 textExtractor,
                 new Chunker(1_500),
                 changeQueue,
                 home.resolve("index"),
-                backgroundExecutor);
+                backgroundExecutor,
+                Clock.systemDefaultZone());
     }
 
     // ------------------------------------------------------------------ shared steps

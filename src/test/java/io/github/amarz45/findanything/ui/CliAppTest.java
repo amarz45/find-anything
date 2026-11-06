@@ -2,6 +2,7 @@ package io.github.amarz45.findanything.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.amarz45.findanything.agent.ConversationStore;
 import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.config.SettingsStore;
 import io.github.amarz45.findanything.core.FindAnythingService;
@@ -17,6 +18,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -64,11 +66,13 @@ class CliAppTest {
                 config,
                 store,
                 factory,
+                new ConversationStore(appData.resolve("conversations"), store),
                 new ScriptedExtractor(),
                 new Chunker(300),
                 new ChangeQueue(Duration.ZERO),
                 appData.resolve("index"),
-                Executors.newFixedThreadPool(2));
+                Executors.newFixedThreadPool(2),
+                Clock.systemDefaultZone());
     }
 
     @AfterEach
