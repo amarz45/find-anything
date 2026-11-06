@@ -312,12 +312,14 @@ surprising.)*
   - Next: Slice 2, item 2 (`Tool`, `ToolResult`, `ToolRegistry`, `SearchTool`,
     `ReadExcerptTool`), then items 3 and 4, then `ask` in the CLI. Period 3 (Nov 3–9) needs 5
     code commits by Nov 5.
-- **2026-11-04 (Session 4: Slice 2, item 2, Claude Code):**
-  - Done: Slice 2, item 2, on branch `agent` continued from its merged tip (3 code commits, not
-    pushed; see the Period 3 row in `docs/traceability.md`): `Tool`, `ToolResult`,
-    `ToolRegistry` (shared spec checks, call log), `SearchTool` and `ReadExcerptTool`, in the new
-    `agent` package. Test double for the agent loop: `ScriptedTool`. The tools aren't wired into
-    `FindAnythingService` yet; that comes with `AgentController`.
+- **2026-11-04 (Session 4: Slice 2, items 2 and 3, Claude Code):**
+  - Done: Slice 2, items 2 and 3, on branch `agent` continued from its merged tip (8 code
+    commits, pushed and merged as PR #5 on Nov 5; see the Period 3 row in
+    `docs/traceability.md`), all in the new `agent` package. Item 2: `Tool`, `ToolResult`, `ToolRegistry` (shared spec checks, call log),
+    `SearchTool` and `ReadExcerptTool`. Item 3: `Conversation`, `ConversationStore`, `Answer`,
+    `Citation`, `VerificationStatus`, `CitationVerifier`, `ResponseParser` (with
+    `AnswerFormatException`) and `PromptBuilder`. Test double for the agent loop: `ScriptedTool`.
+    None of it is wired into `FindAnythingService` yet; that comes with `AgentController`.
   - Decisions to remember (all in `docs/logs/design-changes.md`):
     - `ToolRegistry` checks arguments against the `ToolSpec` (required, unknown, types, allowed
       values) before `Tool.validate()`, so a tool's `validate()` and `execute()` can rely on the
@@ -326,11 +328,47 @@ surprising.)*
       5 files; `file_type` is a fixed list.
     - `ReadExcerptTool` takes `maxExcerptChars` in its constructor; the value isn't chosen yet
       (the facade sets it when the agent is wired up).
-  - Open question for item 4: `Answer.sourceFiles` and `Conversation.lastResults` are
-    `List<SearchResult>`, but a `ToolResult` carries only paths (`sourceFiles`), so
-    `AgentController` needs a way to turn the paths it collected into `SearchResult`s.
-  - Still not verified: a successful `findany model set cloud` with the real key (see Session 3).
-  - Next: Slice 2, item 3 (`Conversation`, `ConversationStore`, `PromptBuilder`,
-    `ResponseParser`, `Answer`, `Citation`, `CitationVerifier`), then item 4 (`AgentController`)
-    and item 5 (`ask`). Period 3 needs 2 more code commits, pushed, by Nov 5; `agent` needs a new
-    pull request.
+    - The answer format is plain lines: the text with `[n]` markers, a `CITATIONS:` line, then
+      `file:`, `page:` and `quote:` per entry. `ResponseParser` throws `AnswerFormatException`
+      with the problems, and `PromptBuilder.buildReformatRequest()` passes them to the model.
+    - `PromptBuilder` wraps file text in tool results between `[FILE CONTENT START]` and
+      `[FILE CONTENT END]`; the stored conversation keeps the tool's own text.
+    - `ConversationStore` takes a `SettingsStore` for the key of a loaded conversation. Nothing
+      generates conversation ids yet; that belongs with `FindAnythingService.newConversation()`.
+  - Low-priority improvements noted along the way are in `TODO.md` (history trimming, citation
+    verification).
+- **2026-11-05 (Session 4, continued: Slice 2, items 4 and 5, Claude Code):**
+  - Done: Slice 2, items 4 and 5, on branch `agent` after PR #5's merged tip (4 code commits,
+    **not pushed**; `agent` needs a new pull request): `AgentController` (the loop),
+    `FindAnythingService.ask()` with the instant-search fallback and the conversation methods, a
+    fix so the agent's tools skip paused and unavailable folders, and `findany ask` with
+    `--continue`, `--verbose` and `--json`. The agent now works end to end from the CLI.
+  - Checked with OpenRouter (Amar's run, Nov 5, with the real key in `.env`):
+    "When does my lease end?" gave August 31, 2026, cited to page 2 of
+    `housing/lease-2025-2026.pdf` and marked verified. The model also cited the 2026–2027 draft,
+    and said it had ignored the instructions in `notes/note-from-unknown-sender.md`. The
+    follow-up `ask --continue "And how much is the rent?"` gave $1,850 and the draft's $1,925,
+    both verified. No reformat request was needed. This is also the first successful request
+    with the real key; `findany model set cloud` itself wasn't confirmed separately. **Still to
+    do:** the same check with Ollama (the slice needs both backends); Amar will run it later.
+  - Decisions to remember (all in `docs/logs/design-changes.md`):
+    - `AgentController.run()` throws `LlmException`; the fallback to instant search is in
+      `FindAnythingService.ask()`, as SD03 draws it.
+    - The conversation gets exactly one closing reply per request. A reply the parser rejects is
+      shown to the model through a copy of the conversation and isn't stored.
+    - `SearchEngine` and `ReadExcerptTool` take the `IndexConfig` and skip files outside the
+      active folders; the facade no longer filters.
+    - The agent's limits are constants in `FindAnythingService`: 8 steps, 6,000 characters per
+      excerpt, 40,000 characters of history. The current exchange is never trimmed, so a long
+      run of searches can still outgrow a local model's 16k context (see `TODO.md`).
+    - `findany ask` has no interactive session; follow-ups use `--continue`, which picks the most
+      recently saved conversation.
+    - `ask --json` takes a request's tool calls from the conversation's messages after the last
+      user message, not from `ToolRegistry`'s call log, which is shared by every request.
+  - Seen on the real run, not acted on:
+    - A marker can be attached to a statement its quote doesn't support (the follow-up cited the
+      rent line for "not yet signed"). The verifier checks that a quote is in the file, not that
+      it supports the sentence; that is the design's limit for F09.
+  - Next: the check with Ollama; push `agent` and open a pull request; then Slice 3
+    (GUI, privacy, backends). `AgentController.summarizeDiff()` and `CompareTool` wait for F10
+    (Tier 2).
