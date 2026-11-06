@@ -165,7 +165,8 @@ public final class AgentController {
             }
         }
 
-        log.warn(
+        // These outcomes reach the user as notices on the answer, so they are logged quietly.
+        log.info(
                 "The step limit of {} was reached in conversation {}",
                 maxSteps,
                 conversation.getId());
@@ -229,14 +230,14 @@ public final class AgentController {
                                     withRejected, toolSpecs, today, problems));
             if (second.hasToolCalls()) {
                 // It was asked for the same answer in the format, so the calls aren't run.
-                log.warn("The model answered the reformat request with a tool call");
+                log.info("The model answered the reformat request with a tool call");
             } else {
                 Answer answer = responseParser.parseAnswer(second);
                 conversation.addAssistantMessage(second);
                 return finish(answer, citedFiles(answer), conversation);
             }
         } catch (AnswerFormatException e) {
-            log.warn(
+            log.info(
                     "The model's second reply isn't in the answer format either: {}",
                     e.getMessage());
         } catch (LlmException e) {
@@ -244,7 +245,7 @@ public final class AgentController {
                 throw e;
             }
             // There is an answer to show, even though its format couldn't be corrected.
-            log.warn("The reformat request failed", e);
+            log.warn("The reformat request failed: {}", e.getMessage());
         }
 
         String text = hasText ? response.text().strip() : EMPTY_REPLY_TEXT;

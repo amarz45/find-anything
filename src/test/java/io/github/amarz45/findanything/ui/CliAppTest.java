@@ -2,6 +2,8 @@ package io.github.amarz45.findanything.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.amarz45.findanything.agent.ConversationStore;
 import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.config.SettingsStore;
@@ -12,8 +14,10 @@ import io.github.amarz45.findanything.indexing.ScriptedExtractor;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
+import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
+import io.github.amarz45.findanything.llm.ToolCall;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
@@ -23,6 +27,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -78,6 +84,158 @@ class CliAppTest {
     @AfterEach
     void tearDown() throws Exception {
         service.close();
+    }
+
+    /** Replaces the service with one whose model is this scripted client. */
+    void useModel(ScriptedLlmClient client) throws Exception {
+        service.close();
+        service = service(home.resolve("app"), new ScriptedLlmClientFactory(client));
+        app = new CliApp(service);
+    }
+
+    static LlmResponse calls(String tool, Map<String, Object> arguments) {
+        return new LlmResponse("", List.of(new ToolCall("call-1", tool, arguments)));
+    }
+
+    static LlmResponse says(String text) {
+        return new LlmResponse(text, List.of());
+    }
+
+    @Test
+    void askPrintsTheAnswerWithEachCitationMarked() throws Exception {
+        Path lecture = docs.resolve("lecture.pdf");
+        Path dentist = docs.resolve("dentist.txt");
+        // A scripted client repeats its last reply, so each run gets a script of its own.
+        Supplier<ScriptedLlmClient> script =
+                () ->
+                        new ScriptedLlmClient(
+                                calls("search", Map.of("query", "merge sort")),
+                                says(
+                                        "Merge sort runs in O(n log n) time [1]. Your dentist"
+                                                + " appointment is on March 11 [2].\n\n"
+                                                + "CITATIONS:\n[1] file: "
+                                                + lecture
+                                                + "\npage: 2\n"
+                                                + "quote: Merge sort runs in O(n log n) time.\n"
+                                                + "[2] file: "
+                                                + dentist
+                                                + "\nquote: Dentist appointment on March 11,"
+                                                + " 2026."));
+        useModel(script.get());
+        run("folders", "add", docs.toString());
+
+        Run quiet = run("ask", "How", "fast", "is", "merge", "sort?");
+        assertThat(quiet.exitCode()).isZero();
+        assertThat(quiet.err()).isEmpty();
+        assertThat(quiet.out())
+                .startsWith("Merge sort runs in O(n log n) time [1].")
+                .contains("Sources:")
+                .contains("[1] [✓] " + lecture + ", page 2 (verified)")
+                .contains("    \"Merge sort runs in O(n log n) time.\"")
+                .contains("[2] [?] " + dentist + " (unverified: the quote was not found there)")
+                .contains("1 of 2 citations could not be verified.")
+                .doesNotContain("CITATIONS:")
+                .doesNotContain("Files:");
+
+        useModel(script.get());
+        Run verbose = run("ask", "--verbose", "How fast is merge sort?");
+        assertThat(verbose.exitCode()).isZero();
+        assertThat(verbose.err())
+                .contains("Step 1: asking the model")
+                .contains("Step 1: search(query=\"merge sort\")")
+                .contains("Step 1: search returned: ");
+        assertThat(verbose.out()).doesNotContain("Step 1");
+
+        Run noRequest = run("ask");
+        assertThat(noRequest.exitCode()).isEqualTo(2);
+        assertThat(noRequest.err()).contains("<request>");
+    }
+
+    @Test
+    void askJsonGivesTheTraceAndContinueKeepsTheConversation() throws Exception {
+        Path lecture = docs.resolve("lecture.pdf");
+        ScriptedLlmClient client =
+                new ScriptedLlmClient(
+                        calls("search", Map.of("query", "merge sort", "limit", 3)),
+                        says(
+                                "It runs in O(n log n) time [1].\n\nCITATIONS:\n[1] file: "
+                                        + lecture
+                                        + "\npage: 2\nquote: Merge sort runs in O(n log n) time."),
+                        says("Which file do you mean?"));
+        useModel(client);
+        run("folders", "add", docs.toString());
+
+        Run none = run("ask", "--continue", "And the second one?");
+        assertThat(none.exitCode()).isEqualTo(1);
+        assertThat(none.err()).contains("There is no conversation to continue.");
+
+        Run first = run("ask", "--json", "How fast is merge sort?");
+        assertThat(first.exitCode()).isZero();
+        JsonNode json = new ObjectMapper().readTree(first.out());
+        assertThat(json.get("request").asText()).isEqualTo("How fast is merge sort?");
+        assertThat(json.get("answer").asText()).isEqualTo("It runs in O(n log n) time [1].");
+        assertThat(json.get("verified").asBoolean()).isTrue();
+        assertThat(json.get("fallback").asBoolean()).isFalse();
+        assertThat(json.get("model").get("backend").asText()).isEqualTo("cloud");
+        assertThat(json.get("model").get("name").asText()).isEqualTo("vendor/model");
+        assertThat(first.out()).doesNotContain("sk-or");
+        JsonNode citation = json.get("citations").get(0);
+        assertThat(citation.get("number").asInt()).isEqualTo(1);
+        assertThat(citation.get("file").asText()).isEqualTo(lecture.toString());
+        assertThat(citation.get("page").asInt()).isEqualTo(2);
+        assertThat(citation.get("quote").asText()).isEqualTo("Merge sort runs in O(n log n) time.");
+        assertThat(citation.get("status").asText()).isEqualTo("verified");
+        assertThat(json.get("sourceFiles")).hasSize(1);
+        assertThat(json.get("sourceFiles").get(0).asText()).isEqualTo(lecture.toString());
+        assertThat(json.get("notices")).isEmpty();
+        assertThat(json.get("toolCalls")).hasSize(1);
+        assertThat(json.get("toolCalls").get(0).get("name").asText()).isEqualTo("search");
+        assertThat(json.get("toolCalls").get(0).get("arguments").get("query").asText())
+                .isEqualTo("merge sort");
+        assertThat(json.get("toolCalls").get(0).get("arguments").get("limit").asInt()).isEqualTo(3);
+
+        Run followUp = run("ask", "--continue", "--json", "And the second one?");
+        assertThat(followUp.exitCode()).isZero();
+        JsonNode second = new ObjectMapper().readTree(followUp.out());
+        assertThat(second.get("conversation").asText())
+                .isEqualTo(json.get("conversation").asText());
+        assertThat(second.get("answer").asText()).isEqualTo("Which file do you mean?");
+        assertThat(second.get("verified").asBoolean()).isFalse();
+        assertThat(second.get("citations")).isEmpty();
+        // Only this request's calls are listed, not the conversation's earlier ones.
+        assertThat(second.get("toolCalls")).isEmpty();
+        // The model was sent the first exchange again, then the follow-up.
+        assertThat(client.requests.get(2).messages())
+                .extracting(Message::content)
+                .contains("How fast is merge sort?")
+                .last()
+                .isEqualTo("And the second one?");
+        try (Stream<Path> saved = Files.list(home.resolve("app/conversations"))) {
+            assertThat(saved).hasSize(1);
+        }
+    }
+
+    @Test
+    void askFallsBackToInstantSearchWhenTheModelIsUnavailable() throws Exception {
+        useModel(new ScriptedLlmClient(new LlmException("Can't reach OpenRouter.")));
+        run("folders", "add", docs.toString());
+
+        Run plain = run("ask", "merge sort speed");
+        assertThat(plain.exitCode()).isZero();
+        assertThat(plain.out())
+                .startsWith("The model is unavailable, so there is no answer.")
+                .contains("Files:")
+                .contains("1. " + docs.resolve("lecture.pdf"))
+                .contains("page 2: Merge sort runs")
+                .contains("Note: The model is unavailable: Can't reach OpenRouter.");
+
+        JsonNode json = new ObjectMapper().readTree(run("ask", "--json", "merge sort").out());
+        assertThat(json.get("fallback").asBoolean()).isTrue();
+        assertThat(json.get("verified").asBoolean()).isFalse();
+        assertThat(json.get("sourceFiles").get(0).asText())
+                .isEqualTo(docs.resolve("lecture.pdf").toString());
+        assertThat(json.get("notices").get(0).asText())
+                .isEqualTo("The model is unavailable: Can't reach OpenRouter.");
     }
 
     record Run(int exitCode, String out, String err) {}

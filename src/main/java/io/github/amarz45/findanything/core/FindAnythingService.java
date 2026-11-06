@@ -511,7 +511,8 @@ public final class FindAnythingService implements AutoCloseable {
                                 agentController.run(
                                         request, conversation, llmClient, progressListener);
                     } catch (LlmException e) {
-                        log.warn("The model is unavailable: {}", e.getMessage());
+                        // The reason reaches the user as the answer's notice.
+                        log.info("The model is unavailable: {}", e.getMessage());
                         answer = instantSearchInstead(request, conversation, e);
                     }
                     conversationStore.save(conversation);
