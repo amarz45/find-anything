@@ -339,7 +339,7 @@ surprising.)*
     verification).
 - **2026-11-05 (Session 4, continued: Slice 2, items 4 and 5, Claude Code):**
   - Done: Slice 2, items 4 and 5, on branch `agent` after PR #5's merged tip (4 code commits,
-    **not pushed**; `agent` needs a new pull request): `AgentController` (the loop),
+    pushed and merged as PR #6 on Nov 7, CI green on Ubuntu and Windows): `AgentController` (the loop),
     `FindAnythingService.ask()` with the instant-search fallback and the conversation methods, a
     fix so the agent's tools skip paused and unavailable folders, and `findany ask` with
     `--continue`, `--verbose` and `--json`. The agent now works end to end from the CLI.
@@ -369,6 +369,6 @@ surprising.)*
     - A marker can be attached to a statement its quote doesn't support (the follow-up cited the
       rent line for "not yet signed"). The verifier checks that a quote is in the file, not that
       it supports the sentence; that is the design's limit for F09.
-  - Next: the check with Ollama; push `agent` and open a pull request; then Slice 3
-    (GUI, privacy, backends). `AgentController.summarizeDiff()` and `CompareTool` wait for F10
-    (Tier 2).
+  - Next: Slice 3, starting with the GUI (Amar's choice on Nov 7), then privacy and backends.
+    The check with Ollama is still owed; Amar will run it later. `AgentController.summarizeDiff()`
+    and `CompareTool` wait for F10 (Tier 2).

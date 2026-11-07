@@ -110,3 +110,39 @@ your own words before they go in the report.
   [5d7b3cd](https://github.com/amarz45/find-anything/commit/5d7b3cda907ac3074e743d9c1b24c5a7671d871e),
   [637839d](https://github.com/amarz45/find-anything/commit/637839dcab5862074db335594af0cd6de3ebbd49);
   finding recorded in `docs/notes/tika/findings.md`. CI green on both runners.
+
+### 2026-11-07: The agent loop, `findany ask`, and the paused-folder gap
+- **Tool / model:** Claude Code / Claude Fable 5.1
+- **Task:** finish Slice 2 of the agent: `AgentController` (the loop from SD03), `ask()` in the
+  facade with the instant-search fallback, and the `findany ask` command; then run the slice's
+  check ("When does my lease end?") against a real model.
+- **Input / instruction:** "Work on the next item" for each piece, with the one-commit-at-a-time
+  rule; "Why does only the fallback skip them?" after reading the fallback code; "Fix it"; "Commit
+  both, don't work on the next item yet"; "How would I run it myself? Where do I put my API key?";
+  pasted the output of the real run; "Commit, then push and make a pull request".
+- **AI contribution:** wrote `AgentController` with its endings (verified answer, one reformat
+  request on a malformed reply, step limit, unverified reply, model failure), `ask()` with the
+  fallback that keeps the conversation and saves it, and `findany ask` with `--continue`,
+  `--verbose` and `--json`, with 23 tests. Its first fallback re-added the user's message after
+  tool steps; it caught that itself. It did not notice that only the fallback skipped paused
+  folders until asked: `SearchTool` and `ReadExcerptTool` searched and read files in paused or
+  unavailable folders, so the agent could answer from them. On "Fix it" it moved the filter into
+  `SearchEngine` and added the check to `ReadExcerptTool`, so every search path honours the
+  folder state. It also wrote "checked on a cloud model" in the docs before knowing which backend
+  the run used, and corrected it to OpenRouter after being told. Explained where the key goes
+  (`.env` in `FINDANY_HOME` or the working directory, never in `settings.json`) without reading
+  `.env`.
+- **Human contribution:** reviewed each diff and committed it; spotted the paused-folder gap from
+  the fallback code and asked for it to be fixed in the agent's tools; stopped the AI from
+  starting the next item before the fix was committed; ran the lease questions with an OpenRouter
+  model and confirmed the backend; chose to test Ollama later; asked for the push and pull
+  request. *(edit in your own words)*
+- **Outcome:** [6ce1c9a](https://github.com/amarz45/find-anything/commit/6ce1c9a89fa84d280217caecc0b624a531257d0f),
+  [308a42c](https://github.com/amarz45/find-anything/commit/308a42cef1a7174bac3aea1f39d8611a0adf6d04),
+  [6eda059](https://github.com/amarz45/find-anything/commit/6eda05959a0ef27462a32fbce530058ed2e54c84),
+  [b15008f](https://github.com/amarz45/find-anything/commit/b15008fba12544758bb182d1d86ac1e70f2b3583),
+  docs in [f9b09c5](https://github.com/amarz45/find-anything/commit/f9b09c50e3e0b68c8e96b1077e3a03be56f30d15);
+  merged as PR #6 ([1f75609](https://github.com/amarz45/find-anything/commit/1f7560923d9cc887420b8f5825e1299b3fc6b40e)).
+  The lease question was answered and cited to page 2 of the lease, verified, with the
+  prompt-injection note ignored; the follow-up on the rent gave both figures, verified. Ollama is
+  not checked yet.
