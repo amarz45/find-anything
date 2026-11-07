@@ -806,7 +806,8 @@ public final class CliApp implements Callable<Integer> {
             }
         }
 
-        private static String place(Citation citation) {
+        /** ", page 2" or ", slide 2" for a citation with a page, otherwise "". */
+        static String place(Citation citation) {
             if (citation.pageNumber() == 0) {
                 return "";
             }
@@ -814,7 +815,8 @@ public final class CliApp implements Callable<Integer> {
             return ", " + unit + " " + citation.pageNumber();
         }
 
-        private static String describe(VerificationStatus status) {
+        /** A citation's verification status in words. */
+        static String describe(VerificationStatus status) {
             return switch (status) {
                 case VERIFIED -> "verified";
                 case UNVERIFIED -> "unverified: the quote was not found there";
