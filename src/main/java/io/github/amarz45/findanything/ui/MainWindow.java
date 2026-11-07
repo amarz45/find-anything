@@ -49,6 +49,7 @@ public final class MainWindow extends BorderPane {
     private final ToggleButton searchToggle = new ToggleButton("Search");
     private final ToggleButton askToggle = new ToggleButton("Ask");
     private final TextField input = new TextField();
+    private final Button newConversation = new Button("New conversation");
     private final Button addFolder = new Button("Add folder…");
     private final FlowPane folderChips = new FlowPane(6, 6);
     private final HBox errorBar = new HBox(8);
@@ -60,6 +61,7 @@ public final class MainWindow extends BorderPane {
     private List<SearchFolder> folders = List.of();
     private Consumer<String> onQueryChanged = query -> {};
     private Consumer<String> onAskSubmitted = request -> {};
+    private Runnable onNewConversation = () -> {};
     private Consumer<Path> onAddFolder = folder -> {};
     private Consumer<Path> onRemoveFolder = folder -> {};
 
@@ -100,10 +102,12 @@ public final class MainWindow extends BorderPane {
                 });
         HBox.setHgrow(input, Priority.ALWAYS);
 
+        newConversation.getStyleClass().add("new-conversation");
+        newConversation.setOnAction(event -> onNewConversation.run());
         addFolder.getStyleClass().add("add-folder");
         addFolder.setOnAction(event -> chooseFolder());
 
-        HBox toolbar = new HBox(8, searchToggle, askToggle, input, addFolder);
+        HBox toolbar = new HBox(8, searchToggle, askToggle, input, newConversation, addFolder);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         toolbar.setPadding(new Insets(8));
 
@@ -166,6 +170,17 @@ public final class MainWindow extends BorderPane {
         askToggle.setSelected(ask);
         searchToggle.setSelected(!ask);
         input.setPromptText(ask ? ASK_PROMPT : SEARCH_PROMPT);
+        newConversation.setVisible(ask);
+        newConversation.setManaged(ask);
+    }
+
+    /** Disables the Ask controls while a request runs; a conversation takes one at a time. */
+    public void setAskBusy(boolean busy) {
+        input.setDisable(busy);
+        newConversation.setDisable(busy);
+        if (!busy) {
+            input.requestFocus();
+        }
     }
 
     public SearchMode getMode() {
@@ -276,6 +291,11 @@ public final class MainWindow extends BorderPane {
     /** Called with the request when Enter is pressed in Ask mode. */
     public void setOnAskSubmitted(Consumer<String> onAskSubmitted) {
         this.onAskSubmitted = Objects.requireNonNull(onAskSubmitted, "onAskSubmitted");
+    }
+
+    /** Called when "New conversation" is clicked. */
+    public void setOnNewConversation(Runnable onNewConversation) {
+        this.onNewConversation = Objects.requireNonNull(onNewConversation, "onNewConversation");
     }
 
     /** Called with the folder the user picked with "Add folder". */

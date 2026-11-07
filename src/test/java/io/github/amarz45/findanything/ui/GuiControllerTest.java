@@ -5,6 +5,8 @@ import static io.github.amarz45.findanything.ui.FxTestSupport.onFxThread;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.amarz45.findanything.core.FindAnythingService;
+import io.github.amarz45.findanything.llm.LlmClientFactory;
+import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
@@ -12,9 +14,12 @@ import io.github.amarz45.findanything.storage.IndexMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.TextField;
@@ -66,6 +71,53 @@ class GuiControllerTest {
                 home.resolve("app"),
                 new ScriptedLlmClientFactory(
                         new ScriptedLlmClient(new LlmResponse("OK", List.of()))));
+    }
+
+    /** Replaces the service and the window with ones whose model comes from this factory. */
+    void useModel(LlmClientFactory factory) throws Exception {
+        onFxThread(() -> stage.hide());
+        service.close();
+        service = CliAppTest.service(home.resolve("app"), factory);
+        assertThat(service.open(false)).isEqualTo(IndexMode.WRITER);
+        onFxThread(
+                () -> {
+                    window = new MainWindow();
+                    controller = new GuiController(service, window);
+                    stage = new Stage();
+                    window.show(stage);
+                });
+    }
+
+    /** The texts of the detail pane's nodes matching the selector. */
+    List<String> detailTexts(String selector) throws Exception {
+        return onFxThread(
+                () -> {
+                    window.applyCss();
+                    window.layout();
+                    return window.getDetailPane().lookupAll(selector).stream()
+                            .map(DetailPaneTest::textOf)
+                            .filter(text -> text != null)
+                            .toList();
+                });
+    }
+
+    void awaitDetail(String selector) throws Exception {
+        awaitFx(
+                () -> window.getDetailPane().lookup(selector) != null,
+                () -> "a node matching " + selector + " in the detail pane");
+    }
+
+    static ScriptedLlmClient mergeSortScript(Path lecture, Path dentist) {
+        return new ScriptedLlmClient(
+                CliAppTest.calls("search", Map.of("query", "merge sort")),
+                CliAppTest.says(
+                        "Merge sort runs in O(n log n) time [1]. Your dentist appointment is on"
+                                + " March 11 [2].\n\nCITATIONS:\n[1] file: "
+                                + lecture
+                                + "\npage: 2\nquote: Merge sort runs in O(n log n) time.\n"
+                                + "[2] file: "
+                                + dentist
+                                + "\nquote: Dentist appointment on March 11, 2026."));
     }
 
     // ------------------------------------------------------------------ helpers
@@ -233,5 +285,63 @@ class GuiControllerTest {
         } finally {
             second.close();
         }
+    }
+
+    @Test
+    void askShowsTheAnswerWithItsCitationsAndOpensACitedFile() throws Exception {
+        Path lecture = docs.resolve("lecture.pdf");
+        Path dentist = docs.resolve("dentist.txt");
+        useModel(new ScriptedLlmClientFactory(mergeSortScript(lecture, dentist)));
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+
+        onFxThread(() -> controller.onAskSubmitted("How fast is merge sort?"));
+        awaitDetail(".answer");
+        assertThat(window.getMode()).isEqualTo(SearchMode.ASK);
+        assertThat(detailTexts(".request")).containsExactly("How fast is merge sort?");
+        assertThat(detailTexts(".progress")).isEmpty();
+        assertThat(detailTexts(".citation-verified")).containsExactly("[1 ✓]");
+        assertThat(detailTexts(".citation-unverified")).containsExactly("[2 ?]");
+        assertThat(detailTexts(".source .hyperlink"))
+                .containsExactly("[1] lecture.pdf, page 2", "[2] dentist.txt");
+        assertThat(shownFiles(window)).contains("lecture.pdf");
+        assertThat(onFxThread(() -> input().isDisable())).isFalse();
+
+        // A citation opens the preview at the quote; Back returns to the conversation.
+        onFxThread(() -> ((Hyperlink) window.getDetailPane().lookup(".citation-verified")).fire());
+        awaitFx(
+                () -> {
+                    Node header = window.getDetailPane().lookup(".detail-header");
+                    return header != null && "lecture.pdf".equals(((Label) header).getText());
+                },
+                () -> "the preview of lecture.pdf");
+        assertThat(detailTexts(".highlight"))
+                .containsExactly("Merge sort runs in O(n log n) time.");
+        onFxThread(() -> ((Button) window.getDetailPane().lookup(".back-button")).fire());
+        assertThat(onFxThread(() -> window.getDetailPane().lookup(".request").isVisible()))
+                .isTrue();
+
+        // New conversation empties the pane and the table.
+        onFxThread(() -> controller.onNewConversation());
+        assertThat(detailTexts(".request")).isEmpty();
+        assertThat(detailTexts(".answer")).isEmpty();
+        assertThat(detailTexts(".conversation-empty")).containsExactly(DetailPane.ASK_A_QUESTION);
+        assertThat(shownFiles(window)).isEmpty();
+    }
+
+    @Test
+    void askFallsBackToInstantSearchWhenTheModelIsUnavailable() throws Exception {
+        useModel(new ScriptedLlmClientFactory(new LlmException("No OpenRouter API key.")));
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+
+        onFxThread(() -> controller.onAskSubmitted("merge sort"));
+        awaitDetail(".notice");
+        assertThat(detailTexts(".notice").get(0))
+                .startsWith("Note: " + FindAnythingService.MODEL_UNAVAILABLE)
+                .contains("No OpenRouter API key.");
+        assertThat(detailTexts(".citation-verified")).isEmpty();
+        assertThat(shownFiles(window)).containsExactly("lecture.pdf");
+        assertThat(onFxThread(() -> input().isDisable())).isFalse();
     }
 }

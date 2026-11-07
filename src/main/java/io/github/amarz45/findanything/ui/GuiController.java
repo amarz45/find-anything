@@ -1,5 +1,7 @@
 package io.github.amarz45.findanything.ui;
 
+import io.github.amarz45.findanything.agent.Answer;
+import io.github.amarz45.findanything.agent.Citation;
 import io.github.amarz45.findanything.agent.Conversation;
 import io.github.amarz45.findanything.config.AlreadyCoveredException;
 import io.github.amarz45.findanything.core.FindAnythingService;
@@ -10,6 +12,7 @@ import io.github.amarz45.findanything.storage.SearchFilters;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,6 +28,7 @@ import javafx.application.Platform;
 public final class GuiController implements IndexStatusListener {
 
     static final String FILE_GONE = "This file no longer exists.";
+    static final String REQUEST_FAILED = "The request could not be completed.";
 
     private final FindAnythingService findAnythingService;
     private final MainWindow mainWindow;
@@ -51,9 +55,12 @@ public final class GuiController implements IndexStatusListener {
         this.detailPane = mainWindow.getDetailPane();
 
         mainWindow.setOnQueryChanged(this::onQueryChanged);
+        mainWindow.setOnAskSubmitted(this::onAskSubmitted);
+        mainWindow.setOnNewConversation(this::onNewConversation);
         mainWindow.setOnAddFolder(this::onAddFolder);
         mainWindow.setOnRemoveFolder(this::onRemoveFolder);
         resultsView.setOnResultSelected(this::onResultSelected);
+        detailPane.setOnCitationClicked(this::onCitationClicked);
 
         findAnythingService.addStatusListener(this);
         mainWindow.showFolders(findAnythingService.getIndexConfig().getSearchFolders());
@@ -97,6 +104,12 @@ public final class GuiController implements IndexStatusListener {
         showPreview(result.file().path(), latestQuery.isBlank() ? null : latestQuery);
     }
 
+    /** Shows the cited file's preview at the quote; the pane offers Back to the conversation. */
+    public void onCitationClicked(Citation citation) {
+        Objects.requireNonNull(citation, "citation");
+        showPreview(citation.file(), citation.quote().isBlank() ? null : citation.quote());
+    }
+
     private void showPreview(Path file, String highlight) {
         try {
             findAnythingService
@@ -116,6 +129,83 @@ public final class GuiController implements IndexStatusListener {
                                             }));
         } catch (RuntimeException e) {
             mainWindow.showError(describe(e));
+        }
+    }
+
+    // ------------------------------------------------------------------ ask (F07, F08, F09, F12)
+
+    /**
+     * Sends a request to the agent in the current conversation, starting one if there is none. The
+     * input is disabled until the answer arrives; the agent's steps and then the answer with its
+     * citations appear in the detail pane, and the files it drew on fill the table.
+     */
+    public void onAskSubmitted(String request) {
+        if (Objects.requireNonNull(request, "request").isBlank()) {
+            return;
+        }
+        if (conversation == null && !startConversation()) {
+            return;
+        }
+        Conversation current = conversation;
+        mainWindow.setMode(SearchMode.ASK);
+        mainWindow.setAskBusy(true);
+        detailPane.showRequest(request);
+        try {
+            findAnythingService
+                    .ask(
+                            request,
+                            current,
+                            step ->
+                                    Platform.runLater(
+                                            () -> {
+                                                if (conversation == current) {
+                                                    detailPane.showAgentStep(step);
+                                                }
+                                            }))
+                    .whenComplete(
+                            (answer, failure) ->
+                                    Platform.runLater(() -> showAnswer(current, answer, failure)));
+        } catch (RuntimeException e) {
+            mainWindow.setAskBusy(false);
+            mainWindow.showError(describe(e));
+        }
+    }
+
+    private void showAnswer(Conversation current, Answer answer, Throwable failure) {
+        mainWindow.setAskBusy(false);
+        if (conversation != current) {
+            return; // another conversation was started meanwhile
+        }
+        if (failure != null) {
+            // The model's own failures come back as the facade's fallback answer; this is the rest,
+            // such as the conversation file not being writable.
+            detailPane.showAnswer(
+                    new Answer(REQUEST_FAILED, List.of(), List.of(), List.of(describe(failure))));
+            return;
+        }
+        detailPane.showAnswer(answer);
+        if (mainWindow.getMode() == SearchMode.ASK) {
+            resultsView.setResults(answer.sourceFiles());
+        }
+    }
+
+    /** Starts a new conversation with the current model and empties the conversation view. */
+    public void onNewConversation() {
+        if (!startConversation()) {
+            return;
+        }
+        detailPane.clearConversation();
+        mainWindow.setMode(SearchMode.ASK);
+        resultsView.setResults(List.of());
+    }
+
+    private boolean startConversation() {
+        try {
+            conversation = findAnythingService.newConversation();
+            return true;
+        } catch (IOException | RuntimeException e) {
+            mainWindow.showError(describe(e));
+            return false;
         }
     }
 
