@@ -72,6 +72,7 @@ public final class Indexer {
     private volatile IndexerState state = IndexerState.OPENING;
     private volatile boolean stopRequested;
     private int uncommittedChanges; // worker thread only
+    private boolean reportedPending; // worker thread only: the last status sent had work pending
 
     public Indexer(
             IndexConfig indexConfig,
@@ -174,7 +175,11 @@ public final class Indexer {
                     completedRequests = Math.max(completedRequests, seenRequests);
                     boolean wasIdle = state == IndexerState.IDLE;
                     state = IndexerState.IDLE;
-                    if (path != null || !wasIdle) {
+                    // A request made while the worker was waiting counts as finished only on the
+                    // next pass, so an idle pass also reports when the last status still had
+                    // work pending; otherwise listeners would never hear "up to date".
+                    boolean caughtUp = reportedPending && completedRequests >= requested.get();
+                    if (path != null || !wasIdle || caughtUp) {
                         notifyStatus();
                     }
                 } else if (path != null) {
@@ -374,6 +379,7 @@ public final class Indexer {
 
     private void notifyStatus() {
         IndexStatus status = getStatus();
+        reportedPending = !status.isUpToDate();
         for (IndexStatusListener listener : statusListeners) {
             try {
                 listener.onStatusChanged(status);

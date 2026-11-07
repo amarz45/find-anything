@@ -27,6 +27,22 @@ Template:
 - **Fix:** `Indexer` truncates modification times to milliseconds both when storing and when
   comparing, and `IndexerTest.aRescanWithNoChangesIndexesNothingAgain()` guards it.
 
+### 2026-11-07: status listeners never heard "up to date" after a single change
+- **Found by:** `GuiControllerTest.removingAFolderClearsItsChipAndItsResults()`, the first test
+  that drives the GUI's status Observer: after removing a folder, the results table never
+  emptied, because the controller refreshes the search only when a status update says the index
+  is up to date, and none came. The CLI never noticed: it polls `getIndexStatus()` instead.
+- **Symptom:** after a request made while the worker was idle (a removed folder, a single
+  changed file), the last status the `Indexer` sent to its `IndexStatusListener`s still had one
+  request pending; the up-to-date status was never sent.
+- **Cause:** the worker reads the request counter at the top of each pass, before blocking on
+  the queue. A request made during the wait is counted as finished only on the next pass, and an
+  idle pass with no path notified nobody. A folder rescan hid this because its queued files
+  gave the loop more passes.
+- **Fix:** `Indexer.runLoop()` also notifies on an idle pass when the last status it sent had
+  work pending and every request is now finished;
+  `IndexerTest.listenersHearUpToDateAfterASingleChange()` guards it.
+
 ### 2026-10-25: `index rebuild` emptied the index instead of rebuilding it
 - **Found by:** `IndexerTest.rebuildDropsStaleEntriesAndIndexesEverythingAgain()` and
   `CliAppTest`, right after the modification-time fix above (which had masked it).
