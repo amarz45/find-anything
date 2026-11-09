@@ -62,6 +62,40 @@ report describes.
   Indexing the path's words as a searchable field would let a query with the folder's name find
   it. Changes behaviour the report describes, so log it in `docs/logs/design-changes.md`.
 
+## The answer format
+
+- **Find out why the model sometimes writes its citation entries twice, then make the parser cope.**
+  Now and then a reply holds the `[n] file:` entries right after the answer's text and then again
+  under the `CITATIONS:` line. `ResponseParser.parseAnswer()` takes everything above the first
+  `CITATIONS:` line as the answer, so the first copy is shown as part of the answer, in the CLI
+  and in the GUI (where the `[n]` that starts each stray line even becomes a citation link), and
+  it is saved with the conversation. Seen on 2026-11-08.
+  - **Known so far.** It happens within one reply: `findany ask --verbose` shows no reformat
+    request. Every run used the same model (`anthropic/claude-haiku-5.5` through OpenRouter).
+    `LangChain4jClient` sets no temperature, so replies vary from run to run. On the test corpus
+    it happened once in 53 runs: 41 on `testdata/corpus` and 12 on a copy enlarged with filler
+    files until each run's search results were 58,000 to 103,000 characters. Questions that ask
+    for a list of files (0 of 8), bulleted answers and a long history each failed to trigger it.
+    On Amar's own documents, with a question about last year's taxes and a follow-up, it happened
+    3 times out of 3.
+  - **Not explained.** On those documents, the three runs before the conversation change of
+    2026-11-08 (`fbb0b7e`, "Keep requests and answers in a conversation, not old tool results")
+    were clean, and the three after it were duplicated. That change does nothing to the first
+    reply of a new conversation, and the 53 corpus runs used the build that includes it, so it is
+    probably a coincidence of six runs. It hasn't been tested.
+  - **Planned test, on the real documents (Amar runs it).** Ask the tax question five times with
+    the current build, then five times with the build of the commit before `fbb0b7e`, and count
+    the replies that have a line starting `[n] file:` above the `CITATIONS:` line (in the
+    `answer` of `ask --json`, any such line is a stray one). A similar rate on both builds clears
+    the change and leaves the documents' content and the model's variation as the cause. A rate
+    that differs means the change reaches the first reply in a way not yet understood.
+  - **Fixes to choose from once the cause is known.** Have the parser accept entries wherever
+    they are, remove them from the text and merge identical duplicates, which would also let a
+    reply that only forgot the `CITATIONS:` line parse without a reformat request. Reword the
+    format instructions in `PromptBuilder`. Set a low temperature. The model does this on its own
+    and only sometimes, so wording alone can't rule it out. A parser change alters the answer
+    format rules in the design changes, so log it there and in `docs/logs/test-failures.md`.
+
 ## Citation verification
 
 Amar may change these later; undecided.
