@@ -428,6 +428,33 @@ Diagrams updated:
   local model's context, and `trimToFit()` still edits the kept history (both in `TODO.md`).
   Diagrams updated: not yet (SD03 at the freeze).
 
+### Redaction: placeholders, category names, and what a pattern matches (2026-11-09, Slice 3)
+- **Original design:** `Redactor.redact(text): RedactionResult` applies every enabled
+  `SensitivePattern`, with one implementation per category: card numbers and SINs (both checked
+  with the Luhn checksum), private keys, and API keys. Matches "are replaced with placeholders".
+  The design gives no placeholder format, no category names, no `RedactionResult` contents, and
+  no rule for what counts as a match.
+- **Implemented change:** a match becomes `[redacted: <category>]`. The categories are
+  `private-key`, `card-number`, `sin` and `api-key`, applied in that order. `RedactionResult` is
+  a record of the redacted text and the categories that matched. What matches:
+  - `CardNumberPattern`: 13 to 19 digits, together or in groups separated by single spaces or
+    hyphens, passing Luhn.
+  - `SinPattern`: 9 digits written the same way, passing Luhn.
+  - `PrivateKeyPattern`: a PEM block from `-----BEGIN ... PRIVATE KEY-----` to its END line, or to
+    the end of the text when an excerpt cut the block short.
+  - `ApiKeyPattern`: keys with a well-known prefix (`sk-`, `ghp_` and its family, `github_pat_`,
+    `AKIA`, `xoxb-` and its family, `AIza`).
+  Added members: `SensitivePattern.builtIn()` (the four patterns in order),
+  `Redactor.placeholder()`, `getCategories()` and `isCategoryEnabled()`, and the package-private
+  `Luhn` helper both number patterns use. `setCategoryEnabled()` rejects a category that doesn't
+  exist with a message listing the ones that do.
+- **Reason:** the code needs concrete rules, and the CLI and the settings dialog need names to
+  show and accept. A number is matched over whole digit groups so that a card number followed by
+  another number on the same line is still found.
+- **Impact:** F14; `privacy` package. A key with no recognizable prefix isn't found, and about one
+  in ten random numbers of the right length passes Luhn and is redacted needlessly, which the
+  design accepts ("False positive: harmless, since the text is only redacted").
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
