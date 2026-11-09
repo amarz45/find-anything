@@ -455,6 +455,29 @@ Diagrams updated:
   in ten random numbers of the right length passes Luhn and is redacted needlessly, which the
   design accepts ("False positive: harmless, since the text is only redacted").
 
+### The privacy log's entries and file, and saved privacy settings (2026-11-09, Slice 3)
+- **Original design:** `PrivacyLog` has a `logFile` with `append(entry)` and `getEntries(limit)`;
+  a log entry shows "its timestamp, the excerpts sent, and any redactions". `PrivacyLogEntry` has
+  no box in any diagram, and the file's place and format aren't given. `SettingsStore` has
+  `loadFolderPolicy()` and `saveFolderPolicy()`, and nothing for the redaction toggles.
+- **Implemented change:**
+  - `PrivacyLogEntry` is a record of the timestamp, the model's name, the request's messages as
+    `Excerpt`s (role, source files, text as sent), and the redacted categories. It has its own
+    `Excerpt` type because `llm` depends on `privacy`, so `privacy` can't use `llm.Message`.
+  - The log is `privacy-log.jsonl` in the app's data folder: one JSON object per line, oldest
+    first, only ever appended to. `getEntries(limit)` returns the newest first and skips a line it
+    can't read, with a warning. `append()` throws `IOException` when the file can't be written.
+    Added `getLogFile()`.
+  - `settings.json` gets a `privacy` section with `localOnlyFolders` and
+    `disabledRedactionCategories`. `SettingsStore` gets
+    `loadDisabledRedactionCategories()` and `saveDisabledRedactionCategories()` beside the two
+    designed methods. `FolderPolicy` gets `getLocalOnlyFolders()` and a constructor from a list.
+- **Reason:** the design leaves these open. The toggles must be saved because every CLI run is a
+  new process: without saving, `findany privacy redact --disable <category>` would do nothing.
+  One line per request keeps the log readable and editable by a person, and appending never
+  rewrites what was recorded.
+- **Impact:** F13, F14; `privacy` package, `SettingsStore`. The log has no size limit or rotation.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

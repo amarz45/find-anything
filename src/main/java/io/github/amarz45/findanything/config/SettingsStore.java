@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.amarz45.findanything.privacy.FolderPolicy;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -16,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /**
@@ -32,6 +35,9 @@ public final class SettingsStore {
 
     private static final String INDEX_CONFIG = "indexConfig";
     private static final String MODEL_SETTINGS = "modelSettings";
+    private static final String PRIVACY = "privacy";
+    private static final String LOCAL_ONLY_FOLDERS = "localOnlyFolders";
+    private static final String DISABLED_CATEGORIES = "disabledRedactionCategories";
 
     /** A value left as in {@code .env.example} counts as not set. */
     private static final Pattern PLACEHOLDER = Pattern.compile("YOUR_[A-Z_]*HERE");
@@ -174,6 +180,52 @@ public final class SettingsStore {
         section.put("modelName", modelSettings.modelName());
         section.put("baseUrl", modelSettings.baseUrl().toString());
         writeFile(root);
+    }
+
+    /** Loads the "local model only" folders (F14); none when nothing was saved. */
+    public synchronized FolderPolicy loadFolderPolicy() throws IOException {
+        List<Path> folders = new ArrayList<>();
+        for (JsonNode node : readFile().path(PRIVACY).path(LOCAL_ONLY_FOLDERS)) {
+            folders.add(Path.of(node.asText()));
+        }
+        return new FolderPolicy(folders);
+    }
+
+    /** Saves the "local model only" folders, keeping the rest of the file. */
+    public synchronized void saveFolderPolicy(FolderPolicy folderPolicy) throws IOException {
+        ObjectNode root = readFile();
+        ArrayNode folders = privacySection(root).putArray(LOCAL_ONLY_FOLDERS);
+        folderPolicy.getLocalOnlyFolders().stream()
+                .map(Path::toString)
+                .sorted()
+                .forEach(folders::add);
+        writeFile(root);
+    }
+
+    /**
+     * Loads the redaction categories the user turned off (F14); none when nothing was saved, since
+     * every category is on unless turned off.
+     */
+    public synchronized Set<String> loadDisabledRedactionCategories() throws IOException {
+        Set<String> categories = new TreeSet<>();
+        for (JsonNode node : readFile().path(PRIVACY).path(DISABLED_CATEGORIES)) {
+            categories.add(node.asText());
+        }
+        return categories;
+    }
+
+    /** Saves the redaction categories that are turned off, keeping the rest of the file. */
+    public synchronized void saveDisabledRedactionCategories(Set<String> categories)
+            throws IOException {
+        ObjectNode root = readFile();
+        ArrayNode disabled = privacySection(root).putArray(DISABLED_CATEGORIES);
+        new TreeSet<>(categories).forEach(disabled::add);
+        writeFile(root);
+    }
+
+    /** The privacy section, created if the file has none; its two lists are saved separately. */
+    private static ObjectNode privacySection(ObjectNode root) {
+        return root.get(PRIVACY) instanceof ObjectNode section ? section : root.putObject(PRIVACY);
     }
 
     private static List<ExclusionRule> parseRules(JsonNode array) throws IOException {
