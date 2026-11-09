@@ -146,6 +146,35 @@ class AgentControllerTest {
     }
 
     @Test
+    void aNewRequestDropsEarlierToolCallsAndResultsButKeepsItsOwn() throws Exception {
+        ScriptedLlmClient client =
+                new ScriptedLlmClient(
+                        calls(SEARCH),
+                        citing("The lease ends on August 31, 2026."),
+                        calls(SEARCH),
+                        says("The rent isn't in your files."));
+        run(client);
+        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT, Role.TOOL, Role.ASSISTANT);
+
+        controller(4, 100_000).run("And the rent?", conversation, client, progress::add);
+        // The first exchange is its request and answer; the second still has its own tool call.
+        assertThat(roles())
+                .containsExactly(
+                        Role.USER,
+                        Role.ASSISTANT,
+                        Role.USER,
+                        Role.ASSISTANT,
+                        Role.TOOL,
+                        Role.ASSISTANT);
+        // The follow-up's first request to the model carried no old search result.
+        LlmRequest followUp = client.requests.get(2);
+        assertThat(followUp.messages()).extracting(Message::role).doesNotContain(Role.TOOL);
+        assertThat(followUp.messages())
+                .extracting(Message::content)
+                .contains(QUESTION, "And the rent?");
+    }
+
+    @Test
     void runsTheModelsToolCallsThenReturnsTheVerifiedAnswer() throws Exception {
         ScriptedLlmClient client =
                 new ScriptedLlmClient(calls(SEARCH), citing("The lease ends on August 31, 2026."));

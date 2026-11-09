@@ -27,7 +27,12 @@ report describes.
   exceed the model's context. The model request then fails and the agent falls back to instant
   search. Today only the step limit and the excerpt size bound it. A better version would shorten
   or drop the oldest tool results inside the latest exchange, keeping each call paired with a
-  result.
+  result. Seen on 2026-11-08: one question about taxes reached about 79,000 characters by its
+  fifth model call. A cloud model's context takes that, at a cost, since the growing history is
+  sent again on every call. A local model at 16,384 tokens would have failed at the fourth call.
+  Earlier exchanges no longer carry their tool results (see the design changes), so this is now
+  only about the exchange in progress. Smaller search results would help most: `SearchTool`
+  returns up to 1,500 characters for each of up to 20 files, and repeats files across searches.
 - **Trim what is sent, not what is kept.** `trimToFit()` changes the conversation itself (as SD03
   draws it), so dropped exchanges also disappear from the saved conversation and from the GUI's
   view of it. A better version would keep the full history and trim only the copy that

@@ -12,7 +12,9 @@ import java.util.Objects;
 /**
  * One Ask-mode conversation (F12): the requests, the model's replies and tool calls, and the tool
  * results, in order, so a follow-up such as "only the ones from 2025" can build on what came
- * before.
+ * before. Tool calls and results are kept only for the exchange in progress: once the next request
+ * starts, earlier exchanges are reduced to their request and closing reply ({@link
+ * #dropToolMessages()}).
  *
  * <p>A conversation is bound to one model for its whole life: its {@code modelSettings} are set
  * when it is created and never change, so text never moves from a local model's conversation to a
@@ -79,6 +81,21 @@ public final class Conversation {
                         ? toolResult.content()
                         : ERROR_PREFIX + toolResult.errorMessage();
         messages.add(Message.toolResult(toolCall, content, toolResult.sourceFiles()));
+    }
+
+    /**
+     * Removes the tool calls and tool results of the exchanges so far, leaving each request and its
+     * closing reply. The agent calls this when a new request starts: the results were needed while
+     * their own request was being worked on, but afterwards they are by far the largest part of the
+     * history, they go stale as files change, and the reply already says what was found.
+     */
+    public synchronized void dropToolMessages() {
+        messages.removeIf(Conversation::isToolMessage);
+    }
+
+    /** Whether a message is a tool result or a reply that called tools. */
+    static boolean isToolMessage(Message message) {
+        return message.role() == Message.Role.TOOL || !message.toolCalls().isEmpty();
     }
 
     /**
