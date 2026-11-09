@@ -1,11 +1,17 @@
 package io.github.amarz45.findanything.ui;
 
+import io.github.amarz45.findanything.agent.Conversation;
 import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.indexing.IndexStatus;
 import io.github.amarz45.findanything.indexing.IndexerState;
+import io.github.amarz45.findanything.llm.Message;
 import java.io.File;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Consumer;
 import javafx.geometry.Insets;
@@ -43,6 +49,13 @@ public final class MainWindow extends BorderPane {
     static final String NO_FOLDERS = "No search folders yet. Click “Add folder”.";
     static final String SEARCH_PROMPT = "Search your files";
     static final String ASK_PROMPT = "Ask a question about your files, then press Enter";
+    static final String NO_CONVERSATIONS = "No saved conversations yet";
+
+    private static final DateTimeFormatter ID_TIME =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT);
+    private static final DateTimeFormatter CONVERSATION_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT);
+    private static final int CONVERSATION_LABEL_CHARS = 60;
 
     private final ResultsView resultsView = new ResultsView();
     private final DetailPane detailPane = new DetailPane();
@@ -50,6 +63,7 @@ public final class MainWindow extends BorderPane {
     private final ToggleButton askToggle = new ToggleButton("Ask");
     private final TextField input = new TextField();
     private final Button newConversation = new Button("New conversation");
+    private final MenuButton conversations = new MenuButton("Conversations");
     private final Button addFolder = new Button("Add folder…");
     private final FlowPane folderChips = new FlowPane(6, 6);
     private final HBox errorBar = new HBox(8);
@@ -62,6 +76,8 @@ public final class MainWindow extends BorderPane {
     private Consumer<String> onQueryChanged = query -> {};
     private Consumer<String> onAskSubmitted = request -> {};
     private Runnable onNewConversation = () -> {};
+    private Consumer<String> onOpenConversation = id -> {};
+    private Runnable onConversationsRequested = () -> {};
     private Consumer<Path> onAddFolder = folder -> {};
     private Consumer<Path> onRemoveFolder = folder -> {};
 
@@ -104,10 +120,22 @@ public final class MainWindow extends BorderPane {
 
         newConversation.getStyleClass().add("new-conversation");
         newConversation.setOnAction(event -> onNewConversation.run());
+        conversations.getStyleClass().add("conversations");
+        // The list is refreshed as the menu opens, so conversations saved by the CLI show up too.
+        conversations.setOnShowing(event -> onConversationsRequested.run());
+        showConversations(List.of());
         addFolder.getStyleClass().add("add-folder");
         addFolder.setOnAction(event -> chooseFolder());
 
-        HBox toolbar = new HBox(8, searchToggle, askToggle, input, newConversation, addFolder);
+        HBox toolbar =
+                new HBox(
+                        8,
+                        searchToggle,
+                        askToggle,
+                        input,
+                        newConversation,
+                        conversations,
+                        addFolder);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         toolbar.setPadding(new Insets(8));
 
@@ -172,12 +200,15 @@ public final class MainWindow extends BorderPane {
         input.setPromptText(ask ? ASK_PROMPT : SEARCH_PROMPT);
         newConversation.setVisible(ask);
         newConversation.setManaged(ask);
+        conversations.setVisible(ask);
+        conversations.setManaged(ask);
     }
 
     /** Disables the Ask controls while a request runs; a conversation takes one at a time. */
     public void setAskBusy(boolean busy) {
         input.setDisable(busy);
         newConversation.setDisable(busy);
+        conversations.setDisable(busy);
         if (!busy) {
             input.requestFocus();
         }
@@ -222,6 +253,41 @@ public final class MainWindow extends BorderPane {
         remove.setOnAction(event -> onRemoveFolder.accept(path));
         chip.getItems().add(remove);
         return chip;
+    }
+
+    /** Fills the "Conversations" menu with the saved conversations, most recent first (F12). */
+    public void showConversations(List<Conversation> savedConversations) {
+        Objects.requireNonNull(savedConversations, "savedConversations");
+        conversations.getItems().clear();
+        if (savedConversations.isEmpty()) {
+            MenuItem none = new MenuItem(NO_CONVERSATIONS);
+            none.setDisable(true);
+            conversations.getItems().add(none);
+            return;
+        }
+        for (Conversation conversation : savedConversations) {
+            MenuItem item = new MenuItem(conversationLabel(conversation));
+            item.setOnAction(event -> onOpenConversation.accept(conversation.getId()));
+            conversations.getItems().add(item);
+        }
+    }
+
+    /** When the conversation started (from its id) and how it started (its first request). */
+    static String conversationLabel(Conversation conversation) {
+        String id = conversation.getId();
+        String when = id;
+        try {
+            when = CONVERSATION_TIME.format(LocalDateTime.parse(id.substring(0, 15), ID_TIME));
+        } catch (DateTimeParseException | IndexOutOfBoundsException e) {
+            // An id of another shape is shown as it is.
+        }
+        String first =
+                conversation.getMessages().stream()
+                        .filter(message -> message.role() == Message.Role.USER)
+                        .map(Message::content)
+                        .findFirst()
+                        .orElse("(no request yet)");
+        return when + "  " + CliApp.snippet(first, CONVERSATION_LABEL_CHARS);
     }
 
     /** Shows the index's state; in read-only mode the folder controls are disabled. */
@@ -296,6 +362,17 @@ public final class MainWindow extends BorderPane {
     /** Called when "New conversation" is clicked. */
     public void setOnNewConversation(Runnable onNewConversation) {
         this.onNewConversation = Objects.requireNonNull(onNewConversation, "onNewConversation");
+    }
+
+    /** Called with the id of the saved conversation chosen from the "Conversations" menu. */
+    public void setOnOpenConversation(Consumer<String> onOpenConversation) {
+        this.onOpenConversation = Objects.requireNonNull(onOpenConversation, "onOpenConversation");
+    }
+
+    /** Called as the "Conversations" menu opens, so the controller can refresh its list. */
+    public void setOnConversationsRequested(Runnable onConversationsRequested) {
+        this.onConversationsRequested =
+                Objects.requireNonNull(onConversationsRequested, "onConversationsRequested");
     }
 
     /** Called with the folder the user picked with "Add folder". */

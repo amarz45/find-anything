@@ -1,12 +1,16 @@
 package io.github.amarz45.findanything.ui;
 
 import io.github.amarz45.findanything.agent.Answer;
+import io.github.amarz45.findanything.agent.AnswerFormatException;
 import io.github.amarz45.findanything.agent.Citation;
 import io.github.amarz45.findanything.agent.Conversation;
+import io.github.amarz45.findanything.agent.ResponseParser;
 import io.github.amarz45.findanything.config.AlreadyCoveredException;
 import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.indexing.IndexStatus;
 import io.github.amarz45.findanything.indexing.IndexStatusListener;
+import io.github.amarz45.findanything.llm.LlmResponse;
+import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.SearchFilters;
 import java.io.FileNotFoundException;
@@ -38,6 +42,9 @@ public final class GuiController implements IndexStatusListener {
     /** The current conversation, started on the first request in Ask mode (F12). */
     private Conversation conversation;
 
+    /** Reads saved replies again when a conversation is reopened. */
+    private final ResponseParser responseParser = new ResponseParser();
+
     private SearchFilters searchFilters = SearchFilters.NONE;
     private long latestQueryId;
     private String latestQuery = "";
@@ -57,6 +64,8 @@ public final class GuiController implements IndexStatusListener {
         mainWindow.setOnQueryChanged(this::onQueryChanged);
         mainWindow.setOnAskSubmitted(this::onAskSubmitted);
         mainWindow.setOnNewConversation(this::onNewConversation);
+        mainWindow.setOnOpenConversation(this::onOpenConversation);
+        mainWindow.setOnConversationsRequested(this::refreshConversations);
         mainWindow.setOnAddFolder(this::onAddFolder);
         mainWindow.setOnRemoveFolder(this::onRemoveFolder);
         resultsView.setOnResultSelected(this::onResultSelected);
@@ -64,6 +73,7 @@ public final class GuiController implements IndexStatusListener {
 
         findAnythingService.addStatusListener(this);
         mainWindow.showFolders(findAnythingService.getIndexConfig().getSearchFolders());
+        refreshConversations();
         // A read-only process is never told again, so show the status it has now.
         onStatusChanged(findAnythingService.getIndexStatus());
         onQueryChanged("");
@@ -186,6 +196,55 @@ public final class GuiController implements IndexStatusListener {
         detailPane.showAnswer(answer);
         if (mainWindow.getMode() == SearchMode.ASK) {
             resultsView.setResults(answer.sourceFiles());
+        }
+        refreshConversations(); // the conversation was saved with this answer
+    }
+
+    /**
+     * Reopens a saved conversation: its requests and answers fill the detail pane, its last
+     * answer's files the table, and the next request continues it. Verification statuses aren't
+     * saved, so the citations carry no mark.
+     */
+    public void onOpenConversation(String id) {
+        Objects.requireNonNull(id, "id");
+        Conversation opened;
+        try {
+            opened = findAnythingService.openConversation(id);
+        } catch (IOException | RuntimeException e) {
+            mainWindow.showError(describe(e));
+            return;
+        }
+        conversation = opened;
+        detailPane.clearConversation();
+        String request = null;
+        for (Message message : opened.getMessages()) {
+            if (message.role() == Message.Role.USER) {
+                request = message.content();
+            } else if (message.role() == Message.Role.ASSISTANT
+                    && message.toolCalls().isEmpty()
+                    && request != null) {
+                detailPane.showPastExchange(request, pastAnswer(message.content()));
+                request = null;
+            }
+        }
+        resultsView.setResults(opened.getLastResults());
+        mainWindow.setMode(SearchMode.ASK);
+    }
+
+    /** A saved reply as an answer. Every saved reply passed the parser once, but to be safe. */
+    private Answer pastAnswer(String reply) {
+        try {
+            return responseParser.parseAnswer(new LlmResponse(reply, List.of()));
+        } catch (AnswerFormatException e) {
+            return new Answer(reply, List.of(), List.of(), List.of());
+        }
+    }
+
+    private void refreshConversations() {
+        try {
+            mainWindow.showConversations(findAnythingService.listConversations());
+        } catch (IOException | RuntimeException e) {
+            mainWindow.showError(describe(e));
         }
     }
 

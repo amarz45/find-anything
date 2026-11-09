@@ -51,6 +51,19 @@ Amar may change these later; undecided.
   real models first. Folding those characters before comparing changes behaviour the report
   describes, so log it in `docs/logs/design-changes.md`.
 
+## GUI
+
+- **Render the answer's Markdown.** Models write their answers in Markdown (headings, `**bold**`,
+  bullet lists, numbered lists, code spans), and `DetailPane.showAnswer()` shows that text as it
+  is, so the marks appear literally in the pane (seen by Amar on 2026-11-07 with a tax question
+  through OpenRouter). The `[n]` citation markers are the only part that is interpreted. Options:
+  render a small Markdown subset into `Text` nodes with styles (bold, italic, code, headings as
+  larger text, list items with a bullet and indent), keeping the citation links; or ask the model
+  for plain text in `PromptBuilder`, which models don't reliably obey; or show the answer in a
+  `WebView`, which needs the `javafx-web` module and loses the citation links unless they are
+  rebuilt as HTML. The first keeps the design (one `TextFlow` per answer) and is the likely choice.
+  The CLI prints the same text, so a plain-text rendering there is unaffected.
+
 ## Extraction
 
 - **Stop Tika appending PDF link annotations to page text.** PDFBox adds every link annotation's

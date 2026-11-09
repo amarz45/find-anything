@@ -8,6 +8,7 @@ import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
+import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
 import io.github.amarz45.findanything.storage.IndexMode;
@@ -22,6 +23,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
@@ -343,5 +345,46 @@ class GuiControllerTest {
         assertThat(detailTexts(".citation-verified")).isEmpty();
         assertThat(shownFiles(window)).containsExactly("lecture.pdf");
         assertThat(onFxThread(() -> input().isDisable())).isFalse();
+    }
+
+    @Test
+    void aSavedConversationIsListedReopenedAndContinued() throws Exception {
+        Path lecture = docs.resolve("lecture.pdf");
+        Path dentist = docs.resolve("dentist.txt");
+        useModel(new ScriptedLlmClientFactory(mergeSortScript(lecture, dentist)));
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        onFxThread(() -> controller.onAskSubmitted("How fast is merge sort?"));
+        awaitDetail(".answer");
+        String id = service.listConversations().get(0).getId();
+
+        // A fresh window, as after a restart: the menu lists the conversation and reopens it.
+        useModel(new ScriptedLlmClientFactory(mergeSortScript(lecture, dentist)));
+        List<MenuItem> items =
+                onFxThread(() -> ((MenuButton) window.lookup(".conversations")).getItems());
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).getText()).endsWith("  How fast is merge sort?");
+        onFxThread(() -> items.get(0).fire());
+        assertThat(window.getMode()).isEqualTo(SearchMode.ASK);
+        assertThat(detailTexts(".request")).containsExactly("How fast is merge sort?");
+        assertThat(detailTexts(".citation-neutral")).containsExactly("[1]", "[2]");
+        assertThat(detailTexts(".citation-verified")).isEmpty();
+        assertThat(detailTexts(".source .detail-meta"))
+                .containsExactly(DetailPane.NOT_REVERIFIED, DetailPane.NOT_REVERIFIED);
+        assertThat(shownFiles(window)).contains("lecture.pdf");
+
+        // The next request continues the reopened conversation.
+        onFxThread(() -> controller.onAskSubmitted("And when is the dentist?"));
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".answer").size() == 2,
+                () -> "the second answer");
+        assertThat(detailTexts(".request"))
+                .containsExactly("How fast is merge sort?", "And when is the dentist?");
+        assertThat(
+                        service.openConversation(id).getMessages().stream()
+                                .filter(message -> message.role() == Message.Role.USER)
+                                .map(Message::content))
+                .containsExactly("How fast is merge sort?", "And when is the dentist?");
+        assertThat(service.listConversations()).hasSize(1);
     }
 }
