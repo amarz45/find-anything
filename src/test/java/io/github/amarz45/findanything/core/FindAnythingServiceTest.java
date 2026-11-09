@@ -26,6 +26,10 @@ import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
 import io.github.amarz45.findanything.llm.ToolCall;
+import io.github.amarz45.findanything.privacy.FolderPolicy;
+import io.github.amarz45.findanything.privacy.PrivacyLog;
+import io.github.amarz45.findanything.privacy.Redactor;
+import io.github.amarz45.findanything.privacy.SensitivePattern;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.ExtractionStatus;
 import io.github.amarz45.findanything.storage.IndexMode;
@@ -58,7 +62,15 @@ class FindAnythingServiceTest {
     @TempDir Path home;
 
     FindAnythingService service(Path appData, TextExtractor extractor) throws Exception {
-        return service(appData, extractor, new LlmClientFactory(), Map.of());
+        return service(
+                appData,
+                extractor,
+                new LlmClientFactory(
+                        new Redactor(SensitivePattern.builtIn()),
+                        new FolderPolicy(),
+                        new PrivacyLog(appData.resolve("privacy-log.jsonl")),
+                        CLOCK),
+                Map.of());
     }
 
     FindAnythingService service(

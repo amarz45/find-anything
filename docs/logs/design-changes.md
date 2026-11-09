@@ -478,6 +478,38 @@ Diagrams updated:
   rewrites what was recorded.
 - **Impact:** F13, F14; `privacy` package, `SettingsStore`. The log has no size limit or rotation.
 
+### The privacy decorators: where the chain is built, and what the design left open (2026-11-09, Slice 3)
+- **Original design:** for a cloud backend `LlmClientFactory` builds `RedactingLlmClient` →
+  `LoggingLlmClient` → `LangChain4jClient`; the factory holds the `redactor`, `folderPolicy` and
+  `privacyLog`. `LoggingLlmClient` has only a `privacyLog` field. SD04 appends the log entry
+  before the request is sent and replaces a local-only message with
+  `"[withheld: local-only source]"`. The design doesn't say what happens when the log can't be
+  written, whether the connection test is logged, or what a logged message's text holds.
+- **Implemented change:**
+  - `LlmClientFactory` takes the three privacy objects and a `Clock` in its constructor.
+    `createClient()` wraps whatever `build()` returns when the backend is CLOUD. An earlier entry
+    said `build()` itself would be wrapped; wrapping in `createClient()` keeps the tests' scripted
+    clients (which replace `build()`) under the decorators, so the whole test suite now runs
+    through the chain.
+  - `LoggingLlmClient` also takes the conversation's `ModelSettings` (for the model's name in
+    each entry) and the `Clock` (for its time). A logged message's text is its content followed
+    by a `[tool call: name {arguments}]` line for each tool call it made, since those are sent too.
+  - If the entry can't be written, the request is **not sent**: `LoggingLlmClient` throws
+    `LlmException` naming the log file, and `ask()` then falls back to instant search with that
+    reason. A cloud request must never go out unrecorded.
+  - The connection test isn't logged or redacted: `LangChain4jClient.testConnection()` sends its
+    own fixed one-line prompt, which holds no user data.
+  - `RedactingLlmClient.WITHHELD` is the marker. A withheld message keeps its source files (they
+    aren't sent; the log shows whose text was withheld) and is not scanned for patterns. A
+    message is withheld whole when any one of its source files is local-only, as SD04 draws it,
+    so a search result that lists one local-only file hides its other files too.
+- **Reason:** the design leaves these open; each choice is the one that can't leak or go
+  unrecorded.
+- **Impact:** F13, F14; `llm` package, `CliApp.createService()`. From this change on, every
+  request to a cloud model is redacted and written to `privacy-log.jsonl`. Dropping only the
+  local-only entries of a search result needs tool results to carry per-file structure; it is in
+  `TODO.md`.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

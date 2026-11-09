@@ -26,6 +26,10 @@ import io.github.amarz45.findanything.indexing.TextExtractor;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.llm.ToolCall;
+import io.github.amarz45.findanything.privacy.FolderPolicy;
+import io.github.amarz45.findanything.privacy.PrivacyLog;
+import io.github.amarz45.findanything.privacy.Redactor;
+import io.github.amarz45.findanything.privacy.SensitivePattern;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.IndexMode;
 import io.github.amarz45.findanything.storage.IndexedFile;
@@ -199,17 +203,39 @@ public final class CliApp implements Callable<Integer> {
                             thread.setDaemon(true);
                             return thread;
                         });
+        // The privacy objects are made once: the factory puts them around every cloud client.
+        FolderPolicy folderPolicy = settingsStore.loadFolderPolicy();
+        Redactor redactor = loadRedactor(settingsStore);
+        PrivacyLog privacyLog = new PrivacyLog(home.resolve("privacy-log.jsonl"));
+        Clock clock = Clock.systemDefaultZone();
         return new FindAnythingService(
                 indexConfig,
                 settingsStore,
-                new LlmClientFactory(),
+                new LlmClientFactory(redactor, folderPolicy, privacyLog, clock),
                 new ConversationStore(home.resolve("conversations"), settingsStore),
                 textExtractor,
                 new Chunker(1_500),
                 changeQueue,
                 home.resolve("index"),
                 backgroundExecutor,
-                Clock.systemDefaultZone());
+                clock);
+    }
+
+    /** The redactor with every built-in pattern, minus the categories the user turned off. */
+    static Redactor loadRedactor(SettingsStore settingsStore) throws IOException {
+        Redactor redactor = new Redactor(SensitivePattern.builtIn());
+        for (String category : settingsStore.loadDisabledRedactionCategories()) {
+            try {
+                redactor.setCategoryEnabled(category, false);
+            } catch (IllegalArgumentException e) {
+                throw new IOException(
+                        "The settings file "
+                                + settingsStore.getSettingsFile()
+                                + " turns off a redaction category that doesn't exist. "
+                                + e.getMessage());
+            }
+        }
+        return redactor;
     }
 
     // ------------------------------------------------------------------ shared steps
