@@ -145,6 +145,20 @@ class IndexerTest {
     }
 
     @Test
+    void listenersHearUpToDateAfterASingleChange() throws Exception {
+        rescanAndWait();
+        notifications.clear();
+        Path lease = docs.resolve("lease.pdf");
+        Files.delete(lease);
+        // The worker is waiting on the queue when the request arrives; it must still end by
+        // telling the listeners the index is up to date, without anyone polling getStatus().
+        indexer.requestUpdate(lease);
+        await(() -> notifications.stream().anyMatch(IndexStatus::isUpToDate));
+        assertThat(notifications.get(notifications.size() - 1).isUpToDate()).isTrue();
+        assertThat(index.getFile(lease)).isEmpty();
+    }
+
+    @Test
     void aFileThatStaysLockedIsRetriedThenMarkedFailed() throws Exception {
         Files.writeString(docs.resolve("locked.txt"), "busy");
         rescanAndWait();

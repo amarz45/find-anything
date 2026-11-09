@@ -97,9 +97,10 @@ public final class AgentController {
     /**
      * Answers one request in a conversation.
      *
-     * <p>The request and everything that follows it are added to the conversation: each reply that
-     * calls tools, each tool result (a rejected call's result is its error, so the model can
-     * correct the call), and one closing reply. What comes back is one of:
+     * <p>First the tool calls and results of earlier exchanges are removed from the conversation,
+     * leaving their requests and answers. Then the request and everything that follows it are
+     * added: each reply that calls tools, each tool result (a rejected call's result is its error,
+     * so the model can correct the call), and one closing reply. What comes back is one of:
      *
      * <ul>
      *   <li>the model's answer, with each citation verified and the cited files as {@code
@@ -136,6 +137,9 @@ public final class AgentController {
         }
         LocalDate today = LocalDate.now(clock);
         Set<Path> filesFound = new LinkedHashSet<>();
+        // Earlier exchanges keep their request and answer; their tool calls and results go, so a
+        // follow-up doesn't resend old search results or lose the whole exchange to trimming.
+        conversation.dropToolMessages();
         conversation.addUserMessage(request);
 
         for (int step = 1; step <= maxSteps; step++) {

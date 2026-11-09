@@ -127,6 +127,28 @@ class ConversationTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void dropsToolCallsAndResultsButKeepsEachRequestAndAnswer() {
+        Conversation conversation = new Conversation("c1", LOCAL);
+        exchange(conversation, "first question", "first answer");
+        conversation.addUserMessage("second question");
+        conversation.addAssistantMessage(new LlmResponse("Let me look.", List.of(SEARCH)));
+        conversation.addToolResult(SEARCH, ToolResult.failure("No such file."));
+        conversation.addAssistantMessage(new LlmResponse("second answer", List.of()));
+
+        conversation.dropToolMessages();
+        assertThat(conversation.getMessages())
+                .extracting(Message::role)
+                .containsExactly(Role.USER, Role.ASSISTANT, Role.USER, Role.ASSISTANT);
+        assertThat(conversation.getMessages())
+                .extracting(Message::content)
+                .containsExactly(
+                        "first question", "first answer", "second question", "second answer");
+
+        conversation.dropToolMessages(); // nothing left to drop
+        assertThat(conversation.getMessages()).hasSize(4);
+    }
+
     /** A request, a search call, its result, and the answer. */
     private static void exchange(Conversation conversation, String question, String answer) {
         conversation.addUserMessage(question);

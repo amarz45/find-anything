@@ -382,9 +382,54 @@ Diagrams updated:
   a verified citation look unverified. The interactive session is left out for time.
 - **Impact:** F07, F08, F09, F12; `CliApp`.
 
+### F12: saved conversations in a menu, reopened without verification marks (2026-11-07, Slice 3)
+1. **Original Stage 1 feature and ID:** F12 Conversation follow-ups. The GUI keeps past
+   conversations in a drawer with a "New conversation" button; a reopened conversation shows its
+   exchanges.
+2. **Implemented feature and its behavior:** in Ask mode the toolbar has "New conversation" and a
+   "Conversations" menu that lists the saved conversations, most recent first, each as its start
+   time and first request. Choosing one shows its requests and answers in the detail pane, puts
+   the last answer's files in the table, and the next request continues it. Each reopened citation
+   is still a link that opens the file at the quote, but carries no verified or unverified mark;
+   its tooltip says that verification isn't kept for saved conversations. The CLI continues the
+   most recent conversation with `ask --continue`.
+3. **What changed and why:** a menu instead of a drawer fits the one-window GUI (status: Modified).
+   The marks are missing because `ConversationStore` saves the messages and the last results, not
+   the verification statuses; verifying again when a conversation is reopened would cost an index
+   lookup per citation and could differ from what the user saw at the time.
+4. **How the user need is still met:** any saved conversation can be reopened, read and continued
+   from the GUI or the CLI.
+5. **Affected use cases, classes, methods, and design patterns:** UC for F12;
+   `GuiController.onOpenConversation()` (reads each saved reply again with `ResponseParser`),
+   `MainWindow.showConversations()`, `DetailPane.showPastExchange()`. Patterns unchanged.
+   Diagrams updated: not yet (cd01 at the freeze).
+
+### Conversations keep requests and answers, not old tool results (2026-11-08, Slice 3)
+- **Original design:** F12 keeps everything: "Each request, tool result, and answer is added to
+  the conversation, which is saved after every answer. The whole conversation, trimmed to fit, is
+  sent with each new request, so the model can refer to earlier results." SD03 draws the same.
+- **Implemented change:** tool calls and tool results are kept only for the exchange in progress.
+  When the next request starts, `AgentController.run()` calls the new
+  `Conversation.dropToolMessages()`, which reduces every earlier exchange to its request and its
+  closing reply. `ConversationStore.save()` never writes tool calls or results, so a saved
+  conversation holds only requests and answers (plus the model and the last answer's files). A
+  file saved before this change still loads, and loses its tool messages at its next request.
+- **Reason:** found in real use on 2026-11-08 (see `test-failures.md`). Tool results were 89 to
+  98 percent of three real conversations; one question about taxes stored about 78,000 characters
+  of search results. That is twice the 40,000-character history limit, so the follow-up dropped
+  the whole first exchange and the model no longer knew what it had answered. Old results also go
+  stale when files change, are sent again on every later call, and left copies of file text in
+  the conversation files. The answer already says what was found, and a follow-up that needs more
+  searches or reads again, which uses the files as they are now.
+- **Impact:** F12; `Conversation`, `AgentController`, `ConversationStore`; SD03. A follow-up now
+  sees earlier requests and answers but not earlier search results or excerpts. `findany ask
+  --json` is unchanged: it reads the latest request's tool calls from the conversation in memory,
+  where they stay until the next request. Not solved here: a single exchange can still outgrow a
+  local model's context, and `trimToFit()` still edits the kept history (both in `TODO.md`).
+  Diagrams updated: not yet (SD03 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
 - F04, F05, F10: Tier 2 features that may end up *Not implemented* in Stage 2.
-- GUI: conversation drawer, side-by-side comparison, privacy log viewer, editing exclusions in the
-  GUI (CLI-only).
+- GUI: side-by-side comparison, privacy log viewer, editing exclusions in the GUI (CLI-only).

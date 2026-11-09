@@ -74,6 +74,11 @@ tasks.withType<JavaCompile>().configureEach {
 tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // The GUI tests run the real JavaFX toolkit without a display: the headless windowing
+    // platform (JavaFX 26 and later) with the software renderer. Left to itself, Prism picks
+    // OpenGL when a display happens to exist, and that pipeline crashes the test JVM.
+    systemProperty("glass.platform", "headless")
+    systemProperty("prism.order", "sw")
     // Tests never touch your real index or settings: FINDANY_HOME points at the build folder.
     environment("FINDANY_HOME", layout.buildDirectory.dir("test-findany-home").get().asFile.absolutePath)
     testLogging {

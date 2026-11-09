@@ -7,6 +7,7 @@ import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.config.SettingsStore;
 import io.github.amarz45.findanything.llm.LlmResponse;
+import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.Chunk;
@@ -78,19 +79,77 @@ class ConversationStoreTest {
     }
 
     @Test
-    void roundTripsMessagesToolCallsResultsAndTheModel() throws Exception {
+    void roundTripsRequestsAnswersResultsAndTheModel() throws Exception {
         Conversation saved = conversation("c1", CLOUD);
         store.save(saved);
 
         Conversation loaded = store.load("c1");
         assertThat(loaded.getId()).isEqualTo("c1");
         assertThat(loaded.getModelSettings()).isEqualTo(CLOUD);
-        assertThat(loaded.getMessages()).isEqualTo(saved.getMessages());
-        assertThat(loaded.getMessages().get(1).toolCalls().get(0).arguments())
+        assertThat(loaded.getMessages())
+                .containsExactly(
+                        Message.user("When does my lease end?\nThanks — é"),
+                        Message.assistant("On August 31, 2026.", List.of()));
+        assertThat(loaded.getLastResults()).isEqualTo(saved.getLastResults());
+        // Saving leaves the conversation in memory as it was, tool messages included.
+        assertThat(saved.getMessages()).hasSize(5);
+    }
+
+    @Test
+    void leavesToolCallsAndTheirResultsOutOfTheFile() throws Exception {
+        store.save(conversation("c1", CLOUD));
+        String json = Files.readString(directory.resolve("c1.json"));
+        assertThat(json)
+                .contains("On August 31, 2026.")
+                .doesNotContain("ends August 31")
+                .doesNotContain("No such file.")
+                .doesNotContain("read_excerpt")
+                .doesNotContain("toolCalls")
+                .doesNotContain("TOOL");
+    }
+
+    @Test
+    void stillLoadsAFileSavedWithToolCallsAndResults() throws Exception {
+        Files.createDirectories(directory);
+        Files.writeString(
+                directory.resolve("old.json"),
+                """
+                {
+                  "id" : "old",
+                  "modelSettings" : {
+                    "backendType" : "LOCAL",
+                    "modelName" : "llama",
+                    "baseUrl" : "http://localhost:11434"
+                  },
+                  "messages" : [
+                    { "role" : "USER", "content" : "When does my lease end?" },
+                    { "role" : "ASSISTANT", "content" : "", "toolCalls" : [
+                      { "id" : "call-1", "name" : "search",
+                        "arguments" : { "query" : "lease", "limit" : 5, "file_type" : null } },
+                      { "id" : null, "name" : "read_excerpt", "arguments" : { "page" : 2 } }
+                    ] },
+                    { "role" : "TOOL", "content" : "ends August 31",
+                      "toolCallId" : "call-1", "toolName" : "search" },
+                    { "role" : "ASSISTANT", "content" : "On August 31, 2026." }
+                  ],
+                  "lastResults" : [ ]
+                }
+                """);
+
+        List<Message> messages = store.load("old").getMessages();
+        assertThat(messages)
+                .extracting(Message::role)
+                .containsExactly(
+                        Message.Role.USER,
+                        Message.Role.ASSISTANT,
+                        Message.Role.TOOL,
+                        Message.Role.ASSISTANT);
+        assertThat(messages.get(1).toolCalls().get(0).arguments())
                 .containsEntry("limit", 5)
                 .containsEntry("file_type", null);
-        assertThat(loaded.getMessages().get(1).toolCalls().get(1).id()).isNull();
-        assertThat(loaded.getLastResults()).isEqualTo(saved.getLastResults());
+        assertThat(messages.get(1).toolCalls().get(1).id()).isNull();
+        assertThat(messages.get(2).content()).isEqualTo("ends August 31");
+        assertThat(messages.get(2).toolName()).isEqualTo("search");
     }
 
     @Test
@@ -115,7 +174,12 @@ class ConversationStoreTest {
         store.save(conversation);
         conversation.addUserMessage("And the rent?");
         store.save(conversation);
-        assertThat(store.load("c1").getMessages()).hasSize(6);
+        assertThat(store.load("c1").getMessages())
+                .extracting(Message::content)
+                .containsExactly(
+                        "When does my lease end?\nThanks — é",
+                        "On August 31, 2026.",
+                        "And the rent?");
         try (var files = Files.list(directory)) {
             assertThat(files.map(file -> file.getFileName().toString())).containsExactly("c1.json");
         }

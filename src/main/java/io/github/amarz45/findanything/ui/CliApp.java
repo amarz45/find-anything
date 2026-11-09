@@ -46,9 +46,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import javafx.application.Platform;
+import javafx.stage.Stage;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -78,7 +82,8 @@ import picocli.CommandLine.Spec;
             CliApp.Search.class,
             CliApp.Ask.class,
             CliApp.Show.class,
-            CliApp.Model.class
+            CliApp.Model.class,
+            CliApp.Gui.class
         })
 public final class CliApp implements Callable<Integer> {
 
@@ -255,7 +260,8 @@ public final class CliApp implements Callable<Integer> {
         return FAILURE;
     }
 
-    private static String describe(Throwable e) {
+    /** A failure as the user should read it; the GUI's error bar uses the same words. */
+    static String describe(Throwable e) {
         if (e instanceof NoSuchFileException) {
             return "No such file or folder: " + e.getMessage();
         }
@@ -289,6 +295,51 @@ public final class CliApp implements Callable<Integer> {
     static String snippet(String text, int maxChars) {
         String oneLine = text.replaceAll("\\s+", " ").strip();
         return oneLine.length() <= maxChars ? oneLine : oneLine.substring(0, maxChars - 1) + "…";
+    }
+
+    // ------------------------------------------------------------------ findany gui
+
+    /**
+     * {@code findany gui}: opens the window and returns when it is closed. The index is opened
+     * first, like every other command; the GUI shows indexing progress instead of waiting for it.
+     * JavaFX is started with {@code Platform.startup()} rather than {@code Application.launch()},
+     * which would create the application object itself and leave no way to hand it the service.
+     */
+    @Command(name = "gui", description = "Open the graphical interface.")
+    static final class Gui implements Callable<Integer> {
+        @ParentCommand CliApp app;
+        @Spec CommandSpec spec;
+
+        @Override
+        public Integer call() throws Exception {
+            PrintWriter err = spec.commandLine().getErr();
+            app.openIndex(err);
+            CountDownLatch closed = new CountDownLatch(1);
+            AtomicBoolean failed = new AtomicBoolean();
+            try {
+                Platform.startup(
+                        () -> {
+                            try {
+                                MainWindow window = new MainWindow();
+                                new GuiController(app.findAnythingService, window);
+                                Stage stage = new Stage();
+                                stage.setOnHidden(event -> closed.countDown());
+                                window.show(stage);
+                            } catch (RuntimeException e) {
+                                err.println("findany: could not open the window: " + describe(e));
+                                failed.set(true);
+                                closed.countDown();
+                            }
+                        });
+            } catch (RuntimeException e) {
+                // No display, or the toolkit can't start here.
+                err.println("findany: could not start the graphical interface: " + describe(e));
+                return FAILURE;
+            }
+            closed.await();
+            Platform.exit();
+            return failed.get() ? FAILURE : 0;
+        }
     }
 
     // ------------------------------------------------------------------ findany folders
@@ -806,7 +857,8 @@ public final class CliApp implements Callable<Integer> {
             }
         }
 
-        private static String place(Citation citation) {
+        /** ", page 2" or ", slide 2" for a citation with a page, otherwise "". */
+        static String place(Citation citation) {
             if (citation.pageNumber() == 0) {
                 return "";
             }
@@ -814,7 +866,8 @@ public final class CliApp implements Callable<Integer> {
             return ", " + unit + " " + citation.pageNumber();
         }
 
-        private static String describe(VerificationStatus status) {
+        /** A citation's verification status in words. */
+        static String describe(VerificationStatus status) {
             return switch (status) {
                 case VERIFIED -> "verified";
                 case UNVERIFIED -> "unverified: the quote was not found there";

@@ -1,0 +1,79 @@
+/* Find Anything's GUI styles. Colours are plain so they read on a screen recording. */
+
+.highlight {
+    -fx-fill: #b35c00;
+    -fx-font-weight: bold;
+    -fx-underline: true;
+}
+
+.page-marker {
+    -fx-fill: #6b6b6b;
+    -fx-font-size: 0.9em;
+}
+
+.detail-header {
+    -fx-font-weight: bold;
+    -fx-font-size: 1.1em;
+}
+
+.detail-meta {
+    -fx-text-fill: #555555;
+}
+
+.detail-message {
+    -fx-text-fill: #555555;
+    -fx-font-style: italic;
+}
+
+.warning {
+    -fx-text-fill: #b35c00;
+}
+
+.request {
+    -fx-font-weight: bold;
+    -fx-background-color: #eef2ff;
+    -fx-background-radius: 6;
+    -fx-padding: 6;
+}
+
+.progress {
+    -fx-text-fill: #555555;
+    -fx-font-style: italic;
+}
+
+.notice {
+    -fx-background-color: #fff4ce;
+    -fx-background-radius: 6;
+    -fx-padding: 6;
+}
+
+.citation-verified {
+    -fx-text-fill: #1a7f37;
+}
+
+.citation-unverified {
+    -fx-text-fill: #c2410c;
+}
+
+.unverified {
+    -fx-text-fill: #c2410c;
+}
+
+.quote {
+    -fx-font-style: italic;
+    -fx-text-fill: #444444;
+}
+
+.error-bar {
+    -fx-background-color: #fde2e2;
+    -fx-padding: 6;
+}
+
+.error-bar .label {
+    -fx-text-fill: #8a1c1c;
+}
+
+.status-bar {
+    -fx-padding: 4 8 4 8;
+    -fx-border-color: #d0d0d0 transparent transparent transparent;
+}

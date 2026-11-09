@@ -356,6 +356,13 @@ class FindAnythingServiceTest {
             service.setBackend(service.resolveModelSettings(BackendType.LOCAL, "mistral"));
             service.ask("Thanks!", conversation, progress::add).join();
             assertThat(factory.requested).containsOnly(conversation.getModelSettings());
+            // The follow-up carried the first request and its answer, not the old search result.
+            assertThat(client.requests.get(2).messages())
+                    .extracting(Message::role)
+                    .doesNotContain(Message.Role.TOOL);
+            assertThat(client.requests.get(2).messages())
+                    .extracting(Message::content)
+                    .contains(QUESTION, "Thanks!");
             assertThat(service.newConversation().getModelSettings().modelName())
                     .isEqualTo("mistral");
 
@@ -369,11 +376,10 @@ class FindAnythingServiceTest {
                     .containsExactly(id);
             Conversation saved = reopened.openConversation(id);
             assertThat(saved.getModelSettings().modelName()).isEqualTo("llama");
+            // The file holds the requests and the answers, not the tool call and its result.
             assertThat(roles(saved))
                     .containsExactly(
                             Message.Role.USER,
-                            Message.Role.ASSISTANT,
-                            Message.Role.TOOL,
                             Message.Role.ASSISTANT,
                             Message.Role.USER,
                             Message.Role.ASSISTANT);

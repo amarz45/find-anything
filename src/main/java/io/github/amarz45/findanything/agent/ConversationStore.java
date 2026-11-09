@@ -40,6 +40,9 @@ import org.slf4j.LoggerFactory;
  * named by its id, in the conversations folder of the app's data folder. Writes replace the file
  * atomically, so a crash can't leave one half-written.
  *
+ * <p>A file holds the requests and the answers, not the tool calls and their results: those are
+ * copies of file text that would go stale, and the answer already says what was found.
+ *
  * <p>A saved conversation records its model (backend, model name, base URL) but never the API key.
  * On loading, the key comes from the environment through {@link SettingsStore}, as it does for the
  * current settings.
@@ -82,7 +85,9 @@ public final class ConversationStore {
         model.put("baseUrl", settings.baseUrl().toString());
         ArrayNode messages = root.putArray("messages");
         for (Message message : conversation.getMessages()) {
-            writeMessage(messages.addObject(), message);
+            if (!Conversation.isToolMessage(message)) {
+                writeMessage(messages.addObject(), message);
+            }
         }
         ArrayNode results = root.putArray("lastResults");
         for (SearchResult result : conversation.getLastResults()) {
@@ -193,28 +198,13 @@ public final class ConversationStore {
                 settingsStore.defaultModelSettings(backendType).apiKey());
     }
 
-    private void writeMessage(ObjectNode node, Message message) {
+    /** Writes a request or a closing reply; tool calls and results are never saved. */
+    private static void writeMessage(ObjectNode node, Message message) {
         node.put("role", message.role().name());
         node.put("content", message.content());
-        if (!message.sourceFiles().isEmpty()) {
-            ArrayNode sourceFiles = node.putArray("sourceFiles");
-            message.sourceFiles().forEach(path -> sourceFiles.add(path.toString()));
-        }
-        if (!message.toolCalls().isEmpty()) {
-            ArrayNode toolCalls = node.putArray("toolCalls");
-            for (ToolCall toolCall : message.toolCalls()) {
-                ObjectNode call = toolCalls.addObject();
-                call.put("id", toolCall.id());
-                call.put("name", toolCall.name());
-                call.set("arguments", mapper.valueToTree(toolCall.arguments()));
-            }
-        }
-        if (message.role() == Message.Role.TOOL) {
-            node.put("toolCallId", message.toolCallId());
-            node.put("toolName", message.toolName());
-        }
     }
 
+    /** Reads a message, including the tool calls and results that files from before held. */
     private Message readMessage(JsonNode node) {
         List<Path> sourceFiles = new ArrayList<>();
         for (JsonNode path : node.path("sourceFiles")) {
