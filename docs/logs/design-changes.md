@@ -440,6 +440,9 @@ Diagrams updated:
   - `CardNumberPattern`: 13 to 19 digits, together or in groups separated by single spaces or
     hyphens, passing Luhn.
   - `SinPattern`: 9 digits written the same way, passing Luhn.
+  - For both, the number must stand on its own: digits that touch a letter, an underscore or a
+    hyphen are part of a name (a file called `IMG_20261108123456.jpg`), not a number. Without
+    this, paths in tool results could be redacted and the model could no longer cite the file.
   - `PrivateKeyPattern`: a PEM block from `-----BEGIN ... PRIVATE KEY-----` to its END line, or to
     the end of the text when an excerpt cut the block short.
   - `ApiKeyPattern`: keys with a well-known prefix (`sk-`, `ghp_` and its family, `github_pat_`,
@@ -509,6 +512,34 @@ Diagrams updated:
   request to a cloud model is redacted and written to `privacy-log.jsonl`. Dropping only the
   local-only entries of a search result needs tool results to carry per-file structure; it is in
   `TODO.md`.
+
+### The facade's privacy methods, and how the answer says sources were withheld (2026-11-09, Slice 3)
+- **Original design:** `FindAnythingService` has `setLocalOnly(folder, localOnly)`,
+  `setRedaction(category, enabled)` and `getPrivacyLog(limit)`, and holds the `folderPolicy`,
+  `redactor` and `privacyLog`. UC10's precondition is that the folder is a search folder. When
+  needed sources are local-only, "the answer notes that some sources were withheld and suggests a
+  conversation with the local model", but no diagram shows how the answer learns of it.
+- **Implemented change:**
+  - The three objects are constructor parameters of the facade, and the composition root gives
+    the same objects to `LlmClientFactory`.
+  - `setLocalOnly()` accepts a search folder **or a folder inside one**, so one private subfolder
+    can be protected without marking the whole search folder. Removing a search folder removes
+    the marks on it and inside it.
+  - `setLocalOnly()` and `setRedaction()` are refused in a read-only process, like the folder
+    changes. A change made by a second process would be saved but would not reach the policy the
+    first process is applying, and the user would believe a folder is protected when it is not.
+  - Added for display: `getLocalOnlyFolders()`, `getRedactionCategories()` (each category with
+    whether it is on) and `getPrivacyLogFile()`.
+  - After `AgentController.run()`, `ask()` adds the notice `SOURCES_WITHHELD` to the answer when
+    the conversation's model is a cloud model and a tool result of the current request came from
+    a local-only folder. `PromptBuilder`'s instructions also tell the model what the withheld
+    marker means, so its own text says the sources were withheld and suggests the local model.
+- **Reason:** the facade is the one place that knows both the conversation's model and the
+  policy, and the conversation still holds the current request's tool results with their source
+  files, so the notice needs no new channel from the decorator back to the agent.
+- **Impact:** F13, F14; UC10 (a folder inside a search folder is allowed); `FindAnythingService`,
+  `PromptBuilder`, SD03. A read-only process keeps the policy it loaded at startup until it is
+  restarted.
 
 ## Pending (decide during implementation; write the entry if it happens)
 

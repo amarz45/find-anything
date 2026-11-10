@@ -11,7 +11,6 @@ import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.ScriptedExtractor;
-import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.llm.Message;
@@ -65,13 +64,24 @@ class CliAppTest {
                     "OPENROUTER_MODEL", "vendor/model",
                     "OLLAMA_MODEL", "llama");
 
-    static FindAnythingService service(Path appData, LlmClientFactory factory) throws Exception {
+    /** A service whose model is scripted; the facade shares the factory's privacy objects. */
+    static FindAnythingService service(Path appData, ScriptedLlmClientFactory factory)
+            throws Exception {
         SettingsStore store = new SettingsStore(appData.resolve("settings.json"), ENV);
         IndexConfig config = store.loadIndexConfig();
+        // What the composition root does: the saved policy and toggles apply from the start.
+        store.loadFolderPolicy()
+                .getLocalOnlyFolders()
+                .forEach(folder -> factory.folderPolicy.setLocalOnly(folder, true));
+        store.loadDisabledRedactionCategories()
+                .forEach(category -> factory.redactor.setCategoryEnabled(category, false));
         return new FindAnythingService(
                 config,
                 store,
                 factory,
+                factory.folderPolicy,
+                factory.redactor,
+                factory.privacyLog,
                 new ConversationStore(appData.resolve("conversations"), store),
                 new ScriptedExtractor(),
                 new Chunker(300),

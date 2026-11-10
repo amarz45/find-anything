@@ -29,6 +29,11 @@ import io.github.amarz45.findanything.llm.LlmClient;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
+import io.github.amarz45.findanything.llm.Message;
+import io.github.amarz45.findanything.privacy.FolderPolicy;
+import io.github.amarz45.findanything.privacy.PrivacyLog;
+import io.github.amarz45.findanything.privacy.PrivacyLogEntry;
+import io.github.amarz45.findanything.privacy.Redactor;
 import io.github.amarz45.findanything.search.SearchEngine;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.Chunk;
@@ -47,10 +52,14 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -102,12 +111,20 @@ public final class FindAnythingService implements AutoCloseable {
     /** What the notice on such an answer starts with; the model's error follows. */
     public static final String MODEL_UNAVAILABLE = "The model is unavailable: ";
 
+    /** The notice on an answer whose cloud model was not sent some local-only sources (F14). */
+    public static final String SOURCES_WITHHELD =
+            "Some sources are in folders marked \"local model only\" and were withheld from the"
+                    + " cloud model. Ask in a conversation with the local model to use them.";
+
     private static final DateTimeFormatter CONVERSATION_ID_TIME =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private final IndexConfig indexConfig;
     private final SettingsStore settingsStore;
     private final LlmClientFactory llmClientFactory;
+    private final FolderPolicy folderPolicy;
+    private final Redactor redactor;
+    private final PrivacyLog privacyLog;
     private final ConversationStore conversationStore;
     private final TextExtractor textExtractor;
     private final Chunker chunker;
@@ -129,6 +146,9 @@ public final class FindAnythingService implements AutoCloseable {
             IndexConfig indexConfig,
             SettingsStore settingsStore,
             LlmClientFactory llmClientFactory,
+            FolderPolicy folderPolicy,
+            Redactor redactor,
+            PrivacyLog privacyLog,
             ConversationStore conversationStore,
             TextExtractor textExtractor,
             Chunker chunker,
@@ -139,6 +159,9 @@ public final class FindAnythingService implements AutoCloseable {
         this.indexConfig = Objects.requireNonNull(indexConfig, "indexConfig");
         this.settingsStore = Objects.requireNonNull(settingsStore, "settingsStore");
         this.llmClientFactory = Objects.requireNonNull(llmClientFactory, "llmClientFactory");
+        this.folderPolicy = Objects.requireNonNull(folderPolicy, "folderPolicy");
+        this.redactor = Objects.requireNonNull(redactor, "redactor");
+        this.privacyLog = Objects.requireNonNull(privacyLog, "privacyLog");
         this.conversationStore = Objects.requireNonNull(conversationStore, "conversationStore");
         this.textExtractor = Objects.requireNonNull(textExtractor, "textExtractor");
         this.chunker = Objects.requireNonNull(chunker, "chunker");
@@ -278,6 +301,17 @@ public final class FindAnythingService implements AutoCloseable {
                                                 folder + " is not a search folder."));
         indexConfig.removeFolder(folder);
         settingsStore.saveIndexConfig(indexConfig);
+        // A "local model only" mark on the folder, or on a folder inside it, goes with it.
+        boolean policyChanged = false;
+        for (Path marked : folderPolicy.getLocalOnlyFolders()) {
+            if (marked.startsWith(searchFolder.getPath())) {
+                folderPolicy.setLocalOnly(marked, false);
+                policyChanged = true;
+            }
+        }
+        if (policyChanged) {
+            settingsStore.saveFolderPolicy(folderPolicy);
+        }
         indexer.requestUpdate(searchFolder.getPath());
     }
 
@@ -510,6 +544,7 @@ public final class FindAnythingService implements AutoCloseable {
                         answer =
                                 agentController.run(
                                         request, conversation, llmClient, progressListener);
+                        answer = noteWithheldSources(answer, conversation);
                     } catch (LlmException e) {
                         // The reason reaches the user as the answer's notice.
                         log.info("The model is unavailable: {}", e.getMessage());
@@ -518,6 +553,32 @@ public final class FindAnythingService implements AutoCloseable {
                     conversationStore.save(conversation);
                     return answer;
                 });
+    }
+
+    /**
+     * Adds {@link #SOURCES_WITHHELD} to the answer when the conversation's model is a cloud model
+     * and a tool result of this request came from a "local model only" folder: the model was sent a
+     * withheld marker in its place (F14), so the answer may be missing what those files say.
+     */
+    private Answer noteWithheldSources(Answer answer, Conversation conversation) {
+        if (conversation.getModelSettings().backendType() != BackendType.CLOUD) {
+            return answer;
+        }
+        List<Message> messages = conversation.getMessages();
+        int start = messages.size();
+        while (start > 0 && messages.get(start - 1).role() != Message.Role.USER) {
+            start--;
+        }
+        boolean withheld =
+                messages.subList(start, messages.size()).stream()
+                        .flatMap(message -> message.sourceFiles().stream())
+                        .anyMatch(folderPolicy::isLocalOnly);
+        if (!withheld) {
+            return answer;
+        }
+        List<String> notices = new ArrayList<>(answer.notices());
+        notices.add(SOURCES_WITHHELD);
+        return new Answer(answer.text(), answer.citations(), answer.sourceFiles(), notices);
     }
 
     /**
@@ -663,6 +724,73 @@ public final class FindAnythingService implements AutoCloseable {
     public synchronized void setBackend(ModelSettings settings) throws IOException {
         settingsStore.saveModelSettings(Objects.requireNonNull(settings, "settings"));
         modelSettings = settings;
+    }
+
+    // ------------------------------------------------------------------ privacy (F13, F14)
+
+    /**
+     * Marks a folder "local model only", or removes the mark, and saves the policy. From the next
+     * request on, text from files under the folder is withheld from every cloud model.
+     *
+     * @param folder a search folder, or a folder inside one
+     * @throws IllegalArgumentException when the folder isn't in a search folder
+     */
+    public synchronized void setLocalOnly(Path folder, boolean localOnly) throws IOException {
+        requireWriter();
+        Path normalized = Objects.requireNonNull(folder, "folder").toAbsolutePath().normalize();
+        if (indexConfig.findFolderContaining(normalized).isEmpty()) {
+            throw new IllegalArgumentException(normalized + " is not in a search folder.");
+        }
+        folderPolicy.setLocalOnly(normalized, localOnly);
+        settingsStore.saveFolderPolicy(folderPolicy);
+    }
+
+    /** The folders marked "local model only". */
+    public Set<Path> getLocalOnlyFolders() {
+        return folderPolicy.getLocalOnlyFolders();
+    }
+
+    /**
+     * Turns the redaction of one category on or off and saves the choice. It applies from the next
+     * request to a cloud model on.
+     *
+     * @throws IllegalArgumentException when there is no such category; the message lists them
+     */
+    public synchronized void setRedaction(String category, boolean enabled) throws IOException {
+        requireWriter();
+        redactor.setCategoryEnabled(category, enabled);
+        Set<String> disabled = new TreeSet<>();
+        getRedactionCategories()
+                .forEach(
+                        (name, on) -> {
+                            if (!on) {
+                                disabled.add(name);
+                            }
+                        });
+        settingsStore.saveDisabledRedactionCategories(disabled);
+    }
+
+    /** Every redaction category, in the order applied, with whether it is on. */
+    public Map<String, Boolean> getRedactionCategories() {
+        Map<String, Boolean> categories = new LinkedHashMap<>();
+        for (String category : redactor.getCategories()) {
+            categories.put(category, redactor.isCategoryEnabled(category));
+        }
+        return categories;
+    }
+
+    /**
+     * The most recent requests sent to cloud models, newest first, each as it was sent (UC09).
+     *
+     * @return an empty list when nothing has been sent to a cloud model
+     */
+    public List<PrivacyLogEntry> getPrivacyLog(int limit) throws IOException {
+        return privacyLog.getEntries(limit);
+    }
+
+    /** The file the privacy log is kept in, for the user who wants to read all of it. */
+    public Path getPrivacyLogFile() {
+        return privacyLog.getLogFile();
     }
 
     // ------------------------------------------------------------------ helpers

@@ -95,6 +95,19 @@ class SensitivePatternTest {
     }
 
     @Test
+    void digitsThatArePartOfANameAreNotANumber() {
+        // The same valid numbers, glued to a letter, an underscore or a hyphen.
+        assertThat(card.findAll("/tmp/junit4111111111111111/docs/notes.txt")).isEmpty();
+        assertThat(card.findAll("IMG_4111111111111111.jpg")).isEmpty();
+        assertThat(card.findAll("report-4111111111111111.pdf")).isEmpty();
+        assertThat(card.findAll("4111111111111111-copy")).isEmpty();
+        assertThat(sin.findAll("invoice-046454286 and ref046454286")).isEmpty();
+        // Punctuation around a number doesn't hide it.
+        assertThat(card.findAll("(4111111111111111), then")).containsExactly("4111111111111111");
+        assertThat(sin.findAll("SIN:046-454-286.")).containsExactly("046-454-286");
+    }
+
+    @Test
     void theBuiltInPatternsCoverTheFourCategoriesInOrder() {
         assertThat(SensitivePattern.builtIn())
                 .extracting(SensitivePattern::getCategory)

@@ -12,8 +12,12 @@ import java.util.regex.Pattern;
  */
 final class Luhn {
 
-    /** Groups of digits joined by single spaces or hyphens, such as "4111 1111 1111 1111". */
-    private static final Pattern RUN = Pattern.compile("(?<!\\d)\\d+(?:[ -]\\d+)*(?!\\d)");
+    /**
+     * Groups of digits joined by single spaces or hyphens, such as "4111 1111 1111 1111", standing
+     * on their own. Digits that touch a letter, an underscore or a hyphen are part of a name (a
+     * file called IMG_20261108123456.jpg, a folder called report-2026), not a number.
+     */
+    private static final Pattern RUN = Pattern.compile("(?<![\\w-])\\d+(?:[ -]\\d+)*(?![\\w-])");
 
     private static final Pattern GROUP = Pattern.compile("\\d+");
 

@@ -203,7 +203,8 @@ public final class CliApp implements Callable<Integer> {
                             thread.setDaemon(true);
                             return thread;
                         });
-        // The privacy objects are made once: the factory puts them around every cloud client.
+        // The privacy objects are made once and shared: the factory puts them around every cloud
+        // client, and the facade changes them when the user changes a policy.
         FolderPolicy folderPolicy = settingsStore.loadFolderPolicy();
         Redactor redactor = loadRedactor(settingsStore);
         PrivacyLog privacyLog = new PrivacyLog(home.resolve("privacy-log.jsonl"));
@@ -212,6 +213,9 @@ public final class CliApp implements Callable<Integer> {
                 indexConfig,
                 settingsStore,
                 new LlmClientFactory(redactor, folderPolicy, privacyLog, clock),
+                folderPolicy,
+                redactor,
+                privacyLog,
                 new ConversationStore(home.resolve("conversations"), settingsStore),
                 textExtractor,
                 new Chunker(1_500),

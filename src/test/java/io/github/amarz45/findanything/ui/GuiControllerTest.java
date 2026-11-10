@@ -5,7 +5,6 @@ import static io.github.amarz45.findanything.ui.FxTestSupport.onFxThread;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.amarz45.findanything.core.FindAnythingService;
-import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.llm.Message;
@@ -76,7 +75,7 @@ class GuiControllerTest {
     }
 
     /** Replaces the service and the window with ones whose model comes from this factory. */
-    void useModel(LlmClientFactory factory) throws Exception {
+    void useModel(ScriptedLlmClientFactory factory) throws Exception {
         onFxThread(() -> stage.hide());
         service.close();
         service = CliAppTest.service(home.resolve("app"), factory);
