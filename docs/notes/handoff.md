@@ -21,8 +21,10 @@ machines (laptop ↔ desktop).
 
 ## The deadline and what Stage 2 requires
 
-Stage 2 is due **Tuesday, November 10, 2026** (not Nov 20 as the syllabus said; the professor
-confirmed). The full instructions are in `local/Project-Stage2-Instruction.pdf`, which is kept out
+Stage 2 is due **Sunday, November 15, 2026**. It was Tuesday, November 10 (not Nov 20 as the
+syllabus said; the professor confirmed), and the deadline was extended on November 10. The change
+freeze moves to **November 14–15**; the days before it go to the privacy work, then items from
+`TODO.md` and Tier 2. The full instructions are in `local/Project-Stage2-Instruction.pdf`, which is kept out
 of Git with `.git/info/exclude`. In short:
 
 - **Minimums:** a GUI and a CLI, at least 10 working non-trivial features, at least 5 distinct
@@ -34,7 +36,9 @@ of Git with `.git/info/exclude`. In short:
 - **Weekly commits:** at least **5 meaningful code commits** in each period: **Oct 20–26**,
   **Oct 27–Nov 2**, **Nov 3–9** (Toronto time, pushed during the period). Documentation,
   formatting-only, empty and artificially split commits don't count. Missing any period costs
-  5 points once. The report links the commits for each period.
+  5 points once. The report links the commits for each period. Whether the extension adds a
+  fourth period (Nov 10–15) isn't confirmed; keep making and pushing code commits in it as if it
+  did.
 - **Report:** `stage2-report` (PDF or Word) in the repo, with 7 sections: overview and status;
   feature-to-implementation mapping; implemented design patterns, including an **updated UML class
   diagram**; changes and rationale; AI tools and collaboration log, including **total tokens and
@@ -94,8 +98,9 @@ done now: formatting, CI, and small tests for logic as it's written (`ExclusionR
 | Oct 30 – Nov 2 | Slice 2: the agent | 2 |
 | Nov 3–5 | Slice 3: GUI, then privacy and backends; F05 if time | 3 (5 commits by Nov 5) |
 | Nov 6–8 | No project work planned | |
-| Mon Nov 9 | Freeze; record videos; update the class diagram | 3 |
-| Tue Nov 10 | Report; final check; submit | |
+| Nov 9–10 | The GUI merged (PR #7); privacy: patterns, policy and log, decorators, facade | 3, then 4 (if it counts) |
+| Nov 10–13 | Privacy: CLI commands, GUI chip and settings dialog; then `TODO.md` items and Tier 2 in order (F05, F04, live watcher, F10) | 4 (if it counts) |
+| Nov 14–15 | Freeze: record videos; update the diagrams; report; final check; submit by Sun Nov 15 | |
 
 ## Decisions already made
 
@@ -221,7 +226,7 @@ commit with a small test where there's logic):
    `policy local-only`, `privacy redact`.
 4. Tier 2 items, in order, as time allows.
 
-**Freeze (Nov 9–10):**
+**Freeze (Nov 14–15):**
 1. Record the videos.
 2. Update the class diagram in UMLet, plus any sequence or use-case diagrams the changes made wrong.
 3. Write `docs/stage2-report.md` from `docs/traceability.md` and `docs/logs/`, and build the PDF.

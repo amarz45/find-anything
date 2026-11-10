@@ -6,7 +6,7 @@ This is the EECS3311 (Fall 2026) course project.
 
 ## Stage 2: implementation (in progress)
 
-The application is being built in Stage 2 (due November 10, 2026). This section will grow into
+The application is being built in Stage 2 (due November 15, 2026). This section will grow into
 full installation and usage instructions. The indexing and keyword-search commands work now; the
 agent (`ask`) and the GUI come next.
 
