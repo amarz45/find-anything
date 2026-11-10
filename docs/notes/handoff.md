@@ -250,6 +250,15 @@ These are already in the plan:
 Stage 3 (due Dec 8) adds full tests and KUMA behaviour tests. KUMA needs Python 3.10+ and a thin
 adapter that runs `findany ask --json`. The user still needs to ask the professor about KUMA credits.
 
+Noted for Stage 3's tests (Amar, 2026-11-10): the privacy tests should use realistic sensitive
+data, not stand-ins. `testdata/corpus/home-like/.ssh/id_ed25519` is the line "placeholder: not a
+real key", so today the built-in exclusion is tested only on the path and `PrivateKeyPattern` only
+on hand-written PEM blocks. Throwaway keys can be generated for the corpus and the unit tests
+(`ssh-keygen -t ed25519`, `-t rsa`, with `-m PEM` for the PKCS#1 form, plus PKCS#8 and PuTTY
+`.ppk` files, and a key pasted inside a note), together with card numbers of each brand, SINs in
+each spelling, and keys with each prefix `ApiKeyPattern` knows, so redaction and the exclusions are
+checked on the real formats. Generated keys only, never one that was ever used.
+
 ## State
 
 *(Update at the end of each session: what's done, what's in progress, what's next, anything
