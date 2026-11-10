@@ -456,7 +456,9 @@ Diagrams updated:
   another number on the same line is still found.
 - **Impact:** F14; `privacy` package. A key with no recognizable prefix isn't found, and about one
   in ten random numbers of the right length passes Luhn and is redacted needlessly, which the
-  design accepts ("False positive: harmless, since the text is only redacted").
+  design accepts ("False positive: harmless, since the text is only redacted"). A quote that
+  contains a placeholder isn't in the file, so such a citation shows as unverified; the model
+  only ever sees the placeholder, so it can't quote the real value.
 
 ### The privacy log's entries and file, and saved privacy settings (2026-11-09, Slice 3)
 - **Original design:** `PrivacyLog` has a `logFile` with `append(entry)` and `getEntries(limit)`;
@@ -540,6 +542,22 @@ Diagrams updated:
 - **Impact:** F13, F14; UC10 (a folder inside a search folder is allowed); `FindAnythingService`,
   `PromptBuilder`, SD03. A read-only process keeps the policy it loaded at startup until it is
   restarted.
+
+### The privacy commands' forms (2026-11-10, Slice 3)
+- **Original design:** `findany privacy-log [--last N]`, `findany policy local-only <folder>` and
+  `findany privacy redact --enable|--disable <category>`. No command removes a local-only mark,
+  and nothing says what the log command prints.
+- **Implemented change:** `policy local-only <folder> --off` removes the mark. `findany privacy`
+  alone shows each category with its state, the limitation sentence, the local-only folders and
+  the log file's path. `privacy-log` shows the newest requests first (10 unless `--last` says
+  otherwise): time, model, message count and size, the redacted categories, the files whose text
+  was withheld, and each message's first 200 characters with its source files; the log file's
+  path follows for the full text. `folders list` marks a local-only search folder, or names the
+  marked folders inside one.
+- **Reason:** the user needs to see the state before changing it, and a mark must be removable.
+  The log's full text can run to hundreds of thousands of characters per question, so the command
+  shows a summary and points at the file.
+- **Impact:** F13, F14; `CliApp`.
 
 ## Pending (decide during implementation; write the entry if it happens)
 

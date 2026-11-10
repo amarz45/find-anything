@@ -437,4 +437,103 @@ class CliAppTest {
         assertThat(bad.exitCode()).isEqualTo(2);
         assertThat(bad.err()).contains("cloud").contains("local");
     }
+
+    // ------------------------------------------------------------------ privacy (F13, F14)
+
+    static final String BANK_DETAILS =
+            "FAKE TEST DATA, NOT REAL\nCard number: 4111 1111 1111 1111\nSIN: 046 454 286\n"
+                    + "API key: sk-test-FAKE-1234567890abcdef\n";
+
+    /** A model that reads the bank details and answers, for this many requests. */
+    static ScriptedLlmClient readsTheBankDetails(Path bank, int requests) {
+        LlmResponse read = calls("read_excerpt", Map.of("file", bank.toString()));
+        LlmResponse answer = says("Your bank details are in one file.");
+        LlmResponse[] script = new LlmResponse[2 * requests];
+        for (int i = 0; i < requests; i++) {
+            script[2 * i] = read;
+            script[2 * i + 1] = answer;
+        }
+        return new ScriptedLlmClient(script);
+    }
+
+    @Test
+    void privacyCommandsShowRedactWithholdAndLogWhatCloudModelsGet() throws Exception {
+        Path privateFolder = docs.resolve("private");
+        Files.createDirectories(privateFolder);
+        Path bank = privateFolder.resolve("bank-details.txt");
+        Files.writeString(bank, BANK_DETAILS);
+        useModel(readsTheBankDetails(bank, 3));
+        run("folders", "add", docs.toString());
+
+        Run status = run("privacy");
+        assertThat(status.exitCode()).isZero();
+        assertThat(status.out())
+                .contains("card-number  on")
+                .contains("sin          on")
+                .contains(CliApp.Privacy.LIMITATION)
+                .contains("No folder is marked local model only")
+                .contains("Privacy log: " + service.getPrivacyLogFile());
+        assertThat(run("privacy-log").out())
+                .startsWith("Nothing has been sent to a cloud model.")
+                .contains("Full text: " + service.getPrivacyLogFile());
+
+        // A cloud request: the excerpt goes out redacted, and the log shows it that way.
+        assertThat(run("ask", "What are my bank details?").exitCode()).isZero();
+        Run log = run("privacy-log", "--last", "1");
+        assertThat(log.exitCode()).isZero();
+        assertThat(log.out())
+                .startsWith("1. ")
+                .contains("vendor/model")
+                .contains("Redacted: card-number, sin, api-key")
+                .contains("[tool] (bank-details.txt) ")
+                .contains("[redacted: card-number]")
+                .contains("[user] What are my bank details?")
+                .doesNotContain("4111")
+                .doesNotContain("046 454 286")
+                .doesNotContain("sk-test");
+        assertThat(run("privacy-log", "--last", "0").exitCode()).isEqualTo(2);
+
+        // Marked local-only, the file's text is withheld and the answer says so.
+        Run mark = run("policy", "local-only", privateFolder.toString());
+        assertThat(mark.exitCode()).isZero();
+        assertThat(mark.out()).startsWith("Marked " + privateFolder + " local model only");
+        assertThat(run("folders", "list").out()).contains("(local model only: private)");
+        assertThat(run("privacy").out()).contains("  " + privateFolder);
+        Run withheld = run("ask", "What are my bank details?");
+        assertThat(withheld.exitCode()).isZero();
+        assertThat(withheld.out()).contains("Note: " + FindAnythingService.SOURCES_WITHHELD);
+        assertThat(run("privacy-log", "--last", "1").out())
+                .contains("Withheld: bank-details.txt")
+                .contains("[withheld: local-only source]")
+                .doesNotContain("FAKE TEST DATA");
+
+        // Unmarked again, with one category turned off.
+        assertThat(run("policy", "local-only", privateFolder.toString(), "--off").out())
+                .startsWith("Removed the local-only mark from " + privateFolder);
+        Run disable = run("privacy", "redact", "--disable", "sin");
+        assertThat(disable.exitCode()).isZero();
+        assertThat(disable.out()).startsWith("Redaction of sin is off");
+        assertThat(run("privacy").out()).contains("sin          off");
+        run("ask", "What are my bank details?");
+        assertThat(run("privacy-log", "--last", "1").out())
+                .contains("Redacted: card-number, api-key")
+                .contains("SIN: 046 454 286")
+                .doesNotContain("4111");
+        assertThat(run("privacy", "redact", "--enable", "sin").out())
+                .startsWith("Redaction of sin is on");
+        assertThat(Files.readString(home.resolve("app/settings.json")))
+                .contains("\"privacy\"")
+                .doesNotContain("sin");
+
+        // The errors: an unknown category, a folder outside the search folders, missing options.
+        Run unknown = run("privacy", "redact", "--disable", "email");
+        assertThat(unknown.exitCode()).isEqualTo(1);
+        assertThat(unknown.err()).contains("There is no redaction category \"email\"");
+        Run outside = run("policy", "local-only", home.resolve("elsewhere").toString());
+        assertThat(outside.exitCode()).isEqualTo(1);
+        assertThat(outside.err()).contains("is not in a search folder");
+        assertThat(run("privacy", "redact").exitCode()).isEqualTo(2);
+        assertThat(run("privacy", "redact", "--enable", "sin", "--disable", "sin").exitCode())
+                .isEqualTo(2);
+    }
 }

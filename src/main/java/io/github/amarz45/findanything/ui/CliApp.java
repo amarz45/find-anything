@@ -25,9 +25,11 @@ import io.github.amarz45.findanything.indexing.IsolatedTextExtractor;
 import io.github.amarz45.findanything.indexing.TextExtractor;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.Message;
+import io.github.amarz45.findanything.llm.RedactingLlmClient;
 import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.privacy.FolderPolicy;
 import io.github.amarz45.findanything.privacy.PrivacyLog;
+import io.github.amarz45.findanything.privacy.PrivacyLogEntry;
 import io.github.amarz45.findanything.privacy.Redactor;
 import io.github.amarz45.findanything.privacy.SensitivePattern;
 import io.github.amarz45.findanything.search.SearchResult;
@@ -48,6 +50,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
@@ -59,6 +62,7 @@ import javafx.application.Platform;
 import javafx.stage.Stage;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 import picocli.CommandLine;
+import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -87,6 +91,9 @@ import picocli.CommandLine.Spec;
             CliApp.Ask.class,
             CliApp.Show.class,
             CliApp.Model.class,
+            CliApp.Privacy.class,
+            CliApp.Policy.class,
+            CliApp.PrivacyLogCommand.class,
             CliApp.Gui.class
         })
 public final class CliApp implements Callable<Integer> {
@@ -327,6 +334,231 @@ public final class CliApp implements Callable<Integer> {
         return oneLine.length() <= maxChars ? oneLine : oneLine.substring(0, maxChars - 1) + "…";
     }
 
+    // ------------------------------------------------------------------ findany privacy, policy
+
+    /**
+     * {@code findany privacy} shows the privacy settings; {@code privacy redact} changes one (F14).
+     */
+    @Command(
+            name = "privacy",
+            description = "Show what is kept from cloud models, or change the redaction.",
+            synopsisSubcommandLabel = "[COMMAND]",
+            subcommands = {Privacy.Redact.class})
+    static final class Privacy implements Callable<Integer> {
+        @ParentCommand CliApp app;
+        @Spec CommandSpec spec;
+
+        /** The limit the design says must be stated plainly. */
+        static final String LIMITATION =
+                "Only data with a recognizable shape is found: card numbers, SINs, private keys and"
+                        + " API keys. Other sensitive text, such as a password in a note, is not"
+                        + " detected; mark its folder local model only, or exclude the file.";
+
+        @Override
+        public Integer call() {
+            PrintWriter out = spec.commandLine().getOut();
+            FindAnythingService service = app.findAnythingService;
+            out.println("Redaction, applied to every request to a cloud model:");
+            service.getRedactionCategories()
+                    .forEach(
+                            (category, on) ->
+                                    out.printf("  %-12s %s%n", category, on ? "on" : "off"));
+            out.println(LIMITATION);
+            out.println();
+            Set<Path> folders = service.getLocalOnlyFolders();
+            if (folders.isEmpty()) {
+                out.println(
+                        "No folder is marked local model only. Mark one with: findany policy"
+                                + " local-only <folder>");
+            } else {
+                out.println("Local model only (their text is withheld from cloud models):");
+                folders.stream().sorted().forEach(folder -> out.println("  " + folder));
+            }
+            out.println("Privacy log: " + service.getPrivacyLogFile());
+            return 0;
+        }
+
+        @Command(name = "redact", description = "Turn the redaction of one category on or off.")
+        static final class Redact implements Callable<Integer> {
+            @ParentCommand Privacy privacy;
+            @Spec CommandSpec spec;
+
+            static final class Choice {
+                @Option(names = "--enable", paramLabel = "<category>", description = "Redact it.")
+                String enable;
+
+                @Option(
+                        names = "--disable",
+                        paramLabel = "<category>",
+                        description = "Send it as it is.")
+                String disable;
+            }
+
+            @ArgGroup(exclusive = true, multiplicity = "1")
+            Choice choice;
+
+            @Override
+            public Integer call() throws Exception {
+                boolean enabled = choice.enable != null;
+                String category = enabled ? choice.enable : choice.disable;
+                privacy.app.openIndex(spec.commandLine().getErr());
+                privacy.app.findAnythingService.setRedaction(category, enabled);
+                spec.commandLine()
+                        .getOut()
+                        .println(
+                                "Redaction of "
+                                        + category
+                                        + " is "
+                                        + (enabled ? "on" : "off")
+                                        + " for the next requests to a cloud model.");
+                return 0;
+            }
+        }
+    }
+
+    /** {@code findany policy local-only <folder> [--off]} (F14). */
+    @Command(
+            name = "policy",
+            description = "Folder policies for cloud models.",
+            synopsisSubcommandLabel = "COMMAND",
+            subcommands = {Policy.LocalOnly.class})
+    static final class Policy implements Callable<Integer> {
+        @ParentCommand CliApp app;
+        @Spec CommandSpec spec;
+
+        @Override
+        public Integer call() {
+            spec.commandLine().usage(spec.commandLine().getOut());
+            return 0;
+        }
+
+        @Command(
+                name = "local-only",
+                description =
+                        "Mark a folder \"local model only\": its files' text is withheld from every"
+                                + " request to a cloud model.")
+        static final class LocalOnly implements Callable<Integer> {
+            @ParentCommand Policy policy;
+            @Spec CommandSpec spec;
+
+            @Parameters(
+                    index = "0",
+                    paramLabel = "<folder>",
+                    description = "A search folder, or a folder inside one.")
+            Path folder;
+
+            @Option(names = "--off", description = "Remove the mark instead.")
+            boolean off;
+
+            @Override
+            public Integer call() throws Exception {
+                policy.app.openIndex(spec.commandLine().getErr());
+                policy.app.findAnythingService.setLocalOnly(folder, !off);
+                Path shown = folder.toAbsolutePath().normalize();
+                spec.commandLine()
+                        .getOut()
+                        .println(
+                                off
+                                        ? "Removed the local-only mark from " + shown + "."
+                                        : "Marked "
+                                                + shown
+                                                + " local model only: its text is withheld from"
+                                                + " cloud models from the next request on.");
+                return 0;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ findany privacy-log
+
+    /** {@code findany privacy-log [--last N]}: what was sent to cloud models (F13, UC09). */
+    @Command(
+            name = "privacy-log",
+            description = "Show the requests sent to cloud models, newest first.")
+    static final class PrivacyLogCommand implements Callable<Integer> {
+        @ParentCommand CliApp app;
+        @Spec CommandSpec spec;
+
+        static final int EXCERPT_CHARS = 200;
+
+        @Option(
+                names = "--last",
+                paramLabel = "<n>",
+                description = "How many requests to show (default: ${DEFAULT-VALUE}).")
+        int last = 10;
+
+        @Override
+        public Integer call() throws Exception {
+            if (last < 1) {
+                throw new CommandLine.ParameterException(
+                        spec.commandLine(), "--last must be at least 1.");
+            }
+            PrintWriter out = spec.commandLine().getOut();
+            FindAnythingService service = app.findAnythingService;
+            List<PrivacyLogEntry> entries = service.getPrivacyLog(last);
+            if (entries.isEmpty()) {
+                out.println("Nothing has been sent to a cloud model.");
+            }
+            int number = 0;
+            for (PrivacyLogEntry entry : entries) {
+                number++;
+                int characters =
+                        entry.excerpts().stream()
+                                .mapToInt(excerpt -> excerpt.text().length())
+                                .sum();
+                out.printf(
+                        "%d. %s  %s  %d message%s, %,d characters%n",
+                        number,
+                        formatDate(entry.timestamp()),
+                        entry.modelName(),
+                        entry.excerpts().size(),
+                        entry.excerpts().size() == 1 ? "" : "s",
+                        characters);
+                out.println(
+                        "   Redacted: "
+                                + (entry.redactedCategories().isEmpty()
+                                        ? "nothing"
+                                        : String.join(", ", entry.redactedCategories())));
+                List<String> withheld =
+                        entry.excerpts().stream()
+                                .filter(
+                                        excerpt ->
+                                                excerpt.text().equals(RedactingLlmClient.WITHHELD))
+                                .flatMap(excerpt -> excerpt.sourceFiles().stream())
+                                .map(path -> String.valueOf(path.getFileName()))
+                                .toList();
+                if (!withheld.isEmpty()) {
+                    out.println("   Withheld: " + String.join(", ", withheld));
+                }
+                for (PrivacyLogEntry.Excerpt excerpt : entry.excerpts()) {
+                    String files =
+                            excerpt.sourceFiles().isEmpty()
+                                    ? ""
+                                    : " ("
+                                            + String.join(
+                                                    ", ",
+                                                    excerpt.sourceFiles().stream()
+                                                            .map(
+                                                                    path ->
+                                                                            String.valueOf(
+                                                                                    path
+                                                                                            .getFileName()))
+                                                            .toList())
+                                            + ")";
+                    out.println(
+                            "   ["
+                                    + excerpt.role()
+                                    + "]"
+                                    + files
+                                    + " "
+                                    + snippet(excerpt.text(), EXCERPT_CHARS));
+                }
+            }
+            out.println("Full text: " + service.getPrivacyLogFile());
+            return 0;
+        }
+    }
+
     // ------------------------------------------------------------------ findany gui
 
     /**
@@ -486,6 +718,7 @@ public final class CliApp implements Callable<Integer> {
                 PrintWriter out = spec.commandLine().getOut();
                 List<SearchFolder> searchFolders =
                         folders.app.findAnythingService.getIndexConfig().getSearchFolders();
+                Set<Path> localOnly = folders.app.findAnythingService.getLocalOnlyFolders();
                 if (searchFolders.isEmpty()) {
                     out.println(
                             "No search folders yet. Add one with: findany folders add <folder>");
@@ -499,6 +732,7 @@ public final class CliApp implements Callable<Integer> {
                     if (!folder.isAvailable()) {
                         line.append("  (unavailable)");
                     }
+                    line.append(localOnlyNote(folder.getPath(), localOnly));
                     if (!folder.getExclusionRules().isEmpty()) {
                         line.append("  excludes: ")
                                 .append(
@@ -511,6 +745,22 @@ public final class CliApp implements Callable<Integer> {
                     out.println(line);
                 }
                 return 0;
+            }
+
+            /** "(local model only)" for a marked folder, or the marked folders inside it. */
+            private static String localOnlyNote(Path folder, Set<Path> localOnly) {
+                if (localOnly.contains(folder)) {
+                    return "  (local model only)";
+                }
+                List<String> inside =
+                        localOnly.stream()
+                                .filter(marked -> marked.startsWith(folder))
+                                .map(marked -> folder.relativize(marked).toString())
+                                .sorted()
+                                .toList();
+                return inside.isEmpty()
+                        ? ""
+                        : "  (local model only: " + String.join(", ", inside) + ")";
             }
         }
     }
