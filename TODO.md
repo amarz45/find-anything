@@ -126,6 +126,25 @@ Amar may change these later; undecided.
   rebuilt as HTML. The first keeps the design (one `TextFlow` per answer) and is the likely choice.
   The CLI prints the same text, so a plain-text rendering there is unaffected.
 
+- **Let the settings dialog's long texts wrap instead of squeezing the controls.** Seen by Amar on
+  2026-11-10: after "Test connection", the result ("Connected. New conversations use the cloud
+  model …") was cut with "…" and shrank the Backend, Model and Test connection controls to "…"
+  too, until the window was widened. The result label sits in the same row as the button, inside
+  a grid column that has no width of its own. A better version puts the result on its own row with
+  a maximum width so it wraps, or gives the grid's columns fixed widths.
+- **Hide the privacy log in the settings dialog until the user asks for it.** It opens with the
+  newest requests in full view, which someone recording a video or sharing their screen wouldn't
+  want (Amar, 2026-11-10). A better version shows a "Show privacy log" button, or a collapsed
+  pane, and loads the entries only when it is opened.
+- **The GUI runs on XWayland, not Wayland.** On a Wayland desktop the window is an X11 client
+  (Amar, 2026-11-10). This can't be changed from the app: JavaFX's Linux backend is GTK on X11,
+  and the OpenJFX maintainers say JavaFX is supported on Wayland through XWayland, as AWT is;
+  a native Wayland backend exists only as a prototype
+  ([openjfx-dev, Dec 2024](https://mail.openjdk.org/pipermail/openjfx-dev/2024-December/051175.html),
+  [openjfx-dev, May 2025](https://mail.openjdk.org/pipermail/openjfx-dev/2025-May/054097.html),
+  [JDK-8326710](https://bugs.openjdk.org/browse/JDK-8326710)). Nothing to do until OpenJFX ships
+  one; check again with each JavaFX release.
+
 ## Privacy
 
 - **Keep sensitive files from reaching the model through search results.** Every search result
