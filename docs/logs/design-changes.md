@@ -580,8 +580,36 @@ Diagrams updated:
 - **Impact:** F03 (rebuild stays CLI-only), F13, F14; `SettingsDialog`, `GuiController`,
   `MainWindow`.
 
+### The GUI: one window, and the members the views needed (2026-11-07 to 2026-11-10, Slice 3)
+- **Original design:** cd01 draws `MainWindow`, `ResultsView`, `DetailPane`, `SettingsDialog` and
+  `GuiController` with the methods the design cares about, a conversation drawer, a comparison
+  view, errors shown as messages, and a chip menu with "Edit exclusions", "Pause", "Local model
+  only" and "Remove". `MainWindow.setMode()` takes a `SearchMode` that no diagram defines.
+- **Implemented change:** one window (search bar with the Search/Ask switch, folder chips, an
+  error bar, the results table, the detail pane, the status label) and the settings dialog.
+  `SearchMode` is an enum in `ui`. The chip menu offers "Local model only" and "Remove"; pause and
+  exclusions stay in the CLI. Errors appear in a dismissible bar under the toolbar. There is no
+  comparison view (F10, Tier 2). Members added beyond the diagram, all view wiring or view state:
+  - `MainWindow`: `show(Stage)`, `getMode()`, `setAskBusy()`, `showConversations()`,
+    `showLocalOnlyFolders()`, getters for its views and dialog, and the callback setters
+    (`setOnQueryChanged`, `setOnAskSubmitted`, `setOnNewConversation`, `setOnOpenConversation`,
+    `setOnConversationsRequested`, `setOnAddFolder`, `setOnRemoveFolder`, `setOnSetLocalOnly`),
+    which keep the diagram's arrow direction: the controller registers itself, views never call
+    the model.
+  - `ResultsView`: `setOnResultSelected()`, `setOnTryAsk()`.
+  - `DetailPane`: `clearConversation()`, `showConversation()`, `showRequest()`,
+    `showPastExchange()`, `setOnCitationClicked()`; the Back button is view state.
+  - `GuiController`: `onRemoveFolder()` (the diagram has no remove handler). Not declared, since
+    not built: `onFiltersChanged()` (F04), `onCompareRequested()` (F10), `onAddExclusion()`.
+  - The `gui` command starts JavaFX with `Platform.startup()` rather than `Application.launch()`,
+    which creates the application object itself and would force a static handoff of the service.
+- **Reason:** time, and the handoff's one-window simplification. The callback setters are the
+  JavaFX way to let a view report an action without knowing the model.
+- **Impact:** F01, F06, F07, F08, F11, F12; cd01 (update at the freeze). The `SettingsDialog` and
+  F12 entries above cover the rest of the GUI's changes.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
 - F04, F05, F10: Tier 2 features that may end up *Not implemented* in Stage 2.
-- GUI: side-by-side comparison, privacy log viewer, editing exclusions in the GUI (CLI-only).
+- GUI: side-by-side comparison (F10), editing exclusions and pausing from the GUI (CLI-only).

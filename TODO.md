@@ -147,6 +147,14 @@ Amar may change these later; undecided.
 
 ## Privacy
 
+- **Withhold only the local-only entries of a search result, not the whole message.** A search
+  result lists several files in one text, and `RedactingLlmClient` replaces the whole message
+  when any one of them is in a local-only folder (as SD04 draws it), so the other files in that
+  result are hidden from the cloud model too. Seen on 2026-11-10: a search that matched a private
+  file also matched a note elsewhere, and both were withheld. A better version needs the tool
+  result to carry per-file structure (a part per file with its source), so the decorator can drop
+  one entry and keep the rest; parsing the search tool's text layout in the decorator would be
+  brittle. Changes SD04, so log it in `docs/logs/design-changes.md`.
 - **Keep sensitive files from reaching the model through search results.** Every search result
   carries each file's best passage, so the model sees file text without opening a file, and for a
   very small file that passage is the whole file. Seen in real use in November 2026: a small text
