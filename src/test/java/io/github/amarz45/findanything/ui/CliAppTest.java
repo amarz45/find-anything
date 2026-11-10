@@ -456,6 +456,12 @@ class CliAppTest {
         return new ScriptedLlmClient(script);
     }
 
+    /** The text of the newest log entry's last message: the tool result the model was sent. */
+    String latestLoggedToolText() throws Exception {
+        var excerpts = service.getPrivacyLog(1).get(0).excerpts();
+        return excerpts.get(excerpts.size() - 1).text();
+    }
+
     @Test
     void privacyCommandsShowRedactWithholdAndLogWhatCloudModelsGet() throws Exception {
         Path privateFolder = docs.resolve("private");
@@ -486,11 +492,16 @@ class CliAppTest {
                 .contains("vendor/model")
                 .contains("Redacted: card-number, sin, api-key")
                 .contains("[tool] (bank-details.txt) ")
-                .contains("[redacted: card-number]")
                 .contains("[user] What are my bank details?")
                 .doesNotContain("4111")
                 .doesNotContain("046 454 286")
                 .doesNotContain("sk-test");
+        // The printed excerpt is cut at 200 characters, and the path takes a share of them that
+        // differs by platform, so the text itself is checked in the log.
+        assertThat(latestLoggedToolText())
+                .contains("Card number: [redacted: card-number]")
+                .contains("SIN: [redacted: sin]")
+                .contains("API key: [redacted: api-key]");
         assertThat(run("privacy-log", "--last", "0").exitCode()).isEqualTo(2);
 
         // Marked local-only, the file's text is withheld and the answer says so.
@@ -517,8 +528,10 @@ class CliAppTest {
         run("ask", "What are my bank details?");
         assertThat(run("privacy-log", "--last", "1").out())
                 .contains("Redacted: card-number, api-key")
-                .contains("SIN: 046 454 286")
                 .doesNotContain("4111");
+        assertThat(latestLoggedToolText())
+                .contains("SIN: 046 454 286")
+                .contains("Card number: [redacted: card-number]");
         assertThat(run("privacy", "redact", "--enable", "sin").out())
                 .startsWith("Redaction of sin is on");
         assertThat(Files.readString(home.resolve("app/settings.json")))
