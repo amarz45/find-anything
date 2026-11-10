@@ -68,6 +68,8 @@ public final class MainWindow extends BorderPane {
     private final Button newConversation = new Button("New conversation");
     private final MenuButton conversations = new MenuButton("Conversations");
     private final Button addFolder = new Button("Add folder…");
+    private final Button settings = new Button("Settings…");
+    private final SettingsDialog settingsDialog = new SettingsDialog();
     private final FlowPane folderChips = new FlowPane(6, 6);
     private final HBox errorBar = new HBox(8);
     private final Label errorLabel = new Label();
@@ -130,6 +132,13 @@ public final class MainWindow extends BorderPane {
         conversations.setOnShowing(event -> onConversationsRequested.run());
         showConversations(List.of());
         addFolder.getStyleClass().add("add-folder");
+        settings.getStyleClass().add("settings");
+        settings.setOnAction(
+                event -> {
+                    if (!settingsDialog.isShowing()) {
+                        settingsDialog.show();
+                    }
+                });
         addFolder.setOnAction(event -> chooseFolder());
 
         HBox toolbar =
@@ -140,7 +149,8 @@ public final class MainWindow extends BorderPane {
                         input,
                         newConversation,
                         conversations,
-                        addFolder);
+                        addFolder,
+                        settings);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         toolbar.setPadding(new Insets(8));
 
@@ -178,6 +188,7 @@ public final class MainWindow extends BorderPane {
     public void show(Stage stage) {
         stage.setTitle(TITLE);
         stage.setScene(new Scene(this, 1200, 750));
+        settingsDialog.initOwner(stage);
         stage.show();
         input.requestFocus();
     }
@@ -325,6 +336,7 @@ public final class MainWindow extends BorderPane {
         if (nowReadOnly != readOnly) {
             readOnly = nowReadOnly;
             addFolder.setDisable(readOnly);
+            settingsDialog.setReadOnly(readOnly);
             showFolders(folders);
         }
     }
@@ -368,6 +380,10 @@ public final class MainWindow extends BorderPane {
 
     public ResultsView getResultsView() {
         return resultsView;
+    }
+
+    public SettingsDialog getSettingsDialog() {
+        return settingsDialog;
     }
 
     public DetailPane getDetailPane() {

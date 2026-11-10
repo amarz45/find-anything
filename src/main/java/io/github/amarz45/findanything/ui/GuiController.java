@@ -6,6 +6,7 @@ import io.github.amarz45.findanything.agent.Citation;
 import io.github.amarz45.findanything.agent.Conversation;
 import io.github.amarz45.findanything.agent.ResponseParser;
 import io.github.amarz45.findanything.config.AlreadyCoveredException;
+import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.indexing.IndexStatus;
 import io.github.amarz45.findanything.indexing.IndexStatusListener;
@@ -34,10 +35,14 @@ public final class GuiController implements IndexStatusListener {
     static final String FILE_GONE = "This file no longer exists.";
     static final String REQUEST_FAILED = "The request could not be completed.";
 
+    /** How many privacy log entries the dialog shows (SD08). */
+    static final int PRIVACY_LOG_ENTRIES = 100;
+
     private final FindAnythingService findAnythingService;
     private final MainWindow mainWindow;
     private final ResultsView resultsView;
     private final DetailPane detailPane;
+    private final SettingsDialog settingsDialog;
 
     /** The current conversation, started on the first request in Ask mode (F12). */
     private Conversation conversation;
@@ -60,6 +65,7 @@ public final class GuiController implements IndexStatusListener {
         this.mainWindow = Objects.requireNonNull(mainWindow, "mainWindow");
         this.resultsView = mainWindow.getResultsView();
         this.detailPane = mainWindow.getDetailPane();
+        this.settingsDialog = mainWindow.getSettingsDialog();
 
         mainWindow.setOnQueryChanged(this::onQueryChanged);
         mainWindow.setOnAskSubmitted(this::onAskSubmitted);
@@ -69,12 +75,24 @@ public final class GuiController implements IndexStatusListener {
         mainWindow.setOnAddFolder(this::onAddFolder);
         mainWindow.setOnRemoveFolder(this::onRemoveFolder);
         mainWindow.setOnSetLocalOnly(this::onSetLocalOnly);
+        settingsDialog.setOnTestBackend(
+                (backendType, modelName) -> {
+                    try {
+                        onTestBackend(
+                                findAnythingService.resolveModelSettings(backendType, modelName));
+                    } catch (IOException | RuntimeException e) {
+                        settingsDialog.showTestResult(false, describe(e));
+                    }
+                });
+        settingsDialog.setOnRedactionToggled(this::onRedactionToggled);
+        settingsDialog.setOnShowPrivacyLog(this::onShowPrivacyLog);
         resultsView.setOnResultSelected(this::onResultSelected);
         detailPane.setOnCitationClicked(this::onCitationClicked);
 
         findAnythingService.addStatusListener(this);
         showFolders();
         refreshConversations();
+        showSettings();
         // A read-only process is never told again, so show the status it has now.
         onStatusChanged(findAnythingService.getIndexStatus());
         onQueryChanged("");
@@ -267,6 +285,80 @@ public final class GuiController implements IndexStatusListener {
             mainWindow.showError(describe(e));
             return false;
         }
+    }
+
+    // ------------------------------------------------------------------ settings (F13, F14)
+
+    /**
+     * Tests the backend on the background thread; if it answers, it becomes the backend for new
+     * conversations (SD08). The outcome goes to the settings dialog.
+     */
+    public void onTestBackend(ModelSettings modelSettings) {
+        Objects.requireNonNull(modelSettings, "modelSettings");
+        settingsDialog.showModelSettings(modelSettings);
+        try {
+            findAnythingService
+                    .testBackend(modelSettings)
+                    .whenComplete(
+                            (answered, failure) ->
+                                    Platform.runLater(
+                                            () ->
+                                                    showTestOutcome(
+                                                            modelSettings, answered, failure)));
+        } catch (RuntimeException e) {
+            settingsDialog.showTestResult(false, describe(e));
+        }
+    }
+
+    private void showTestOutcome(ModelSettings modelSettings, Boolean answered, Throwable failure) {
+        if (failure != null) {
+            settingsDialog.showTestResult(false, describe(failure));
+            return;
+        }
+        if (!answered) {
+            settingsDialog.showTestResult(false, "The backend was reached but answered nothing.");
+            return;
+        }
+        try {
+            findAnythingService.setBackend(modelSettings);
+        } catch (IOException | RuntimeException e) {
+            settingsDialog.showTestResult(false, describe(e));
+            return;
+        }
+        settingsDialog.showTestResult(
+                true,
+                "Connected. New conversations use the "
+                        + CliApp.Model.describe(modelSettings)
+                        + ".");
+    }
+
+    /** Turns one redaction category on or off (F14); the toggles are shown again as saved. */
+    public void onRedactionToggled(String category, boolean enabled) {
+        Objects.requireNonNull(category, "category");
+        try {
+            findAnythingService.setRedaction(category, enabled);
+        } catch (IOException | RuntimeException e) {
+            mainWindow.showError(describe(e));
+        }
+        settingsDialog.showRedaction(findAnythingService.getRedactionCategories());
+    }
+
+    /** Loads the most recent privacy log entries into the dialog (UC09). */
+    public void onShowPrivacyLog() {
+        try {
+            settingsDialog.showPrivacyLog(findAnythingService.getPrivacyLog(PRIVACY_LOG_ENTRIES));
+        } catch (IOException | RuntimeException e) {
+            mainWindow.showError(describe(e));
+        }
+    }
+
+    private void showSettings() {
+        try {
+            settingsDialog.showModelSettings(findAnythingService.getModelSettings());
+        } catch (IOException | RuntimeException e) {
+            mainWindow.showError(describe(e));
+        }
+        settingsDialog.showRedaction(findAnythingService.getRedactionCategories());
     }
 
     // ------------------------------------------------------------------ folders (F01)

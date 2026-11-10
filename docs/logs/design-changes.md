@@ -559,6 +559,27 @@ Diagrams updated:
   shows a summary and points at the file.
 - **Impact:** F13, F14; `CliApp`.
 
+### `SettingsDialog`: what it holds and what stays in the CLI (2026-11-10, Slice 3)
+- **Original design:** Settings has a Model section (backend, API key or model name, Test
+  connection), a Privacy section (a toggle per redaction category, the stated limitation), a
+  privacy log viewer, Settings > Indexing with the global exclusion rules, and a "Rebuild index"
+  button. `SettingsDialog` has `showGlobalRules()`, `showTestResult()` and `showPrivacyLog()`.
+- **Implemented change:** a non-modal dialog opened from a "Settings…" button on the toolbar,
+  with the Model section (backend choice, model name, a line saying whether an API key is
+  configured, Test connection and its result), the Privacy section (a check box per category,
+  the limitation sentence) and the privacy log as read-only text with a Refresh button, loaded
+  when the dialog opens. The API key is never entered here: it comes from `.env`, as logged
+  earlier. Left to the CLI: the global exclusion rules (`findany exclude`) and rebuilding the
+  index (`findany index rebuild`), so `showGlobalRules()` isn't implemented. Added members:
+  `showModelSettings()`, `showRedaction()`, `setReadOnly()` and the callback setters;
+  `GuiController.onRedactionToggled()` shows the toggles again as saved, and `onTestBackend()`
+  saves the backend only when the test answered, as SD08 draws it. The log's text is the same as
+  `findany privacy-log` prints (`CliApp.PrivacyLogCommand.describe()`), so the two views agree.
+- **Reason:** time before the freeze; the CLI already covers the two parts left out, and a
+  read-only text area lets the user select and copy log text.
+- **Impact:** F03 (rebuild stays CLI-only), F13, F14; `SettingsDialog`, `GuiController`,
+  `MainWindow`.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

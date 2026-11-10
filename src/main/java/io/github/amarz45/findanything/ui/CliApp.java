@@ -502,60 +502,69 @@ public final class CliApp implements Callable<Integer> {
             int number = 0;
             for (PrivacyLogEntry entry : entries) {
                 number++;
-                int characters =
-                        entry.excerpts().stream()
-                                .mapToInt(excerpt -> excerpt.text().length())
-                                .sum();
-                out.printf(
-                        "%d. %s  %s  %d message%s, %,d characters%n",
-                        number,
-                        formatDate(entry.timestamp()),
-                        entry.modelName(),
-                        entry.excerpts().size(),
-                        entry.excerpts().size() == 1 ? "" : "s",
-                        characters);
-                out.println(
-                        "   Redacted: "
-                                + (entry.redactedCategories().isEmpty()
-                                        ? "nothing"
-                                        : String.join(", ", entry.redactedCategories())));
-                List<String> withheld =
-                        entry.excerpts().stream()
-                                .filter(
-                                        excerpt ->
-                                                excerpt.text().equals(RedactingLlmClient.WITHHELD))
-                                .flatMap(excerpt -> excerpt.sourceFiles().stream())
-                                .map(path -> String.valueOf(path.getFileName()))
-                                .toList();
-                if (!withheld.isEmpty()) {
-                    out.println("   Withheld: " + String.join(", ", withheld));
-                }
-                for (PrivacyLogEntry.Excerpt excerpt : entry.excerpts()) {
-                    String files =
-                            excerpt.sourceFiles().isEmpty()
-                                    ? ""
-                                    : " ("
-                                            + String.join(
-                                                    ", ",
-                                                    excerpt.sourceFiles().stream()
-                                                            .map(
-                                                                    path ->
-                                                                            String.valueOf(
-                                                                                    path
-                                                                                            .getFileName()))
-                                                            .toList())
-                                            + ")";
-                    out.println(
-                            "   ["
-                                    + excerpt.role()
-                                    + "]"
-                                    + files
-                                    + " "
-                                    + snippet(excerpt.text(), EXCERPT_CHARS));
-                }
+                out.print(describe(number, entry));
             }
             out.println("Full text: " + service.getPrivacyLogFile());
             return 0;
+        }
+
+        /**
+         * One entry as the user reads it: when, the model, how much, what was redacted and
+         * withheld, then each message's start with its source files. The settings dialog shows the
+         * same text.
+         */
+        static String describe(int number, PrivacyLogEntry entry) {
+            StringBuilder text = new StringBuilder();
+            int characters =
+                    entry.excerpts().stream().mapToInt(excerpt -> excerpt.text().length()).sum();
+            text.append(
+                    String.format(
+                            Locale.ROOT,
+                            "%d. %s  %s  %d message%s, %,d characters%n",
+                            number,
+                            formatDate(entry.timestamp()),
+                            entry.modelName(),
+                            entry.excerpts().size(),
+                            entry.excerpts().size() == 1 ? "" : "s",
+                            characters));
+            text.append("   Redacted: ")
+                    .append(
+                            entry.redactedCategories().isEmpty()
+                                    ? "nothing"
+                                    : String.join(", ", entry.redactedCategories()))
+                    .append('\n');
+            List<String> withheld =
+                    entry.excerpts().stream()
+                            .filter(excerpt -> excerpt.text().equals(RedactingLlmClient.WITHHELD))
+                            .flatMap(excerpt -> excerpt.sourceFiles().stream())
+                            .map(path -> String.valueOf(path.getFileName()))
+                            .toList();
+            if (!withheld.isEmpty()) {
+                text.append("   Withheld: ").append(String.join(", ", withheld)).append('\n');
+            }
+            for (PrivacyLogEntry.Excerpt excerpt : entry.excerpts()) {
+                String files =
+                        excerpt.sourceFiles().isEmpty()
+                                ? ""
+                                : " ("
+                                        + String.join(
+                                                ", ",
+                                                excerpt.sourceFiles().stream()
+                                                        .map(
+                                                                path ->
+                                                                        String.valueOf(
+                                                                                path.getFileName()))
+                                                        .toList())
+                                        + ")";
+                text.append("   [")
+                        .append(excerpt.role())
+                        .append(']')
+                        .append(files)
+                        .append(' ')
+                        .append(snippet(excerpt.text(), EXCERPT_CHARS))
+                        .append('\n');
+            }
+            return text.toString();
         }
     }
 

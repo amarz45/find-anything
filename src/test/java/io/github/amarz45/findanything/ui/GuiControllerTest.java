@@ -4,6 +4,7 @@ import static io.github.amarz45.findanything.ui.FxTestSupport.awaitFx;
 import static io.github.amarz45.findanything.ui.FxTestSupport.onFxThread;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
@@ -19,11 +20,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.CheckMenuItem;
+import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
@@ -462,5 +466,122 @@ class GuiControllerTest {
                                 .filter(item -> item instanceof CheckMenuItem)
                                 .findFirst()
                                 .orElseThrow();
+    }
+
+    // ------------------------------------------------------------------ the settings dialog
+
+    <T extends Node> T inDialog(String selector) throws Exception {
+        return onFxThread(
+                () -> {
+                    @SuppressWarnings("unchecked")
+                    T node = (T) window.getSettingsDialog().getDialogPane().lookup(selector);
+                    return node;
+                });
+    }
+
+    String testResult() throws Exception {
+        Label label = inDialog(".test-result");
+        return onFxThread(label::getText);
+    }
+
+    @Test
+    void settingsDialogTestsTheBackendAndSavesItWhenItAnswers() throws Exception {
+        // Shown as the settings are now: the cloud backend from the environment, with its key.
+        ChoiceBox<BackendType> backend = inDialog(".backend-choice");
+        Label resultLabel = inDialog(".test-result");
+        TextField modelName = inDialog(".model-name");
+        Label keyLine = inDialog(".detail-meta");
+        assertThat(onFxThread(backend::getValue)).isEqualTo(BackendType.CLOUD);
+        assertThat(onFxThread(() -> modelName.getText())).isEqualTo("vendor/model");
+        assertThat(onFxThread(keyLine::getText)).isEqualTo(SettingsDialog.KEY_SET);
+
+        onFxThread(
+                () -> {
+                    backend.setValue(BackendType.LOCAL);
+                    modelName.setText("llama");
+                    ((Button) window.getSettingsDialog().getDialogPane().lookup(".test-connection"))
+                            .fire();
+                });
+        assertThat(onFxThread(keyLine::isVisible)).isFalse();
+        awaitFx(
+                () -> !resultLabel.getText().equals(SettingsDialog.TESTING),
+                () -> "the connection test's result");
+        assertThat(testResult()).startsWith("Connected.").contains("local model llama");
+        assertThat(service.getModelSettings().backendType()).isEqualTo(BackendType.LOCAL);
+        assertThat(service.getModelSettings().modelName()).isEqualTo("llama");
+    }
+
+    @Test
+    void aFailedConnectionTestSavesNothing() throws Exception {
+        useModel(
+                new ScriptedLlmClientFactory(
+                        new ScriptedLlmClient(
+                                new LlmException("OpenRouter rejected the API key."))));
+        TextField modelName = inDialog(".model-name");
+        Label resultLabel = inDialog(".test-result");
+        onFxThread(
+                () -> {
+                    modelName.setText("vendor/other");
+                    ((Button) window.getSettingsDialog().getDialogPane().lookup(".test-connection"))
+                            .fire();
+                });
+        awaitFx(
+                () -> !resultLabel.getText().equals(SettingsDialog.TESTING),
+                () -> "the connection test's result");
+        assertThat(testResult()).isEqualTo("OpenRouter rejected the API key.");
+        assertThat(service.getModelSettings().modelName()).isEqualTo("vendor/model");
+        assertThat(onFxThread(() -> resultLabel.getStyleClass().contains("unverified"))).isTrue();
+    }
+
+    @Test
+    void settingsDialogTogglesRedactionAndShowsThePrivacyLog() throws Exception {
+        List<CheckBox> boxes =
+                onFxThread(
+                        () ->
+                                window
+                                        .getSettingsDialog()
+                                        .getDialogPane()
+                                        .lookupAll(".redaction-toggle")
+                                        .stream()
+                                        .map(node -> (CheckBox) node)
+                                        .toList());
+        assertThat(boxes)
+                .extracting(CheckBox::getText)
+                .containsExactly("private-key", "card-number", "sin", "api-key");
+        assertThat(boxes).allMatch(CheckBox::isSelected);
+
+        CheckBox sin = boxes.get(2);
+        onFxThread(sin::fire); // off
+        assertThat(service.getRedactionCategories()).containsEntry("sin", false);
+        assertThat(Files.readString(home.resolve("app/settings.json"))).contains("\"sin\"");
+        CheckBox sinAgain =
+                onFxThread(
+                        () ->
+                                window
+                                        .getSettingsDialog()
+                                        .getDialogPane()
+                                        .lookupAll(".redaction-toggle")
+                                        .stream()
+                                        .map(node -> (CheckBox) node)
+                                        .filter(box -> box.getText().equals("sin"))
+                                        .findFirst()
+                                        .orElseThrow());
+        assertThat(onFxThread(sinAgain::isSelected)).isFalse();
+        onFxThread(sinAgain::fire); // on again
+        assertThat(service.getRedactionCategories()).containsEntry("sin", true);
+
+        TextArea log = inDialog(".privacy-log");
+        assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+        onFxThread(() -> controller.onAskSubmitted("Is anything due this week?"));
+        awaitDetail(".answer");
+        onFxThread(
+                () ->
+                        ((Button) window.getSettingsDialog().getDialogPane().lookup(".refresh-log"))
+                                .fire());
+        assertThat(onFxThread(() -> log.getText()))
+                .startsWith("1. ")
+                .contains("vendor/model")
+                .contains("Redacted: nothing")
+                .contains("[user] Is anything due this week?");
     }
 }
