@@ -68,11 +68,12 @@ public final class GuiController implements IndexStatusListener {
         mainWindow.setOnConversationsRequested(this::refreshConversations);
         mainWindow.setOnAddFolder(this::onAddFolder);
         mainWindow.setOnRemoveFolder(this::onRemoveFolder);
+        mainWindow.setOnSetLocalOnly(this::onSetLocalOnly);
         resultsView.setOnResultSelected(this::onResultSelected);
         detailPane.setOnCitationClicked(this::onCitationClicked);
 
         findAnythingService.addStatusListener(this);
-        mainWindow.showFolders(findAnythingService.getIndexConfig().getSearchFolders());
+        showFolders();
         refreshConversations();
         // A read-only process is never told again, so show the status it has now.
         onStatusChanged(findAnythingService.getIndexStatus());
@@ -292,8 +293,23 @@ public final class GuiController implements IndexStatusListener {
         showFolders();
     }
 
+    /**
+     * Marks a search folder "local model only", or removes the mark (F14): from the next request
+     * on, text from its files is withheld from every cloud model.
+     */
+    public void onSetLocalOnly(Path folder, boolean localOnly) {
+        Objects.requireNonNull(folder, "folder");
+        try {
+            findAnythingService.setLocalOnly(folder, localOnly);
+        } catch (IOException | RuntimeException e) {
+            mainWindow.showError(describe(e));
+        }
+        showFolders();
+    }
+
     private void showFolders() {
         mainWindow.showFolders(findAnythingService.getIndexConfig().getSearchFolders());
+        mainWindow.showLocalOnlyFolders(findAnythingService.getLocalOnlyFolders());
     }
 
     // ------------------------------------------------------------------ index status (F03)

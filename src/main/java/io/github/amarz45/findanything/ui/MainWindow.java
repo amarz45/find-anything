@@ -13,11 +13,14 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
@@ -73,6 +76,7 @@ public final class MainWindow extends BorderPane {
     private SearchMode mode = SearchMode.SEARCH;
     private boolean readOnly;
     private List<SearchFolder> folders = List.of();
+    private Set<Path> localOnlyFolders = Set.of();
     private Consumer<String> onQueryChanged = query -> {};
     private Consumer<String> onAskSubmitted = request -> {};
     private Runnable onNewConversation = () -> {};
@@ -80,6 +84,7 @@ public final class MainWindow extends BorderPane {
     private Runnable onConversationsRequested = () -> {};
     private Consumer<Path> onAddFolder = folder -> {};
     private Consumer<Path> onRemoveFolder = folder -> {};
+    private BiConsumer<Path, Boolean> onSetLocalOnly = (folder, localOnly) -> {};
 
     public MainWindow() {
         getStylesheets().add(Styles.STYLESHEET);
@@ -242,17 +247,39 @@ public final class MainWindow extends BorderPane {
         } else if (folder.isPaused()) {
             suffix = " (paused)";
         }
+        boolean localOnly = localOnlyFolders.contains(path);
+        boolean localOnlyInside =
+                !localOnly && localOnlyFolders.stream().anyMatch(marked -> marked.startsWith(path));
+        if (localOnly) {
+            suffix += " (local model only)";
+        } else if (localOnlyInside) {
+            suffix += " (local model only inside)";
+        }
         MenuButton chip = new MenuButton(name + suffix);
         chip.getStyleClass().add("chip");
         if (!folder.isAvailable()) {
             chip.getStyleClass().add("unavailable");
         }
+        if (localOnly || localOnlyInside) {
+            chip.getStyleClass().add("local-only");
+        }
         chip.setTooltip(new Tooltip(path.toString()));
+        CheckMenuItem localOnlyItem = new CheckMenuItem("Local model only");
+        localOnlyItem.getStyleClass().add("local-only-item");
+        localOnlyItem.setSelected(localOnly);
+        localOnlyItem.setDisable(readOnly);
+        localOnlyItem.setOnAction(event -> onSetLocalOnly.accept(path, localOnlyItem.isSelected()));
         MenuItem remove = new MenuItem("Remove");
         remove.setDisable(readOnly);
         remove.setOnAction(event -> onRemoveFolder.accept(path));
-        chip.getItems().add(remove);
+        chip.getItems().addAll(localOnlyItem, remove);
         return chip;
+    }
+
+    /** Marks the chips of the "local model only" folders (F14), and of those with one inside. */
+    public void showLocalOnlyFolders(Set<Path> localOnlyFolders) {
+        this.localOnlyFolders = Set.copyOf(Objects.requireNonNull(localOnlyFolders, "folders"));
+        showFolders(folders);
     }
 
     /** Fills the "Conversations" menu with the saved conversations, most recent first (F12). */
@@ -378,6 +405,11 @@ public final class MainWindow extends BorderPane {
     /** Called with the folder the user picked with "Add folder". */
     public void setOnAddFolder(Consumer<Path> onAddFolder) {
         this.onAddFolder = Objects.requireNonNull(onAddFolder, "onAddFolder");
+    }
+
+    /** Called with the folder and the new state when a chip's "Local model only" is toggled. */
+    public void setOnSetLocalOnly(BiConsumer<Path, Boolean> onSetLocalOnly) {
+        this.onSetLocalOnly = Objects.requireNonNull(onSetLocalOnly, "onSetLocalOnly");
     }
 
     /** Called with the folder whose chip menu "Remove" was chosen. */

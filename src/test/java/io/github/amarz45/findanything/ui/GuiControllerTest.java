@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
@@ -385,5 +386,81 @@ class GuiControllerTest {
                                 .map(Message::content))
                 .containsExactly("How fast is merge sort?", "And when is the dentist?");
         assertThat(service.listConversations()).hasSize(1);
+    }
+
+    @Test
+    void aChipMarksItsFolderLocalModelOnlyAndShowsTheMark() throws Exception {
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        assertThat(chips(window)).containsExactly("docs");
+
+        CheckMenuItem item = localOnlyItem(window);
+        assertThat(item.isSelected()).isFalse();
+        onFxThread(
+                () -> {
+                    item.setSelected(true);
+                    item.fire();
+                });
+        assertThat(chips(window)).containsExactly("docs (local model only)");
+        assertThat(localOnlyItem(window).isSelected()).isTrue();
+        assertThat(service.getLocalOnlyFolders()).containsExactly(docs);
+
+        onFxThread(() -> controller.onSetLocalOnly(docs, false));
+        assertThat(chips(window)).containsExactly("docs");
+        assertThat(service.getLocalOnlyFolders()).isEmpty();
+
+        // A folder marked inside it from the CLI shows on the chip too.
+        service.setLocalOnly(docs.resolve("private"), true);
+        onFxThread(() -> controller.onAddFolder(home.resolve("missing"))); // any refresh
+        assertThat(chips(window)).containsExactly("docs (local model only inside)");
+        assertThat(error(window)).startsWith("No such file or folder");
+    }
+
+    @Test
+    void aReadOnlyProcessCannotChangeTheLocalOnlyMark() throws Exception {
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        FindAnythingService second = newService();
+        try {
+            assertThat(second.open(false)).isEqualTo(IndexMode.READ_ONLY);
+            MainWindow[] other = new MainWindow[1];
+            GuiController[] otherController = new GuiController[1];
+            Stage[] otherStage = new Stage[1];
+            onFxThread(
+                    () -> {
+                        other[0] = new MainWindow();
+                        otherController[0] = new GuiController(second, other[0]);
+                        otherStage[0] = new Stage();
+                        other[0].show(otherStage[0]);
+                    });
+            try {
+                awaitFx(
+                        () -> statusNow(other[0]).startsWith(MainWindow.READ_ONLY_STATUS),
+                        () -> "read-only status");
+                assertThat(onFxThread(() -> localOnlyItemNow(other[0]).isDisable())).isTrue();
+                onFxThread(() -> otherController[0].onSetLocalOnly(docs, true));
+                assertThat(error(other[0])).contains("read-only");
+                assertThat(second.getLocalOnlyFolders()).isEmpty();
+            } finally {
+                onFxThread(() -> otherStage[0].hide());
+            }
+        } finally {
+            second.close();
+        }
+    }
+
+    /** The first chip's "Local model only" menu item, read on the JavaFX thread. */
+    static CheckMenuItem localOnlyItem(MainWindow window) throws Exception {
+        return onFxThread(() -> localOnlyItemNow(window));
+    }
+
+    /** As {@link #localOnlyItem}, for code that already runs on the JavaFX thread. */
+    static CheckMenuItem localOnlyItemNow(MainWindow window) {
+        return (CheckMenuItem)
+                ((MenuButton) window.lookup(".chip"))
+                        .getItems().stream()
+                                .filter(item -> item instanceof CheckMenuItem)
+                                .findFirst()
+                                .orElseThrow();
     }
 }
