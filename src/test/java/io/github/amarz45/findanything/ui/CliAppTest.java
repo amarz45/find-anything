@@ -11,7 +11,6 @@ import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.ScriptedExtractor;
-import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.llm.Message;
@@ -65,13 +64,24 @@ class CliAppTest {
                     "OPENROUTER_MODEL", "vendor/model",
                     "OLLAMA_MODEL", "llama");
 
-    static FindAnythingService service(Path appData, LlmClientFactory factory) throws Exception {
+    /** A service whose model is scripted; the facade shares the factory's privacy objects. */
+    static FindAnythingService service(Path appData, ScriptedLlmClientFactory factory)
+            throws Exception {
         SettingsStore store = new SettingsStore(appData.resolve("settings.json"), ENV);
         IndexConfig config = store.loadIndexConfig();
+        // What the composition root does: the saved policy and toggles apply from the start.
+        store.loadFolderPolicy()
+                .getLocalOnlyFolders()
+                .forEach(folder -> factory.folderPolicy.setLocalOnly(folder, true));
+        store.loadDisabledRedactionCategories()
+                .forEach(category -> factory.redactor.setCategoryEnabled(category, false));
         return new FindAnythingService(
                 config,
                 store,
                 factory,
+                factory.folderPolicy,
+                factory.redactor,
+                factory.privacyLog,
                 new ConversationStore(appData.resolve("conversations"), store),
                 new ScriptedExtractor(),
                 new Chunker(300),
@@ -426,5 +436,117 @@ class CliAppTest {
         Run bad = run("model", "set", "remote");
         assertThat(bad.exitCode()).isEqualTo(2);
         assertThat(bad.err()).contains("cloud").contains("local");
+    }
+
+    // ------------------------------------------------------------------ privacy (F13, F14)
+
+    static final String BANK_DETAILS =
+            "FAKE TEST DATA, NOT REAL\nCard number: 4111 1111 1111 1111\nSIN: 046 454 286\n"
+                    + "API key: sk-test-FAKE-1234567890abcdef\n";
+
+    /** A model that reads the bank details and answers, for this many requests. */
+    static ScriptedLlmClient readsTheBankDetails(Path bank, int requests) {
+        LlmResponse read = calls("read_excerpt", Map.of("file", bank.toString()));
+        LlmResponse answer = says("Your bank details are in one file.");
+        LlmResponse[] script = new LlmResponse[2 * requests];
+        for (int i = 0; i < requests; i++) {
+            script[2 * i] = read;
+            script[2 * i + 1] = answer;
+        }
+        return new ScriptedLlmClient(script);
+    }
+
+    /** The text of the newest log entry's last message: the tool result the model was sent. */
+    String latestLoggedToolText() throws Exception {
+        var excerpts = service.getPrivacyLog(1).get(0).excerpts();
+        return excerpts.get(excerpts.size() - 1).text();
+    }
+
+    @Test
+    void privacyCommandsShowRedactWithholdAndLogWhatCloudModelsGet() throws Exception {
+        Path privateFolder = docs.resolve("private");
+        Files.createDirectories(privateFolder);
+        Path bank = privateFolder.resolve("bank-details.txt");
+        Files.writeString(bank, BANK_DETAILS);
+        useModel(readsTheBankDetails(bank, 3));
+        run("folders", "add", docs.toString());
+
+        Run status = run("privacy");
+        assertThat(status.exitCode()).isZero();
+        assertThat(status.out())
+                .contains("card-number  on")
+                .contains("sin          on")
+                .contains(CliApp.Privacy.LIMITATION)
+                .contains("No folder is marked local model only")
+                .contains("Privacy log: " + service.getPrivacyLogFile());
+        assertThat(run("privacy-log").out())
+                .startsWith("Nothing has been sent to a cloud model.")
+                .contains("Full text: " + service.getPrivacyLogFile());
+
+        // A cloud request: the excerpt goes out redacted, and the log shows it that way.
+        assertThat(run("ask", "What are my bank details?").exitCode()).isZero();
+        Run log = run("privacy-log", "--last", "1");
+        assertThat(log.exitCode()).isZero();
+        assertThat(log.out())
+                .startsWith("1. ")
+                .contains("vendor/model")
+                .contains("Redacted: card-number, sin, api-key")
+                .contains("[tool] (bank-details.txt) ")
+                .contains("[user] What are my bank details?")
+                .doesNotContain("4111")
+                .doesNotContain("046 454 286")
+                .doesNotContain("sk-test");
+        // The printed excerpt is cut at 200 characters, and the path takes a share of them that
+        // differs by platform, so the text itself is checked in the log.
+        assertThat(latestLoggedToolText())
+                .contains("Card number: [redacted: card-number]")
+                .contains("SIN: [redacted: sin]")
+                .contains("API key: [redacted: api-key]");
+        assertThat(run("privacy-log", "--last", "0").exitCode()).isEqualTo(2);
+
+        // Marked local-only, the file's text is withheld and the answer says so.
+        Run mark = run("policy", "local-only", privateFolder.toString());
+        assertThat(mark.exitCode()).isZero();
+        assertThat(mark.out()).startsWith("Marked " + privateFolder + " local model only");
+        assertThat(run("folders", "list").out()).contains("(local model only: private)");
+        assertThat(run("privacy").out()).contains("  " + privateFolder);
+        Run withheld = run("ask", "What are my bank details?");
+        assertThat(withheld.exitCode()).isZero();
+        assertThat(withheld.out()).contains("Note: " + FindAnythingService.SOURCES_WITHHELD);
+        assertThat(run("privacy-log", "--last", "1").out())
+                .contains("Withheld: bank-details.txt")
+                .contains("[withheld: local-only source]")
+                .doesNotContain("FAKE TEST DATA");
+
+        // Unmarked again, with one category turned off.
+        assertThat(run("policy", "local-only", privateFolder.toString(), "--off").out())
+                .startsWith("Removed the local-only mark from " + privateFolder);
+        Run disable = run("privacy", "redact", "--disable", "sin");
+        assertThat(disable.exitCode()).isZero();
+        assertThat(disable.out()).startsWith("Redaction of sin is off");
+        assertThat(run("privacy").out()).contains("sin          off");
+        run("ask", "What are my bank details?");
+        assertThat(run("privacy-log", "--last", "1").out())
+                .contains("Redacted: card-number, api-key")
+                .doesNotContain("4111");
+        assertThat(latestLoggedToolText())
+                .contains("SIN: 046 454 286")
+                .contains("Card number: [redacted: card-number]");
+        assertThat(run("privacy", "redact", "--enable", "sin").out())
+                .startsWith("Redaction of sin is on");
+        assertThat(Files.readString(home.resolve("app/settings.json")))
+                .contains("\"privacy\"")
+                .doesNotContain("sin");
+
+        // The errors: an unknown category, a folder outside the search folders, missing options.
+        Run unknown = run("privacy", "redact", "--disable", "email");
+        assertThat(unknown.exitCode()).isEqualTo(1);
+        assertThat(unknown.err()).contains("There is no redaction category \"email\"");
+        Run outside = run("policy", "local-only", home.resolve("elsewhere").toString());
+        assertThat(outside.exitCode()).isEqualTo(1);
+        assertThat(outside.err()).contains("is not in a search folder");
+        assertThat(run("privacy", "redact").exitCode()).isEqualTo(2);
+        assertThat(run("privacy", "redact", "--enable", "sin", "--disable", "sin").exitCode())
+                .isEqualTo(2);
     }
 }

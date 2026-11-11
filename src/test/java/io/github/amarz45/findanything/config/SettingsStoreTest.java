@@ -3,10 +3,13 @@ package io.github.amarz45.findanything.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.amarz45.findanything.privacy.FolderPolicy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -184,5 +187,68 @@ class SettingsStoreTest {
         assertThatThrownBy(() -> new SettingsStore(file).loadModelSettings())
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("valid URL");
+    }
+
+    @Test
+    void hasNoPrivacySettingsUntilTheyAreSaved() throws Exception {
+        SettingsStore store = new SettingsStore(home.resolve("settings.json"));
+        assertThat(store.loadFolderPolicy().getLocalOnlyFolders()).isEmpty();
+        assertThat(store.loadDisabledRedactionCategories()).isEmpty();
+    }
+
+    @Test
+    void roundTripsLocalOnlyFoldersAndDisabledCategoriesSeparately() throws Exception {
+        Path file = home.resolve("settings.json");
+        SettingsStore store = new SettingsStore(file);
+        Path privateFolder = CORPUS.resolve("private");
+
+        FolderPolicy policy = new FolderPolicy();
+        policy.setLocalOnly(privateFolder, true);
+        policy.setLocalOnly(CORPUS.resolve("housing"), true);
+        store.saveFolderPolicy(policy);
+        store.saveDisabledRedactionCategories(Set.of("sin", "api-key"));
+
+        // Saving one list keeps the other, and a fresh store reads both back.
+        SettingsStore reopened = new SettingsStore(file);
+        assertThat(reopened.loadFolderPolicy().getLocalOnlyFolders())
+                .containsExactlyInAnyOrder(privateFolder, CORPUS.resolve("housing"));
+        assertThat(
+                        reopened.loadFolderPolicy()
+                                .isLocalOnly(privateFolder.resolve("bank-details.txt")))
+                .isTrue();
+        assertThat(reopened.loadDisabledRedactionCategories()).containsExactly("api-key", "sin");
+
+        policy.setLocalOnly(privateFolder, false);
+        store.saveFolderPolicy(policy);
+        store.saveDisabledRedactionCategories(Set.of());
+        assertThat(reopened.loadFolderPolicy().getLocalOnlyFolders())
+                .containsExactly(CORPUS.resolve("housing"));
+        assertThat(reopened.loadDisabledRedactionCategories()).isEmpty();
+    }
+
+    @Test
+    void privacySettingsKeepTheOtherSectionsAndAreKeptByThem() throws Exception {
+        Path file = home.resolve("settings.json");
+        SettingsStore store = new SettingsStore(file, CLOUD_ENV);
+        IndexConfig config = store.loadIndexConfig();
+        config.addFolder(CORPUS);
+        store.saveIndexConfig(config);
+        store.saveModelSettings(store.loadModelSettings());
+
+        FolderPolicy policy = new FolderPolicy(List.of(CORPUS.resolve("private")));
+        store.saveFolderPolicy(policy);
+        store.saveDisabledRedactionCategories(Set.of("sin"));
+        assertThat(store.loadIndexConfig().getSearchFolders()).hasSize(1);
+        assertThat(Files.readString(file))
+                .contains("\"indexConfig\"")
+                .contains("\"modelSettings\"")
+                .contains("\"privacy\"");
+
+        // The other sections' saves leave the privacy section alone.
+        store.saveIndexConfig(config);
+        store.saveModelSettings(store.loadModelSettings());
+        assertThat(store.loadFolderPolicy().getLocalOnlyFolders())
+                .containsExactly(CORPUS.resolve("private"));
+        assertThat(store.loadDisabledRedactionCategories()).containsExactly("sin");
     }
 }

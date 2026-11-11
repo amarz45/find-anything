@@ -62,6 +62,40 @@ report describes.
   Indexing the path's words as a searchable field would let a query with the folder's name find
   it. Changes behaviour the report describes, so log it in `docs/logs/design-changes.md`.
 
+## The answer format
+
+- **Find out why the model sometimes writes its citation entries twice, then make the parser cope.**
+  Now and then a reply holds the `[n] file:` entries right after the answer's text and then again
+  under the `CITATIONS:` line. `ResponseParser.parseAnswer()` takes everything above the first
+  `CITATIONS:` line as the answer, so the first copy is shown as part of the answer, in the CLI
+  and in the GUI (where the `[n]` that starts each stray line even becomes a citation link), and
+  it is saved with the conversation. Seen on 2026-11-08.
+  - **Known so far.** It happens within one reply: `findany ask --verbose` shows no reformat
+    request. Every run used the same model (`anthropic/claude-haiku-5.5` through OpenRouter).
+    `LangChain4jClient` sets no temperature, so replies vary from run to run. On the test corpus
+    it happened once in 53 runs: 41 on `testdata/corpus` and 12 on a copy enlarged with filler
+    files until each run's search results were 58,000 to 103,000 characters. Questions that ask
+    for a list of files (0 of 8), bulleted answers and a long history each failed to trigger it.
+    On Amar's own documents, with a question about last year's taxes and a follow-up, it happened
+    3 times out of 3.
+  - **Not explained.** On those documents, the three runs before the conversation change of
+    2026-11-08 (`fbb0b7e`, "Keep requests and answers in a conversation, not old tool results")
+    were clean, and the three after it were duplicated. That change does nothing to the first
+    reply of a new conversation, and the 53 corpus runs used the build that includes it, so it is
+    probably a coincidence of six runs. It hasn't been tested.
+  - **Planned test, on the real documents (Amar runs it).** Ask the tax question five times with
+    the current build, then five times with the build of the commit before `fbb0b7e`, and count
+    the replies that have a line starting `[n] file:` above the `CITATIONS:` line (in the
+    `answer` of `ask --json`, any such line is a stray one). A similar rate on both builds clears
+    the change and leaves the documents' content and the model's variation as the cause. A rate
+    that differs means the change reaches the first reply in a way not yet understood.
+  - **Fixes to choose from once the cause is known.** Have the parser accept entries wherever
+    they are, remove them from the text and merge identical duplicates, which would also let a
+    reply that only forgot the `CITATIONS:` line parse without a reformat request. Reword the
+    format instructions in `PromptBuilder`. Set a low temperature. The model does this on its own
+    and only sometimes, so wording alone can't rule it out. A parser change alters the answer
+    format rules in the design changes, so log it there and in `docs/logs/test-failures.md`.
+
 ## Citation verification
 
 Amar may change these later; undecided.
@@ -92,8 +126,35 @@ Amar may change these later; undecided.
   rebuilt as HTML. The first keeps the design (one `TextFlow` per answer) and is the likely choice.
   The CLI prints the same text, so a plain-text rendering there is unaffected.
 
+- **Let the settings dialog's long texts wrap instead of squeezing the controls.** Seen by Amar on
+  2026-11-10: after "Test connection", the result ("Connected. New conversations use the cloud
+  model …") was cut with "…" and shrank the Backend, Model and Test connection controls to "…"
+  too, until the window was widened. The result label sits in the same row as the button, inside
+  a grid column that has no width of its own. A better version puts the result on its own row with
+  a maximum width so it wraps, or gives the grid's columns fixed widths.
+- **Hide the privacy log in the settings dialog until the user asks for it.** It opens with the
+  newest requests in full view, which someone recording a video or sharing their screen wouldn't
+  want (Amar, 2026-11-10). A better version shows a "Show privacy log" button, or a collapsed
+  pane, and loads the entries only when it is opened.
+- **The GUI runs on XWayland, not Wayland.** On a Wayland desktop the window is an X11 client
+  (Amar, 2026-11-10). This can't be changed from the app: JavaFX's Linux backend is GTK on X11,
+  and the OpenJFX maintainers say JavaFX is supported on Wayland through XWayland, as AWT is;
+  a native Wayland backend exists only as a prototype
+  ([openjfx-dev, Dec 2024](https://mail.openjdk.org/pipermail/openjfx-dev/2024-December/051175.html),
+  [openjfx-dev, May 2025](https://mail.openjdk.org/pipermail/openjfx-dev/2025-May/054097.html),
+  [JDK-8326710](https://bugs.openjdk.org/browse/JDK-8326710)). Nothing to do until OpenJFX ships
+  one; check again with each JavaFX release.
+
 ## Privacy
 
+- **Withhold only the local-only entries of a search result, not the whole message.** A search
+  result lists several files in one text, and `RedactingLlmClient` replaces the whole message
+  when any one of them is in a local-only folder (as SD04 draws it), so the other files in that
+  result are hidden from the cloud model too. Seen on 2026-11-10: a search that matched a private
+  file also matched a note elsewhere, and both were withheld. A better version needs the tool
+  result to carry per-file structure (a part per file with its source), so the decorator can drop
+  one entry and keep the rest; parsing the search tool's text layout in the decorator would be
+  brittle. Changes SD04, so log it in `docs/logs/design-changes.md`.
 - **Keep sensitive files from reaching the model through search results.** Every search result
   carries each file's best passage, so the model sees file text without opening a file, and for a
   very small file that passage is the whole file. Seen in real use in November 2026: a small text

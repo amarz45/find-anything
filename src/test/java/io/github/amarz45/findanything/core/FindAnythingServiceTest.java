@@ -23,9 +23,15 @@ import io.github.amarz45.findanything.llm.LlmClientFactory;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.llm.Message;
+import io.github.amarz45.findanything.llm.RedactingLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
 import io.github.amarz45.findanything.llm.ToolCall;
+import io.github.amarz45.findanything.privacy.FolderPolicy;
+import io.github.amarz45.findanything.privacy.PrivacyLog;
+import io.github.amarz45.findanything.privacy.PrivacyLogEntry;
+import io.github.amarz45.findanything.privacy.Redactor;
+import io.github.amarz45.findanything.privacy.SensitivePattern;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.ExtractionStatus;
 import io.github.amarz45.findanything.storage.IndexMode;
@@ -57,22 +63,62 @@ class FindAnythingServiceTest {
 
     @TempDir Path home;
 
+    /** A service with the real factory: clients are built for the settings, never called. */
     FindAnythingService service(Path appData, TextExtractor extractor) throws Exception {
-        return service(appData, extractor, new LlmClientFactory(), Map.of());
+        Redactor redactor = new Redactor(SensitivePattern.builtIn());
+        FolderPolicy folderPolicy = new FolderPolicy();
+        PrivacyLog privacyLog = new PrivacyLog(appData.resolve("privacy-log.jsonl"));
+        return service(
+                appData,
+                extractor,
+                new LlmClientFactory(redactor, folderPolicy, privacyLog, CLOCK),
+                Map.of(),
+                folderPolicy,
+                redactor,
+                privacyLog);
     }
 
+    /** A service whose model is scripted; the facade shares the factory's privacy objects. */
     FindAnythingService service(
             Path appData,
             TextExtractor extractor,
-            LlmClientFactory llmClientFactory,
+            ScriptedLlmClientFactory factory,
             Map<String, String> environment)
+            throws Exception {
+        return service(
+                appData,
+                extractor,
+                factory,
+                environment,
+                factory.folderPolicy,
+                factory.redactor,
+                factory.privacyLog);
+    }
+
+    private FindAnythingService service(
+            Path appData,
+            TextExtractor extractor,
+            LlmClientFactory llmClientFactory,
+            Map<String, String> environment,
+            FolderPolicy folderPolicy,
+            Redactor redactor,
+            PrivacyLog privacyLog)
             throws Exception {
         SettingsStore store = new SettingsStore(appData.resolve("settings.json"), environment);
         IndexConfig config = store.loadIndexConfig();
+        // What the composition root does: the saved policy and toggles apply from the start.
+        store.loadFolderPolicy()
+                .getLocalOnlyFolders()
+                .forEach(folder -> folderPolicy.setLocalOnly(folder, true));
+        store.loadDisabledRedactionCategories()
+                .forEach(category -> redactor.setCategoryEnabled(category, false));
         return new FindAnythingService(
                 config,
                 store,
                 llmClientFactory,
+                folderPolicy,
+                redactor,
+                privacyLog,
                 new ConversationStore(appData.resolve("conversations"), store),
                 extractor,
                 new Chunker(300),
@@ -488,5 +534,249 @@ class FindAnythingServiceTest {
             assertThat(roles(conversation))
                     .containsExactly(Message.Role.USER, Message.Role.ASSISTANT);
         }
+    }
+
+    // ------------------------------------------------------------------ privacy (F13, F14)
+
+    static final String BANK_DETAILS =
+            "FAKE TEST DATA, NOT REAL\nCard number: 4111 1111 1111 1111\nSIN: 046 454 286\n"
+                    + "API key: sk-test-FAKE-1234567890abcdef\n";
+    static final Map<String, String> CLOUD_ENV =
+            Map.of("OPENROUTER_API_KEY", "sk-or-test-key", "OPENROUTER_MODEL", "vendor/model");
+    static final String BANK_QUESTION = "What are my bank details?";
+
+    /** A folder with a private subfolder holding fake sensitive values, and an ordinary note. */
+    Path folderWithPrivateFiles() throws Exception {
+        Path docs = home.resolve("docs");
+        Files.createDirectories(docs.resolve("private"));
+        Files.writeString(docs.resolve("private/bank-details.txt"), BANK_DETAILS);
+        Files.writeString(docs.resolve("notes.txt"), "Dentist appointment on March 4.");
+        return docs;
+    }
+
+    /** A model that, for each request, reads the bank details and then answers. */
+    static ScriptedLlmClient readsTheBankDetails(Path bank, int requests) {
+        LlmResponse read =
+                new LlmResponse(
+                        "",
+                        List.of(
+                                new ToolCall(
+                                        "call-1",
+                                        "read_excerpt",
+                                        Map.of("file", bank.toString()))));
+        LlmResponse answer = new LlmResponse("Your bank details are in one file.", List.of());
+        LlmResponse[] script = new LlmResponse[2 * requests];
+        for (int i = 0; i < requests; i++) {
+            script[2 * i] = read;
+            script[2 * i + 1] = answer;
+        }
+        return new ScriptedLlmClient(script);
+    }
+
+    /** The text of the last message of the model's latest request: the tool result it was sent. */
+    static String latestToolResult(ScriptedLlmClient client) {
+        List<Message> messages = client.requests.get(client.requests.size() - 1).messages();
+        return messages.get(messages.size() - 1).content();
+    }
+
+    @Test
+    void aCloudModelGetsRedactedTextAndEveryRequestIsLogged() throws Exception {
+        Path docs = folderWithPrivateFiles();
+        Path bank = docs.resolve("private/bank-details.txt");
+        ScriptedLlmClient client = readsTheBankDetails(bank, 1);
+        try (FindAnythingService service =
+                service(
+                        home.resolve("app"),
+                        new ScriptedExtractor(),
+                        new ScriptedLlmClientFactory(client),
+                        CLOUD_ENV)) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+            assertThat(service.getPrivacyLog(10)).isEmpty();
+
+            Answer answer =
+                    service.ask(BANK_QUESTION, service.newConversation(), step -> {}).join();
+
+            // What the model received: the excerpt with every sensitive value replaced.
+            String excerpt = latestToolResult(client);
+            assertThat(excerpt)
+                    .contains("FAKE TEST DATA, NOT REAL")
+                    .contains("Card number: [redacted: card-number]")
+                    .contains("SIN: [redacted: sin]")
+                    .contains("API key: [redacted: api-key]")
+                    .doesNotContain("4111")
+                    .doesNotContain("046 454 286")
+                    .doesNotContain("sk-test");
+            assertThat(excerpt).contains(bank.toString()); // the path is left readable
+            assertThat(answer.notices()).isEmpty();
+
+            // Both requests of the exchange are in the log, newest first, exactly as sent.
+            List<PrivacyLogEntry> entries = service.getPrivacyLog(10);
+            assertThat(entries).hasSize(2);
+            PrivacyLogEntry newest = entries.get(0);
+            assertThat(newest.modelName()).isEqualTo("vendor/model");
+            assertThat(newest.redactedCategories())
+                    .containsExactly("card-number", "sin", "api-key");
+            PrivacyLogEntry.Excerpt logged = newest.excerpts().get(newest.excerpts().size() - 1);
+            assertThat(logged.role()).isEqualTo("tool");
+            assertThat(logged.sourceFiles()).containsExactly(bank);
+            assertThat(logged.text()).isEqualTo(excerpt);
+            assertThat(entries.get(1).redactedCategories()).isEmpty();
+            assertThat(Files.readString(service.getPrivacyLogFile()))
+                    .contains(BANK_QUESTION)
+                    .doesNotContain("4111")
+                    .doesNotContain("sk-or-test-key");
+        }
+    }
+
+    @Test
+    void aLocalOnlyFolderIsWithheldFromACloudModelAndTheAnswerSaysSo() throws Exception {
+        Path docs = folderWithPrivateFiles();
+        Path privateFolder = docs.resolve("private");
+        Path bank = privateFolder.resolve("bank-details.txt");
+        ScriptedLlmClient client = readsTheBankDetails(bank, 2);
+        try (FindAnythingService service =
+                service(
+                        home.resolve("app"),
+                        new ScriptedExtractor(),
+                        new ScriptedLlmClientFactory(client),
+                        CLOUD_ENV)) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+
+            service.setLocalOnly(privateFolder, true);
+            assertThat(service.getLocalOnlyFolders()).containsExactly(privateFolder);
+            Answer answer =
+                    service.ask(BANK_QUESTION, service.newConversation(), step -> {}).join();
+
+            assertThat(latestToolResult(client)).isEqualTo(RedactingLlmClient.WITHHELD);
+            assertThat(answer.notices()).containsExactly(FindAnythingService.SOURCES_WITHHELD);
+            PrivacyLogEntry newest = service.getPrivacyLog(1).get(0);
+            PrivacyLogEntry.Excerpt logged = newest.excerpts().get(newest.excerpts().size() - 1);
+            assertThat(logged.text()).isEqualTo("[withheld: local-only source]");
+            assertThat(logged.sourceFiles()).containsExactly(bank);
+            assertThat(newest.redactedCategories()).isEmpty();
+            assertThat(Files.readString(service.getPrivacyLogFile())).doesNotContain("FAKE TEST");
+
+            // With the mark removed, the next request gets the text again, redacted.
+            service.setLocalOnly(privateFolder, false);
+            assertThat(service.getLocalOnlyFolders()).isEmpty();
+            Answer again = service.ask(BANK_QUESTION, service.newConversation(), step -> {}).join();
+            assertThat(latestToolResult(client)).contains("Card number: [redacted: card-number]");
+            assertThat(again.notices()).isEmpty();
+
+            assertThatThrownBy(() -> service.setLocalOnly(home.resolve("elsewhere"), true))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageEndingWith("is not in a search folder.");
+        }
+    }
+
+    @Test
+    void aLocalModelGetsTheTextAsItIsAndNothingIsLogged() throws Exception {
+        Path docs = folderWithPrivateFiles();
+        Path bank = docs.resolve("private/bank-details.txt");
+        ScriptedLlmClient client = readsTheBankDetails(bank, 1);
+        try (FindAnythingService service =
+                service(
+                        home.resolve("app"),
+                        new ScriptedExtractor(),
+                        new ScriptedLlmClientFactory(client),
+                        Map.of("OLLAMA_MODEL", "llama"))) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+            service.setLocalOnly(docs.resolve("private"), true);
+
+            Answer answer =
+                    service.ask(BANK_QUESTION, service.newConversation(), step -> {}).join();
+
+            // Nothing leaves the computer, so nothing is withheld, redacted or logged.
+            assertThat(latestToolResult(client))
+                    .contains("Card number: 4111 1111 1111 1111")
+                    .contains("SIN: 046 454 286");
+            assertThat(answer.notices()).isEmpty();
+            assertThat(service.getPrivacyLog(10)).isEmpty();
+        }
+    }
+
+    @Test
+    void privacySettingsAreSavedAppliedAfterARestartAndRefusedInAReadOnlyProcess()
+            throws Exception {
+        Path docs = folderWithPrivateFiles();
+        Path privateFolder = docs.resolve("private");
+        Path appData = home.resolve("app");
+        ScriptedLlmClient client =
+                readsTheBankDetails(privateFolder.resolve("bank-details.txt"), 1);
+        try (FindAnythingService service =
+                service(
+                        appData,
+                        new ScriptedExtractor(),
+                        new ScriptedLlmClientFactory(client),
+                        CLOUD_ENV)) {
+            service.open(false);
+            service.addSearchFolder(docs);
+            awaitUpToDate(service);
+            assertThat(service.getRedactionCategories())
+                    .containsExactly(
+                            Map.entry("private-key", true),
+                            Map.entry("card-number", true),
+                            Map.entry("sin", true),
+                            Map.entry("api-key", true));
+
+            service.setLocalOnly(privateFolder, true);
+            service.setRedaction("sin", false);
+            assertThat(service.getRedactionCategories()).containsEntry("sin", false);
+            assertThatThrownBy(() -> service.setRedaction("email", false))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageStartingWith("There is no redaction category \"email\".");
+
+            // A second process can read but not change the policy the first one is applying.
+            try (FindAnythingService reader =
+                    service(
+                            appData,
+                            new ScriptedExtractor(),
+                            new ScriptedLlmClientFactory(client),
+                            CLOUD_ENV)) {
+                assertThat(reader.open(false)).isEqualTo(IndexMode.READ_ONLY);
+                assertThat(reader.getLocalOnlyFolders()).containsExactly(privateFolder);
+                assertThatThrownBy(() -> reader.setLocalOnly(privateFolder, false))
+                        .isInstanceOf(IllegalStateException.class);
+                assertThatThrownBy(() -> reader.setRedaction("sin", true))
+                        .isInstanceOf(IllegalStateException.class);
+            }
+        }
+
+        // After a restart the saved policy and toggles apply to the first request.
+        ScriptedLlmClient afterRestart =
+                readsTheBankDetails(privateFolder.resolve("bank-details.txt"), 2);
+        try (FindAnythingService service =
+                service(
+                        appData,
+                        new ScriptedExtractor(),
+                        new ScriptedLlmClientFactory(afterRestart),
+                        CLOUD_ENV)) {
+            service.open(false);
+            awaitUpToDate(service);
+            assertThat(service.getLocalOnlyFolders()).containsExactly(privateFolder);
+            assertThat(service.getRedactionCategories()).containsEntry("sin", false);
+            service.ask(BANK_QUESTION, service.newConversation(), step -> {}).join();
+            assertThat(latestToolResult(afterRestart)).isEqualTo(RedactingLlmClient.WITHHELD);
+
+            service.setLocalOnly(privateFolder, false);
+            service.ask(BANK_QUESTION, service.newConversation(), step -> {}).join();
+            assertThat(latestToolResult(afterRestart))
+                    .contains("SIN: 046 454 286")
+                    .contains("Card number: [redacted: card-number]");
+
+            // Removing a search folder takes the marks inside it along.
+            service.setLocalOnly(privateFolder, true);
+            service.removeSearchFolder(docs);
+            assertThat(service.getLocalOnlyFolders()).isEmpty();
+        }
+        SettingsStore saved = new SettingsStore(appData.resolve("settings.json"));
+        assertThat(saved.loadFolderPolicy().getLocalOnlyFolders()).isEmpty();
+        assertThat(saved.loadDisabledRedactionCategories()).containsExactly("sin");
     }
 }

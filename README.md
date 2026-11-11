@@ -6,9 +6,9 @@ This is the EECS3311 (Fall 2026) course project.
 
 ## Stage 2: implementation (in progress)
 
-The application is being built in Stage 2 (due November 10, 2026). This section will grow into
-full installation and usage instructions. The indexing and keyword-search commands work now; the
-agent (`ask`) and the GUI come next.
+The application is being built in Stage 2 (due November 15, 2026). Indexing, keyword search, the
+agent (`ask`), the GUI and the privacy features work; semantic search, filters, the live file
+watcher and document comparison are the remaining Tier 2 items.
 
 ### Prerequisites
 
@@ -45,10 +45,22 @@ local backend, install [Ollama](https://ollama.com), run `ollama pull <model>` a
 ```
 ./gradlew build                      # compile, check formatting, run tests
 ./gradlew run --args="--help"        # run the app with findany arguments
+./gradlew run --args="gui"           # open the window
 ./gradlew installDist                # make the launcher: build/install/findany/bin/findany
 ```
 
-On Windows, use `gradlew.bat` in Command Prompt, or `.\gradlew` in PowerShell.
+On Windows, use `gradlew.bat` in Command Prompt, or `.\gradlew` in PowerShell. `build` does not
+refresh the launcher under `build/install`; run `installDist` again after changing the code.
+
+### The window
+
+`findany gui` opens the window: a Search/Ask switch and one input field, the search folders as
+chips (add one with "Add folder…", or mark one "Local model only" from its menu), the results on
+the left and, on the right, a file's preview with the matches highlighted or the conversation with
+the agent. In Ask mode, Enter sends the request; the answer's citations are marked verified or
+unverified and open the file at the quoted passage. "Settings…" chooses and tests the model
+backend, turns redaction categories on or off, and shows the privacy log. The GUI tests run the
+JavaFX toolkit without a display.
 
 ### Using the command line (so far)
 
@@ -62,7 +74,18 @@ findany folders list
 findany model set cloud                  # test the OpenRouter model from .env, then use it
 findany model set local --model llama3.1 # or a model from Ollama
 findany model test                       # check the current backend
+findany ask "When does my lease end?"    # the agent searches, reads and answers with citations
+findany ask --continue "And the rent?"   # a follow-up in the same conversation
+findany privacy                          # what is redacted before a request reaches a cloud model
+findany policy local-only ~/Documents/Taxes   # withhold a folder's text from cloud models
+findany privacy-log --last 5             # what was sent to cloud models, newest first
 ```
+
+Before a request reaches a cloud model, text from folders marked "local model only" is withheld,
+and card numbers, SINs, private keys and API keys are replaced with placeholders. Other sensitive
+text is not detected: exclude such a file, or mark its folder local model only. Every cloud request
+is recorded in `privacy-log.jsonl` in the data folder. A local model gets the text as it is, since
+nothing leaves the computer.
 
 Every command first catches up on files that changed since the last run. If another Find Anything
 process is updating the index, the command runs read-only and says so. The index and settings
@@ -90,7 +113,8 @@ docs/
   stage1-report.pdf      PDF copy of the report, built from the Markdown file
   traceability.md        feature-to-implementation mapping, kept up to date during Stage 2
   logs/                  AI collaboration log, design changes, defects found
-  notes/                 working notes (Tika findings, handoff notes between sessions)
+  notes/handoff.md       the state of the work and what comes next, updated every session
+  notes/                 working notes (Tika findings)
   pdf.yaml               settings for building the PDF
   table-widths.lua       small filter that sizes table columns in the PDF
   diagrams/              UMLet sources (.uxf) and images (.png) of every diagram

@@ -21,8 +21,10 @@ machines (laptop ↔ desktop).
 
 ## The deadline and what Stage 2 requires
 
-Stage 2 is due **Tuesday, November 10, 2026** (not Nov 20 as the syllabus said; the professor
-confirmed). The full instructions are in `local/Project-Stage2-Instruction.pdf`, which is kept out
+Stage 2 is due **Sunday, November 15, 2026**. It was Tuesday, November 10 (not Nov 20 as the
+syllabus said; the professor confirmed), and the deadline was extended on November 10. The change
+freeze moves to **November 14–15**; the days before it go to the privacy work, then items from
+`TODO.md` and Tier 2. The full instructions are in `local/Project-Stage2-Instruction.pdf`, which is kept out
 of Git with `.git/info/exclude`. In short:
 
 - **Minimums:** a GUI and a CLI, at least 10 working non-trivial features, at least 5 distinct
@@ -34,7 +36,9 @@ of Git with `.git/info/exclude`. In short:
 - **Weekly commits:** at least **5 meaningful code commits** in each period: **Oct 20–26**,
   **Oct 27–Nov 2**, **Nov 3–9** (Toronto time, pushed during the period). Documentation,
   formatting-only, empty and artificially split commits don't count. Missing any period costs
-  5 points once. The report links the commits for each period.
+  5 points once. The report links the commits for each period. Whether the extension adds a
+  fourth period (Nov 10–15) isn't confirmed; keep making and pushing code commits in it as if it
+  did.
 - **Report:** `stage2-report` (PDF or Word) in the repo, with 7 sections: overview and status;
   feature-to-implementation mapping; implemented design patterns, including an **updated UML class
   diagram**; changes and rationale; AI tools and collaboration log, including **total tokens and
@@ -94,8 +98,9 @@ done now: formatting, CI, and small tests for logic as it's written (`ExclusionR
 | Oct 30 – Nov 2 | Slice 2: the agent | 2 |
 | Nov 3–5 | Slice 3: GUI, then privacy and backends; F05 if time | 3 (5 commits by Nov 5) |
 | Nov 6–8 | No project work planned | |
-| Mon Nov 9 | Freeze; record videos; update the class diagram | 3 |
-| Tue Nov 10 | Report; final check; submit | |
+| Nov 9–10 | The GUI merged (PR #7); privacy: patterns, policy and log, decorators, facade | 3, then 4 (if it counts) |
+| Nov 10–13 | Privacy: CLI commands, GUI chip and settings dialog; then `TODO.md` items and Tier 2 in order (F05, F04, live watcher, F10) | 4 (if it counts) |
+| Nov 14–15 | Freeze: record videos; update the diagrams; report; final check; submit by Sun Nov 15 | |
 
 ## Decisions already made
 
@@ -127,7 +132,9 @@ done now: formatting, CI, and small tests for logic as it's written (`ExclusionR
 - **Root package:** `io.github.amarz45.findanything` (confirmed).
 - **Entry point:** `findany` with no arguments prints help, like most command-line tools, and
   `findany gui` opens the GUI. Every other subcommand is CLI. `CliApp` is the main class; its `gui`
-  command calls `Application.launch(...)`. The design doesn't specify this, so note it in the
+  command starts JavaFX with `Platform.startup(...)` (not `Application.launch()`, which would
+  create the application object itself and leave no way to hand it the service) and shows a
+  `Stage` it creates. The design doesn't specify this, so note it in the
   report's overview rather than the design-changes log.
 
 ## Technical notes
@@ -151,7 +158,7 @@ done now: formatting, CI, and small tests for logic as it's written (`ExclusionR
   `./gradlew wrapper --gradle-version 9.8.2` once to refresh the scripts. There's no distribution
   checksum yet; that command can add one with `--gradle-distribution-sha256-sum`.
 - **JavaFX on the class path:** the main class must not extend `Application`, or the launch fails.
-  `CliApp` is the main class, and its `gui` command calls `Application.launch(...)`.
+  `CliApp` is the main class, and its `gui` command calls `Platform.startup(...)`.
   JavaFX logs an "unsupported configuration" warning on the class path, which is harmless.
 - **Logging:** Tika brings Log4j 2 and LangChain4j logs through SLF4J. Configure one backend
   (`log4j2.xml` in resources) so the CLI's output stays clean, plus the forked parser's own config
@@ -221,7 +228,7 @@ commit with a small test where there's logic):
    `policy local-only`, `privacy redact`.
 4. Tier 2 items, in order, as time allows.
 
-**Freeze (Nov 9–10):**
+**Freeze (Nov 14–15):**
 1. Record the videos.
 2. Update the class diagram in UMLet, plus any sequence or use-case diagrams the changes made wrong.
 3. Write `docs/stage2-report.md` from `docs/traceability.md` and `docs/logs/`, and build the PDF.
@@ -244,6 +251,15 @@ These are already in the plan:
 
 Stage 3 (due Dec 8) adds full tests and KUMA behaviour tests. KUMA needs Python 3.10+ and a thin
 adapter that runs `findany ask --json`. The user still needs to ask the professor about KUMA credits.
+
+Noted for Stage 3's tests (Amar, 2026-11-10): the privacy tests should use realistic sensitive
+data, not stand-ins. `testdata/corpus/home-like/.ssh/id_ed25519` is the line "placeholder: not a
+real key", so today the built-in exclusion is tested only on the path and `PrivateKeyPattern` only
+on hand-written PEM blocks. Throwaway keys can be generated for the corpus and the unit tests
+(`ssh-keygen -t ed25519`, `-t rsa`, with `-m PEM` for the PKCS#1 form, plus PKCS#8 and PuTTY
+`.ppk` files, and a key pasted inside a note), together with card numbers of each brand, SINs in
+each spelling, and keys with each prefix `ApiKeyPattern` knows, so redaction and the exclusions are
+checked on the real formats. Generated keys only, never one that was ever used.
 
 ## State
 
@@ -281,7 +297,9 @@ surprising.)*
       silently miss; check the file after `spotlessApply`.
     - Lucene logs through `java.util.logging`; the CLI installs `jul-to-slf4j` so `log4j2.xml`
       governs it. The run and test JVMs get `--enable-native-access=ALL-UNNAMED` for Lucene's mmap.
-    - The CLI uses a zero quiet period (`ChangeQueue`), the GUI should use about two seconds.
+    - The CLI uses a zero quiet period (`ChangeQueue`). The GUI does too for now: the two
+      seconds were meant for the live watcher's bursts, and without a watcher a quiet period
+      would only delay every rescan. Revisit with `FileWatcher` (Tier 2).
     - `SearchFilters` is already applied inside `SearchIndex` queries, so F04 is mostly the CLI
       options and the GUI menu.
   - Next: Slice 2 (the agent), starting with `LlmRequest`/`LlmResponse`, `LlmClient`,
@@ -372,3 +390,43 @@ surprising.)*
   - Next: Slice 3, starting with the GUI (Amar's choice on Nov 7), then privacy and backends.
     The check with Ollama is still owed; Amar will run it later. `AgentController.summarizeDiff()`
     and `CompareTool` wait for F10 (Tier 2).
+- **2026-11-07 to 2026-11-08 (Session 5: the GUI, Claude Code):**
+  - Done: the `ui` package (`SearchMode`, `ResultsView`, `DetailPane`, `MainWindow`,
+    `GuiController`) and `findany gui`, on branch `gui`, merged as PR #7 on Nov 8 (8 commits).
+    Search mode, Ask mode with marked clickable citations and Back, New conversation, a
+    "Conversations" menu that reopens a saved conversation. The GUI tests run the real JavaFX
+    toolkit headless (`glass.platform=headless`, `prism.order=sw` on the test task; the OpenGL
+    pipeline crashed the test JVM whenever a display existed), on both CI OSes.
+  - Found and fixed (both in `docs/logs/test-failures.md`): `Indexer` never told its listeners
+    the index was up to date after a request made while idle; a follow-up lost the whole first
+    exchange when its search results were over the 40,000-character history limit, and the saved
+    file lost the first request. Conversations now keep requests and answers, and tool calls and
+    results only for the exchange in progress, never saved (design change to F12).
+  - Investigated, not fixed (all in `TODO.md`): the model sometimes writes its citation entries
+    twice and the parser keeps the first copy in the answer (1 run in 53 on the corpus, 3 of 3 on
+    Amar's documents; a test plan is written); the agent can't look inside a folder or find one
+    by name; a small sensitive file's whole text reaches the cloud model through a search
+    result's best passage; answers show raw Markdown; text can't be selected in the pane.
+  - Workflow: the first GUI commits were made on local `master` by mistake and moved to `gui`;
+    `AGENTS.md` now says to wait after each commit and to work on a feature branch.
+- **2026-11-09 to 2026-11-10 (Session 6: privacy, Claude Code):**
+  - Done, on branch `privacy` (from `gui`'s tip, so it carries one `TODO.md` commit PR #7 missed;
+    7 code commits, **not pushed yet**): the `privacy` package (`SensitivePattern` with four
+    implementations, `Redactor`, `FolderPolicy`, `PrivacyLog`, `PrivacyLogEntry`), the
+    decorators (`LlmClientDecorator`, `RedactingLlmClient`, `LoggingLlmClient`) and the factory's
+    cloud chain, the facade's `setLocalOnly()`, `setRedaction()`, `getPrivacyLog()` and the
+    "sources withheld" notice, `findany privacy|policy|privacy-log`, "Local model only" on the
+    chips, and `SettingsDialog` (backend test, redaction toggles, privacy log). F13 and F14 are
+    Implemented; Decorator, Factory and MVC too. 257 tests. Checked on the corpus with the real
+    cloud model: placeholders instead of the fake card number, SIN and key; the withheld marker
+    and the notice once `private/` was marked.
+  - Decisions (all in `docs/logs/design-changes.md`): a message is withheld whole when any of its
+    source files is local-only; a folder inside a search folder can be marked; policy changes are
+    refused in a read-only process; a request that can't be logged isn't sent; the toggles are
+    saved in `settings.json`; the chain is built in `createClient()` so scripted test clients are
+    decorated too; a number glued to a letter, underscore or hyphen isn't a card number or SIN.
+  - The deadline moved to **November 15**; the freeze is Nov 14–15.
+  - Next: push `privacy` and open its PR into `master` (merge without squashing). Then
+    `TODO.md` items and Tier 2 in order (F05, F04, live watcher, F10) until the freeze. Still
+    owed: the Ollama check; the test for the duplicated citation entries; a decision on the
+    sensitive-file leak; finer withholding (only the local-only entries of a search result).

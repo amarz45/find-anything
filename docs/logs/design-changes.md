@@ -428,8 +428,188 @@ Diagrams updated:
   local model's context, and `trimToFit()` still edits the kept history (both in `TODO.md`).
   Diagrams updated: not yet (SD03 at the freeze).
 
+### Redaction: placeholders, category names, and what a pattern matches (2026-11-09, Slice 3)
+- **Original design:** `Redactor.redact(text): RedactionResult` applies every enabled
+  `SensitivePattern`, with one implementation per category: card numbers and SINs (both checked
+  with the Luhn checksum), private keys, and API keys. Matches "are replaced with placeholders".
+  The design gives no placeholder format, no category names, no `RedactionResult` contents, and
+  no rule for what counts as a match.
+- **Implemented change:** a match becomes `[redacted: <category>]`. The categories are
+  `private-key`, `card-number`, `sin` and `api-key`, applied in that order. `RedactionResult` is
+  a record of the redacted text and the categories that matched. What matches:
+  - `CardNumberPattern`: 13 to 19 digits, together or in groups separated by single spaces or
+    hyphens, passing Luhn.
+  - `SinPattern`: 9 digits written the same way, passing Luhn.
+  - For both, the number must stand on its own: digits that touch a letter, an underscore or a
+    hyphen are part of a name (a file called `IMG_20261108123456.jpg`), not a number. Without
+    this, paths in tool results could be redacted and the model could no longer cite the file.
+  - `PrivateKeyPattern`: a PEM block from `-----BEGIN ... PRIVATE KEY-----` to its END line, or to
+    the end of the text when an excerpt cut the block short.
+  - `ApiKeyPattern`: keys with a well-known prefix (`sk-`, `ghp_` and its family, `github_pat_`,
+    `AKIA`, `xoxb-` and its family, `AIza`).
+  Added members: `SensitivePattern.builtIn()` (the four patterns in order),
+  `Redactor.placeholder()`, `getCategories()` and `isCategoryEnabled()`, and the package-private
+  `Luhn` helper both number patterns use. `setCategoryEnabled()` rejects a category that doesn't
+  exist with a message listing the ones that do.
+- **Reason:** the code needs concrete rules, and the CLI and the settings dialog need names to
+  show and accept. A number is matched over whole digit groups so that a card number followed by
+  another number on the same line is still found.
+- **Impact:** F14; `privacy` package. A key with no recognizable prefix isn't found, and about one
+  in ten random numbers of the right length passes Luhn and is redacted needlessly, which the
+  design accepts ("False positive: harmless, since the text is only redacted"). A quote that
+  contains a placeholder isn't in the file, so such a citation shows as unverified; the model
+  only ever sees the placeholder, so it can't quote the real value.
+
+### The privacy log's entries and file, and saved privacy settings (2026-11-09, Slice 3)
+- **Original design:** `PrivacyLog` has a `logFile` with `append(entry)` and `getEntries(limit)`;
+  a log entry shows "its timestamp, the excerpts sent, and any redactions". `PrivacyLogEntry` has
+  no box in any diagram, and the file's place and format aren't given. `SettingsStore` has
+  `loadFolderPolicy()` and `saveFolderPolicy()`, and nothing for the redaction toggles.
+- **Implemented change:**
+  - `PrivacyLogEntry` is a record of the timestamp, the model's name, the request's messages as
+    `Excerpt`s (role, source files, text as sent), and the redacted categories. It has its own
+    `Excerpt` type because `llm` depends on `privacy`, so `privacy` can't use `llm.Message`.
+  - The log is `privacy-log.jsonl` in the app's data folder: one JSON object per line, oldest
+    first, only ever appended to. `getEntries(limit)` returns the newest first and skips a line it
+    can't read, with a warning. `append()` throws `IOException` when the file can't be written.
+    Added `getLogFile()`.
+  - `settings.json` gets a `privacy` section with `localOnlyFolders` and
+    `disabledRedactionCategories`. `SettingsStore` gets
+    `loadDisabledRedactionCategories()` and `saveDisabledRedactionCategories()` beside the two
+    designed methods. `FolderPolicy` gets `getLocalOnlyFolders()` and a constructor from a list.
+- **Reason:** the design leaves these open. The toggles must be saved because every CLI run is a
+  new process: without saving, `findany privacy redact --disable <category>` would do nothing.
+  One line per request keeps the log readable and editable by a person, and appending never
+  rewrites what was recorded.
+- **Impact:** F13, F14; `privacy` package, `SettingsStore`. The log has no size limit or rotation.
+
+### The privacy decorators: where the chain is built, and what the design left open (2026-11-09, Slice 3)
+- **Original design:** for a cloud backend `LlmClientFactory` builds `RedactingLlmClient` →
+  `LoggingLlmClient` → `LangChain4jClient`; the factory holds the `redactor`, `folderPolicy` and
+  `privacyLog`. `LoggingLlmClient` has only a `privacyLog` field. SD04 appends the log entry
+  before the request is sent and replaces a local-only message with
+  `"[withheld: local-only source]"`. The design doesn't say what happens when the log can't be
+  written, whether the connection test is logged, or what a logged message's text holds.
+- **Implemented change:**
+  - `LlmClientFactory` takes the three privacy objects and a `Clock` in its constructor.
+    `createClient()` wraps whatever `build()` returns when the backend is CLOUD. An earlier entry
+    said `build()` itself would be wrapped; wrapping in `createClient()` keeps the tests' scripted
+    clients (which replace `build()`) under the decorators, so the whole test suite now runs
+    through the chain.
+  - `LoggingLlmClient` also takes the conversation's `ModelSettings` (for the model's name in
+    each entry) and the `Clock` (for its time). A logged message's text is its content followed
+    by a `[tool call: name {arguments}]` line for each tool call it made, since those are sent too.
+  - If the entry can't be written, the request is **not sent**: `LoggingLlmClient` throws
+    `LlmException` naming the log file, and `ask()` then falls back to instant search with that
+    reason. A cloud request must never go out unrecorded.
+  - The connection test isn't logged or redacted: `LangChain4jClient.testConnection()` sends its
+    own fixed one-line prompt, which holds no user data.
+  - `RedactingLlmClient.WITHHELD` is the marker. A withheld message keeps its source files (they
+    aren't sent; the log shows whose text was withheld) and is not scanned for patterns. A
+    message is withheld whole when any one of its source files is local-only, as SD04 draws it,
+    so a search result that lists one local-only file hides its other files too.
+- **Reason:** the design leaves these open; each choice is the one that can't leak or go
+  unrecorded.
+- **Impact:** F13, F14; `llm` package, `CliApp.createService()`. From this change on, every
+  request to a cloud model is redacted and written to `privacy-log.jsonl`. Dropping only the
+  local-only entries of a search result needs tool results to carry per-file structure; it is in
+  `TODO.md`.
+
+### The facade's privacy methods, and how the answer says sources were withheld (2026-11-09, Slice 3)
+- **Original design:** `FindAnythingService` has `setLocalOnly(folder, localOnly)`,
+  `setRedaction(category, enabled)` and `getPrivacyLog(limit)`, and holds the `folderPolicy`,
+  `redactor` and `privacyLog`. UC10's precondition is that the folder is a search folder. When
+  needed sources are local-only, "the answer notes that some sources were withheld and suggests a
+  conversation with the local model", but no diagram shows how the answer learns of it.
+- **Implemented change:**
+  - The three objects are constructor parameters of the facade, and the composition root gives
+    the same objects to `LlmClientFactory`.
+  - `setLocalOnly()` accepts a search folder **or a folder inside one**, so one private subfolder
+    can be protected without marking the whole search folder. Removing a search folder removes
+    the marks on it and inside it.
+  - `setLocalOnly()` and `setRedaction()` are refused in a read-only process, like the folder
+    changes. A change made by a second process would be saved but would not reach the policy the
+    first process is applying, and the user would believe a folder is protected when it is not.
+  - Added for display: `getLocalOnlyFolders()`, `getRedactionCategories()` (each category with
+    whether it is on) and `getPrivacyLogFile()`.
+  - After `AgentController.run()`, `ask()` adds the notice `SOURCES_WITHHELD` to the answer when
+    the conversation's model is a cloud model and a tool result of the current request came from
+    a local-only folder. `PromptBuilder`'s instructions also tell the model what the withheld
+    marker means, so its own text says the sources were withheld and suggests the local model.
+- **Reason:** the facade is the one place that knows both the conversation's model and the
+  policy, and the conversation still holds the current request's tool results with their source
+  files, so the notice needs no new channel from the decorator back to the agent.
+- **Impact:** F13, F14; UC10 (a folder inside a search folder is allowed); `FindAnythingService`,
+  `PromptBuilder`, SD03. A read-only process keeps the policy it loaded at startup until it is
+  restarted.
+
+### The privacy commands' forms (2026-11-10, Slice 3)
+- **Original design:** `findany privacy-log [--last N]`, `findany policy local-only <folder>` and
+  `findany privacy redact --enable|--disable <category>`. No command removes a local-only mark,
+  and nothing says what the log command prints.
+- **Implemented change:** `policy local-only <folder> --off` removes the mark. `findany privacy`
+  alone shows each category with its state, the limitation sentence, the local-only folders and
+  the log file's path. `privacy-log` shows the newest requests first (10 unless `--last` says
+  otherwise): time, model, message count and size, the redacted categories, the files whose text
+  was withheld, and each message's first 200 characters with its source files; the log file's
+  path follows for the full text. `folders list` marks a local-only search folder, or names the
+  marked folders inside one.
+- **Reason:** the user needs to see the state before changing it, and a mark must be removable.
+  The log's full text can run to hundreds of thousands of characters per question, so the command
+  shows a summary and points at the file.
+- **Impact:** F13, F14; `CliApp`.
+
+### `SettingsDialog`: what it holds and what stays in the CLI (2026-11-10, Slice 3)
+- **Original design:** Settings has a Model section (backend, API key or model name, Test
+  connection), a Privacy section (a toggle per redaction category, the stated limitation), a
+  privacy log viewer, Settings > Indexing with the global exclusion rules, and a "Rebuild index"
+  button. `SettingsDialog` has `showGlobalRules()`, `showTestResult()` and `showPrivacyLog()`.
+- **Implemented change:** a non-modal dialog opened from a "Settings…" button on the toolbar,
+  with the Model section (backend choice, model name, a line saying whether an API key is
+  configured, Test connection and its result), the Privacy section (a check box per category,
+  the limitation sentence) and the privacy log as read-only text with a Refresh button, loaded
+  when the dialog opens. The API key is never entered here: it comes from `.env`, as logged
+  earlier. Left to the CLI: the global exclusion rules (`findany exclude`) and rebuilding the
+  index (`findany index rebuild`), so `showGlobalRules()` isn't implemented. Added members:
+  `showModelSettings()`, `showRedaction()`, `setReadOnly()` and the callback setters;
+  `GuiController.onRedactionToggled()` shows the toggles again as saved, and `onTestBackend()`
+  saves the backend only when the test answered, as SD08 draws it. The log's text is the same as
+  `findany privacy-log` prints (`CliApp.PrivacyLogCommand.describe()`), so the two views agree.
+- **Reason:** time before the freeze; the CLI already covers the two parts left out, and a
+  read-only text area lets the user select and copy log text.
+- **Impact:** F03 (rebuild stays CLI-only), F13, F14; `SettingsDialog`, `GuiController`,
+  `MainWindow`.
+
+### The GUI: one window, and the members the views needed (2026-11-07 to 2026-11-10, Slice 3)
+- **Original design:** cd01 draws `MainWindow`, `ResultsView`, `DetailPane`, `SettingsDialog` and
+  `GuiController` with the methods the design cares about, a conversation drawer, a comparison
+  view, errors shown as messages, and a chip menu with "Edit exclusions", "Pause", "Local model
+  only" and "Remove". `MainWindow.setMode()` takes a `SearchMode` that no diagram defines.
+- **Implemented change:** one window (search bar with the Search/Ask switch, folder chips, an
+  error bar, the results table, the detail pane, the status label) and the settings dialog.
+  `SearchMode` is an enum in `ui`. The chip menu offers "Local model only" and "Remove"; pause and
+  exclusions stay in the CLI. Errors appear in a dismissible bar under the toolbar. There is no
+  comparison view (F10, Tier 2). Members added beyond the diagram, all view wiring or view state:
+  - `MainWindow`: `show(Stage)`, `getMode()`, `setAskBusy()`, `showConversations()`,
+    `showLocalOnlyFolders()`, getters for its views and dialog, and the callback setters
+    (`setOnQueryChanged`, `setOnAskSubmitted`, `setOnNewConversation`, `setOnOpenConversation`,
+    `setOnConversationsRequested`, `setOnAddFolder`, `setOnRemoveFolder`, `setOnSetLocalOnly`),
+    which keep the diagram's arrow direction: the controller registers itself, views never call
+    the model.
+  - `ResultsView`: `setOnResultSelected()`, `setOnTryAsk()`.
+  - `DetailPane`: `clearConversation()`, `showConversation()`, `showRequest()`,
+    `showPastExchange()`, `setOnCitationClicked()`; the Back button is view state.
+  - `GuiController`: `onRemoveFolder()` (the diagram has no remove handler). Not declared, since
+    not built: `onFiltersChanged()` (F04), `onCompareRequested()` (F10), `onAddExclusion()`.
+  - The `gui` command starts JavaFX with `Platform.startup()` rather than `Application.launch()`,
+    which creates the application object itself and would force a static handoff of the service.
+- **Reason:** time, and the handoff's one-window simplification. The callback setters are the
+  JavaFX way to let a view report an action without knowing the model.
+- **Impact:** F01, F06, F07, F08, F11, F12; cd01 (update at the freeze). The `SettingsDialog` and
+  F12 entries above cover the rest of the GUI's changes.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
 - F04, F05, F10: Tier 2 features that may end up *Not implemented* in Stage 2.
-- GUI: side-by-side comparison, privacy log viewer, editing exclusions in the GUI (CLI-only).
+- GUI: side-by-side comparison (F10), editing exclusions and pausing from the GUI (CLI-only).

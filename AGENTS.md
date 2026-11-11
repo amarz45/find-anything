@@ -2,7 +2,7 @@
 
 Find Anything is a Java 25 desktop app (JavaFX GUI and a `findany` CLI) that indexes a user's
 files and answers questions about them with an AI agent. It's the EECS3311 course project of
-Amar Al-Zubaidi. Stage 2 (implementation) is due **November 10, 2026**.
+Amar Al-Zubaidi. Stage 2 (implementation) is due **November 15, 2026** (extended from November 10).
 
 Read `docs/notes/handoff.md` at the start of a session for the current state, scope and next steps.
 
