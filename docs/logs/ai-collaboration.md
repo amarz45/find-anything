@@ -3,7 +3,7 @@
 Source for section 5 of the Stage 2 report ("AI tools and collaboration log"). Add an entry when
 an interaction is worth showing, not for every prompt. Good entries show both sides: what the AI
 produced and what you reviewed, corrected, rejected or redesigned. Run `/log` in Claude Code to
-draft one, then rewrite the "Human contribution" part in your own words.
+draft one.
 
 ## Tools and models
 
@@ -32,8 +32,7 @@ Template:
 - **Outcome:** what ended up in the project (commit link)
 ```
 
-The entries below were drafted from the planning conversation in the claude.ai app. Edit them in
-your own words before they go in the report.
+The first entries were drafted from the planning conversation in the claude.ai app.
 
 ### 2026-10-16: Testing Tika 4.1.0 before choosing it
 - **Tool / model:** Claude (claude.ai app)
@@ -44,7 +43,7 @@ your own words before they go in the report.
   markers, OCR on/off, crashes, timeouts, cancellation, locale problems and Gradle tests. Found that
   `isSuccess()` is true for unreadable files and that PowerPoint slides come out in the wrong order,
   and wrote a working reference extractor that handles both.
-- **Human contribution:** *(your words)* pushed for real tests instead of claims, provided the
+- **Human contribution:** pushed for real tests instead of claims, provided the
   release, decided to keep Tika 4.1.0.
 - **Outcome:** `docs/notes/tika/` (findings and reference extractor).
 
@@ -54,7 +53,7 @@ your own words before they go in the report.
 - **Input / instruction:** asked for the development-environment plan.
 - **AI contribution:** recommended the Claude Code JetBrains plugin, then IntelliJ's built-in MCP
   server, without checking either one's maintenance or reviews.
-- **Human contribution:** *(your words)* checked the marketplace pages, rejected both because of
+- **Human contribution:** checked the marketplace pages, rejected both because of
   poor reviews, and chose the third-party IDE Index MCP Server (and Debugger MCP Server) instead.
 - **Outcome:** setup uses IDE Index MCP Server; the AI now checks maintenance and reviews before
   recommending a tool.
@@ -66,7 +65,7 @@ your own words before they go in the report.
   deadlines.
 - **AI contribution:** pointed out the new requirements (weekly commits, demo videos, cost
   reporting, `.env`), split the features into tiers, and proposed a timeline.
-- **Human contribution:** *(your words)* proposed moving testing and polish to Stage 3 and relying
+- **Human contribution:** proposed moving testing and polish to Stage 3 and relying
   on AI for most of the code while supervising the design.
 - **Outcome:** scope tiers and timeline in `docs/notes/handoff.md`.
 
@@ -84,7 +83,7 @@ your own words before they go in the report.
   wrote and PDFBox appends to the page text. Proposed fixes for each.
 - **Human contribution:** decided none of it was a priority, asked for a `TODO.md` instead of
   changes, and set two working rules: prepare one commit at a time without committing, and never
-  push unasked. *(edit in your own words)*
+  push unasked.
 - **Outcome:** `TODO.md` (four items) and the rules in `AGENTS.md`,
   [d8921e9](https://github.com/amarz45/find-anything/commit/d8921e9c11a97d45f93de941e2f74e031eb83228).
 
@@ -105,7 +104,7 @@ your own words before they go in the report.
   causes before the timestamps ruled them out.
 - **Human contribution:** reviewed and committed each step separately, asked whether IDE
   warnings in the test (sleep in a loop, `getFirst()`) mattered, and chose to push and wait for
-  data rather than guess. *(edit in your own words)*
+  data rather than guess.
 - **Outcome:** [4db5034](https://github.com/amarz45/find-anything/commit/4db50340110ffd349bc29bdd0183b411d1c96516),
   [5d7b3cd](https://github.com/amarz45/find-anything/commit/5d7b3cda907ac3074e743d9c1b24c5a7671d871e),
   [637839d](https://github.com/amarz45/find-anything/commit/637839dcab5862074db335594af0cd6de3ebbd49);
@@ -136,7 +135,7 @@ your own words before they go in the report.
   the fallback code and asked for it to be fixed in the agent's tools; stopped the AI from
   starting the next item before the fix was committed; ran the lease questions with an OpenRouter
   model and confirmed the backend; chose to test Ollama later; asked for the push and pull
-  request. *(edit in your own words)*
+  request.
 - **Outcome:** [6ce1c9a](https://github.com/amarz45/find-anything/commit/6ce1c9a89fa84d280217caecc0b624a531257d0f),
   [308a42c](https://github.com/amarz45/find-anything/commit/308a42cef1a7174bac3aea1f39d8611a0adf6d04),
   [6eda059](https://github.com/amarz45/find-anything/commit/6eda05959a0ef27462a32fbce530058ed2e54c84),
@@ -146,3 +145,94 @@ your own words before they go in the report.
   The lease question was answered and cited to page 2 of the lease, verified, with the
   prompt-injection note ignored; the follow-up on the rent gave both figures, verified. Ollama is
   not checked yet.
+
+### 2026-11-08: The GUI, and what testing it on real documents turned up
+- **Tool / model:** Claude Code / Claude Fable 5.1
+- **Task:** build the JavaFX GUI from the design (`MainWindow`, `ResultsView`, `DetailPane`,
+  `GuiController`, `findany gui`), then act on what Amar found when he used it on his own
+  documents.
+- **Input / instruction:** "Create a plan for the GUI" and its scope choices; reports from
+  testing the GUI on real documents, with a screenshot and permission to list one folder's file
+  names but not read any contents; "Don't fix before we understand the cause. How shall we
+  investigate?"; a sequence of questions on what a conversation stores and why; "Did the model
+  read the file? Check."; the pasted output of a verbose CLI run.
+- **AI contribution:** wrote the views and controller with headless toolkit tests, and found and
+  fixed an `Indexer` bug the GUI's Observer exposed: listeners never heard "up to date" after a
+  request made while the worker was idle. From the saved conversations' structure (roles, sizes,
+  tool calls; no file contents) it diagnosed the follow-up failure: the first exchange was 80,000
+  characters of search results, twice the history limit, so trimming dropped it whole and saved
+  the result. It implemented the approved change: requests and answers are kept across
+  exchanges, tool calls and results only for the exchange in progress and never saved, with the
+  trace for `ask --json` preserved. It confirmed, by lengths only, that a small access-code file
+  had gone to the cloud model inside a search result's best passage. Its investigation of answers
+  that repeat their citation entries ran 53 corpus requests, ruled out a reformat step, the
+  model, context size and the file-listing wording, and reproduced it once; its first
+  explanation (the reformat request) was wrong. Other mistakes Amar caught: it filed a serious
+  bug as a low-priority TODO, offered two "variants" that didn't address the two details it had
+  itself raised, and blurred the app's own 40,000-character threshold with the model's context
+  window.
+- **Human contribution:** tested every commit in the real GUI on his own documents, which found
+  what the tests had not: answers shown as raw Markdown, a follow-up that denied an earlier
+  answer, and the first prompt gone after reopening a conversation. Offered a hypothesis for the
+  follow-up (a narrowed index), gave a scoped permission (list the folder's names, never read
+  contents), and judged the answer itself weak for not reading the folder's other files. Refused
+  a fix until the cause was understood, and led the diagnosis with his questions: why one
+  question was so expensive, whether the trimming was too harsh or too much was stored, what
+  exactly is stored, why search results are saved at all and whether they go stale, how much
+  dropping them would save, what the 40,000 limit is for, whether one exchange can exceed it,
+  and how a request over the limit could still succeed. Set the scope of the fix (drop tool
+  results from stored conversations for the cloud case now, the local-model case later),
+  rejected the AI's two unclear variants and demanded one approach that handled both details,
+  then approved it and verified it. Noticed the model's wording "I haven't shown its contents
+  here", asked whether the file had been read, judged the designed redaction insufficient for
+  such cases, and proposed a name-based sensitivity check with its limits. Ran the verbose CLI
+  himself, which disproved the reformat hypothesis, approved the corpus experiments, and deferred
+  the real-document comparison as tedious to reproduce.
+- **Outcome:** [a443690](https://github.com/amarz45/find-anything/commit/a443690af7b6d02a702ab934710d285af618afab),
+  [1474a97](https://github.com/amarz45/find-anything/commit/1474a9775fa83d5065f99e1ac4a07c203bce2ee8),
+  [c0639cf](https://github.com/amarz45/find-anything/commit/c0639cfd6d6829867d11e6af9a661912c954226d),
+  [7a01dd6](https://github.com/amarz45/find-anything/commit/7a01dd6910a49d4295b32520ca327718b0784e60),
+  [fbb0b7e](https://github.com/amarz45/find-anything/commit/fbb0b7e044409cb1df8746ab8bad0b575cb7b494);
+  merged as PR #7. Two entries in `docs/logs/test-failures.md`. The duplicated citation entries,
+  the leak and the agent's folder blindness are in `TODO.md` with a test plan.
+
+### 2026-11-10: The privacy slice: redaction, local-only folders and the log
+- **Tool / model:** Claude Code / Claude Fable 5.1
+- **Task:** implement F14 and the rest of F13 as designed: the `privacy` package, the two
+  decorators and the factory chain, the facade methods, the CLI commands, the chip item and the
+  settings dialog.
+- **Input / instruction:** "Make a plan for implementing the privacy stuff"; answers to the
+  plan's three questions; a note for Stage 3's tests; three observations from using the settings
+  dialog.
+- **AI contribution:** read the design's privacy sections and diagrams, listed what they left
+  open (placeholder format, category names, log fields and file, saving the toggles, how the
+  answer learns that sources were withheld, the read-only process, an unwritable log) and
+  decided each with a logged reason. Built the four patterns with the Luhn check, the redactor,
+  policy and log, the decorators (wrapped in `createClient()` so the scripted test clients are
+  decorated too), the facade methods with the withheld notice, the three CLI commands, the chip
+  item and the dialog, with end-to-end tests on fake values and a check against the real cloud
+  model on the corpus. Fixed its own pattern when it saw that digits inside a file or folder
+  name could pass Luhn and mangle paths. Mistakes: two test helpers waited on the JavaFX thread
+  from the JavaFX thread; one CLI test read a truncated excerpt and failed only on Windows, where
+  the temporary path is longer. Verified that JavaFX runs on XWayland by design before writing
+  the note.
+- **Human contribution:** chose the scope at each decision point: the settings dialog as well as
+  the chip item, no mitigation yet for the search-result leak, and, after asking exactly what
+  whole-message withholding hides, the simpler form first with finer withholding as a TODO, with
+  the instruction to do the finer one instead if it turned out easy. Reviewed each of the seven
+  pieces. Pointed out that the corpus's SSH key is a placeholder line, so Stage 3 should test
+  redaction and the exclusions on generated throwaway keys in real formats. Used the dialog and
+  reported three problems to document rather than fix: a long test result that squeezed the
+  Backend, Model and Test connection controls to "…", the privacy log visible by default (a risk
+  when recording or streaming), and the window running under XWayland, asking whether that was
+  avoidable.
+- **Outcome:** [6068d97](https://github.com/amarz45/find-anything/commit/6068d97b9099bc7a9cc7e6e565ccd5f1928a8798),
+  [de99189](https://github.com/amarz45/find-anything/commit/de991895fa720017abd64a90ef867f8c775eea50),
+  [70726e6](https://github.com/amarz45/find-anything/commit/70726e649eab4d5dc3e99185261d8ed4fdd5e0fa),
+  [29866ae](https://github.com/amarz45/find-anything/commit/29866ae93ae13c31c5e7cbd46c3d74764746dd8a),
+  [2fb7acc](https://github.com/amarz45/find-anything/commit/2fb7acc81b9f76edbc0ef93cc8f7de0c70cdc417),
+  [800a3ce](https://github.com/amarz45/find-anything/commit/800a3ce8122b09264dce038b4765972be4cb0cc7),
+  [c19cf29](https://github.com/amarz45/find-anything/commit/c19cf29767f08817575c510102509ca6e7e32283);
+  pull request #8, CI green on both runners. F13 and F14 Implemented; Decorator, Factory and MVC
+  evident in the code. Four design-change entries for what the design left open.
+
