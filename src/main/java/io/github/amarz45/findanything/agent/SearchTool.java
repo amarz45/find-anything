@@ -16,12 +16,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * The agent's search command (F07): runs the same instant search as the search bar, with the same
  * filters (F04), and gives the model each matching file with its best passage. The model plans with
  * it: it searches, reads the results, and searches again with other words or filters.
+ *
+ * <p>A passage is given once per request. When a later search of the same request finds it again,
+ * the file is still listed, with a line naming the earlier search in place of the passage's text.
  */
 public final class SearchTool implements Tool {
 
@@ -124,7 +128,7 @@ public final class SearchTool implements Tool {
     }
 
     @Override
-    public ToolResult execute(Map<String, Object> arguments) {
+    public ToolResult execute(Map<String, Object> arguments, ShownPassages shownPassages) {
         String query = ((String) arguments.get(QUERY)).strip();
         String fileType = (String) arguments.get(FILE_TYPE);
         SearchFilters searchFilters =
@@ -147,7 +151,10 @@ public final class SearchTool implements Tool {
             return ToolResult.success(describeNoResults(query, searchFilters), List.of());
         }
         List<Path> sourceFiles = results.stream().map(result -> result.file().path()).toList();
-        return ToolResult.success(describe(query, results), sourceFiles);
+        String content = describe(query, results, shownPassages);
+        // Recorded only after the text is written, so a result never refers to itself.
+        shownPassages.record(query, results);
+        return ToolResult.success(content, sourceFiles);
     }
 
     /** The date a parameter gives, or null when it is absent; a malformed one adds an error. */
@@ -177,8 +184,16 @@ public final class SearchTool implements Tool {
                 : what + " with these filters. Try other keywords, or search without a filter.";
     }
 
-    /** Lists the results for the model: the path to cite, the file's details, and the passage. */
-    private static String describe(String query, List<SearchResult> results) {
+    /**
+     * Lists the results for the model: the path to cite, the file's details, and the passage.
+     *
+     * <p>A passage's text always starts on the line after its "Best passage" label. A passage the
+     * request was already given isn't repeated: the label line itself names the earlier search.
+     * Only this method writes on a label line, so the text of a file can't be taken for that note
+     * by its place.
+     */
+    private static String describe(
+            String query, List<SearchResult> results, ShownPassages shownPassages) {
         StringBuilder text = new StringBuilder();
         text.append(results.size()).append(results.size() == 1 ? " file" : " files");
         text.append(
@@ -204,7 +219,14 @@ public final class SearchTool implements Tool {
                             .append(chunk.pageNumber())
                             .append(")");
                 }
-                text.append(":\n").append(chunk.text().strip());
+                Optional<String> earlierQuery = shownPassages.queryThatGave(file.path(), chunk);
+                if (earlierQuery.isPresent()) {
+                    text.append(": already given above, in the results for \"")
+                            .append(earlierQuery.get())
+                            .append("\".");
+                } else {
+                    text.append(":\n").append(chunk.text().strip());
+                }
             } else if (!query.isEmpty()) {
                 text.append("\n   Matched by its name only; none of its text is indexed.");
             }

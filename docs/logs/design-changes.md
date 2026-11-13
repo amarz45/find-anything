@@ -608,6 +608,41 @@ Diagrams updated:
 - **Impact:** F01, F06, F07, F08, F11, F12; cd01 (update at the freeze). The `SettingsDialog` and
   F12 entries above cover the rest of the GUI's changes.
 
+### A search passage is given once per request: `ShownPassages` (2026-11-12, after Slice 3)
+- **Original design:** `SearchTool` gives each matching file with its best passage on every
+  call. `Tool.execute()` takes the call's arguments and `ToolRegistry.execute()` takes the
+  `ToolCall`, nothing else (cd05, SD03). `AgentController` doesn't know the `FolderPolicy`.
+- **Implemented change:** within one request, a passage's text is sent once. When a later search
+  finds the same passage as its file's best one, the file is still listed (and stays in the
+  result's `sourceFiles`), and its label line names the earlier search in place of the text:
+  `Best passage (page 1): already given above, in the results for "cumulative GPA".` Another
+  passage of the same file comes in full.
+  - New class `agent/ShownPassages`, one per request: `record(query, results)` records each
+    result's best passage by file and chunk position, keeping the first query, and
+    `queryThatGave(file, chunk)` returns that query.
+  - `Tool.execute(arguments, shownPassages)` and `ToolRegistry.execute(toolCall, shownPassages)`
+    take the record. `SearchTool` reads and fills it; `ReadExcerptTool` ignores it.
+  - `AgentController` takes the `FolderPolicy` in its constructor (from `FindAnythingService`)
+    and `run()` creates the record. A new request starts with an empty one, because
+    `dropToolMessages()` has just removed the earlier results.
+  - `RedactingLlmClient` withholds a whole search result from a cloud model when any of its files
+    is local-only. So in a cloud conversation such a result records nothing, and a later search
+    gives its passages in full. A local model has nothing withheld.
+- **Reason:** measured on 2026-11-12 with the cloud model and "What's my cumulative GPA?": two
+  searches returned the same ten files, so the request was 34,019 characters, half of it
+  repeated, for an answer that needed under 100. A smaller request leaves a local model's context
+  room for more steps, or for a larger model. The record is passed with each call because the
+  registry and its tools are shared by all requests; kept in the tool, it would mix them. The
+  note sits on the label line, which only the tool writes, and names the search, so a file's own
+  text ("shown above") can't stand in for it by its place.
+- **Impact:** F07, F14; the Command pattern keeps its roles, with one more parameter on
+  `Tool.execute()` and `ToolRegistry.execute()`; `SearchTool`, `ReadExcerptTool`,
+  `AgentController`, `FindAnythingService`; the `agent` package now uses `privacy`. Not solved
+  here: a file's text can still imitate any line of a result, the note included, because the
+  whole result is one marked block; and a folder marked local-only while a request is running can
+  leave a note that names a result the model is no longer sent.
+  Diagrams updated: not yet (cd05 and SD03 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

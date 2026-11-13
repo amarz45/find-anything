@@ -85,8 +85,13 @@ class SearchToolTest {
         return new float[0];
     }
 
+    /** A search by a request that hasn't been given any passage yet. */
     ToolResult search(Map<String, Object> arguments) {
-        return registry.execute(new ToolCall("call-1", SearchTool.NAME, arguments));
+        return search(arguments, new ShownPassages(file -> false));
+    }
+
+    ToolResult search(Map<String, Object> arguments, ShownPassages shownPassages) {
+        return registry.execute(new ToolCall("call-1", SearchTool.NAME, arguments), shownPassages);
     }
 
     @Test
@@ -116,6 +121,71 @@ class SearchToolTest {
                 .contains("Best passage:\nRemember to renew the lease")
                 .contains(PHOTO + "\n   jpg, 2048 bytes, modified 2025-08-15")
                 .contains("Matched by its name only; none of its text is indexed.");
+    }
+
+    @Test
+    void aLaterSearchOfTheRequestNamesTheEarlierSearchInPlaceOfAPassage() {
+        ShownPassages shownPassages = new ShownPassages(file -> false);
+        search(Map.of("query", "lease ends"), shownPassages);
+
+        ToolResult later = search(Map.of("query", "ends august"), shownPassages);
+        // The file is still listed and still a source; only the passage's text is left out.
+        assertThat(later.sourceFiles()).containsExactly(LEASE);
+        assertThat(later.content())
+                .isEqualTo(
+                        "1 file for \"ends august\", best match first:\n\n1. "
+                                + LEASE
+                                + "\n   pdf, 2048 bytes, modified 2025-08-14"
+                                + "\n   Best passage (page 2): already given above, in the results"
+                                + " for \"lease ends\".");
+
+        ToolResult withoutPages = search(Map.of("query", "renew spring"), shownPassages);
+        assertThat(withoutPages.sourceFiles()).containsExactly(NOTES);
+        assertThat(withoutPages.content())
+                .endsWith("Best passage: already given above, in the results for \"lease ends\".")
+                .doesNotContain("Remember to renew");
+    }
+
+    @Test
+    void anotherPassageOfAFileAlreadyGivenComesInFull() {
+        ShownPassages shownPassages = new ShownPassages(file -> false);
+        search(Map.of("query", "lease ends"), shownPassages);
+
+        ToolResult later = search(Map.of("query", "landlord tenant"), shownPassages);
+        assertThat(later.content())
+                .contains(
+                        "Best passage (page 1):\n"
+                                + "This lease is between the landlord and the tenant.");
+    }
+
+    @Test
+    void aNewRequestIsGivenThePassageAgain() {
+        search(Map.of("query", "lease ends"), new ShownPassages(file -> false));
+
+        ToolResult next = search(Map.of("query", "ends august"), new ShownPassages(file -> false));
+        assertThat(next.content())
+                .contains("Best passage (page 2):\nThe lease ends on August 31, 2026.");
+    }
+
+    @Test
+    void aPassageOfAWithheldResultIsGivenAgain() {
+        // As for a cloud model when the notes are in a local-only folder: the first result holds
+        // the notes, so the model is sent none of it.
+        ShownPassages shownPassages = new ShownPassages(NOTES::equals);
+        ToolResult withheld = search(Map.of("query", "lease ends"), shownPassages);
+        assertThat(withheld.sourceFiles()).contains(LEASE, NOTES);
+
+        ToolResult later = search(Map.of("query", "ends august"), shownPassages);
+        assertThat(later.sourceFiles()).containsExactly(LEASE);
+        assertThat(later.content())
+                .contains("Best passage (page 2):\nThe lease ends on August 31, 2026.");
+
+        // That result held no withheld file, so the model has the passage now.
+        ToolResult third = search(Map.of("query", "august 2026"), shownPassages);
+        assertThat(third.content())
+                .endsWith(
+                        "Best passage (page 2): already given above, in the results for \"ends"
+                                + " august\".");
     }
 
     @Test

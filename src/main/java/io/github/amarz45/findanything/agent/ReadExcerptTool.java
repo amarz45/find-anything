@@ -107,8 +107,9 @@ public final class ReadExcerptTool implements Tool {
         return errors;
     }
 
+    /** An excerpt is always given in full, so {@code shownPassages} isn't used. */
     @Override
-    public ToolResult execute(Map<String, Object> arguments) {
+    public ToolResult execute(Map<String, Object> arguments, ShownPassages shownPassages) {
         Path path = Path.of((String) arguments.get(FILE)).normalize();
         Optional<IndexedFile> indexed;
         List<Chunk> chunks;

@@ -1,10 +1,12 @@
 package io.github.amarz45.findanything.agent;
 
+import io.github.amarz45.findanything.config.BackendType;
 import io.github.amarz45.findanything.llm.LlmClient;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.llm.ToolSpec;
+import io.github.amarz45.findanything.privacy.FolderPolicy;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.IndexedFile;
 import io.github.amarz45.findanything.storage.SearchIndex;
@@ -59,12 +61,15 @@ public final class AgentController {
     private final ResponseParser responseParser;
     private final CitationVerifier citationVerifier;
     private final SearchIndex searchIndex;
+    private final FolderPolicy folderPolicy;
     private final int maxSteps;
     private final int maxConversationChars;
     private final Clock clock;
 
     /**
      * @param searchIndex where the files of an answer are looked up for the results table
+     * @param folderPolicy says which files' text a cloud model is never sent, so a search result
+     *     doesn't refer the model to a passage that was withheld from it
      * @param maxSteps how many times the model may be called for one request before the loop stops
      * @param maxConversationChars the most history to send, for {@link Conversation#trimToFit}
      * @param clock the source of today's date for the prompt
@@ -75,6 +80,7 @@ public final class AgentController {
             ResponseParser responseParser,
             CitationVerifier citationVerifier,
             SearchIndex searchIndex,
+            FolderPolicy folderPolicy,
             int maxSteps,
             int maxConversationChars,
             Clock clock) {
@@ -89,6 +95,7 @@ public final class AgentController {
         this.responseParser = Objects.requireNonNull(responseParser, "responseParser");
         this.citationVerifier = Objects.requireNonNull(citationVerifier, "citationVerifier");
         this.searchIndex = Objects.requireNonNull(searchIndex, "searchIndex");
+        this.folderPolicy = Objects.requireNonNull(folderPolicy, "folderPolicy");
         this.maxSteps = maxSteps;
         this.maxConversationChars = maxConversationChars;
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -141,6 +148,12 @@ public final class AgentController {
         // follow-up doesn't resend old search results or lose the whole exchange to trimming.
         conversation.dropToolMessages();
         conversation.addUserMessage(request);
+        // The record starts empty for each request, because the earlier results were just removed.
+        // A cloud model is sent none of a result that holds a local-only file (F14), so such a
+        // result's passages don't count as given.
+        boolean cloud = conversation.getModelSettings().backendType() == BackendType.CLOUD;
+        ShownPassages shownPassages =
+                new ShownPassages(file -> cloud && folderPolicy.isLocalOnly(file));
 
         for (int step = 1; step <= maxSteps; step++) {
             conversation.trimToFit(maxConversationChars);
@@ -161,7 +174,7 @@ public final class AgentController {
             conversation.addAssistantMessage(response);
             for (ToolCall toolCall : response.toolCalls()) {
                 progressListener.accept("Step " + step + ": " + describe(toolCall));
-                ToolResult toolResult = toolRegistry.execute(toolCall);
+                ToolResult toolResult = toolRegistry.execute(toolCall, shownPassages);
                 conversation.addToolResult(toolCall, toolResult);
                 filesFound.addAll(toolResult.sourceFiles());
                 progressListener.accept(

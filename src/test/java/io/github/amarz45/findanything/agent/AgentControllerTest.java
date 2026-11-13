@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.amarz45.findanything.config.BackendType;
+import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.config.ModelSettings;
+import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.llm.LlmClient;
 import io.github.amarz45.findanything.llm.LlmException;
 import io.github.amarz45.findanything.llm.LlmRequest;
@@ -14,6 +16,8 @@ import io.github.amarz45.findanything.llm.Message.Role;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ToolCall;
 import io.github.amarz45.findanything.llm.ToolSpec;
+import io.github.amarz45.findanything.privacy.FolderPolicy;
+import io.github.amarz45.findanything.search.SearchEngine;
 import io.github.amarz45.findanything.search.SearchResult;
 import io.github.amarz45.findanything.storage.Chunk;
 import io.github.amarz45.findanything.storage.ExtractionStatus;
@@ -38,10 +42,20 @@ class AgentControllerTest {
     static final ModelSettings LOCAL =
             new ModelSettings(
                     BackendType.LOCAL, "llama", ModelSettings.OLLAMA_DEFAULT_BASE_URL, "");
+    static final ModelSettings CLOUD =
+            new ModelSettings(
+                    BackendType.CLOUD, "vendor/model", ModelSettings.OPENROUTER_BASE_URL, "");
     static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-04T15:00:00Z"), ZoneOffset.UTC);
     static final String QUESTION = "When does my lease end?";
     static final ToolCall SEARCH = new ToolCall("call-1", "search", Map.of("query", "lease end"));
     static final ToolCall BAD_SEARCH = new ToolCall("call-0", "search", Map.of("query", "bad"));
+
+    /** The lease's passage as the real search tool gives it, and the note that replaces it. */
+    static final String LEASE_PASSAGE =
+            "Best passage (page 2):\nThe lease ends on August 31, 2026.";
+
+    static final String LEASE_PASSAGE_NOTE =
+            "Best passage (page 2): already given above, in the results for \"lease ends\".";
 
     @TempDir Path indexFolder;
     @TempDir Path files;
@@ -50,6 +64,7 @@ class AgentControllerTest {
     Path notes;
     ScriptedTool searchTool;
     ToolRegistry toolRegistry;
+    final FolderPolicy folderPolicy = new FolderPolicy();
     Conversation conversation;
     final List<String> progress = new ArrayList<>();
 
@@ -83,6 +98,7 @@ class AgentControllerTest {
     /** Writes a real file and indexes it with the size and time it has on disk. */
     Path indexFile(String name, Chunk chunk) throws IOException {
         Path path = files.resolve(name);
+        Files.createDirectories(path.getParent());
         Files.writeString(path, "the original bytes of " + name);
         index.put(
                 new IndexedFile(
@@ -100,6 +116,14 @@ class AgentControllerTest {
         return new float[0];
     }
 
+    /** Puts the real search tool, over the indexed files, in place of the scripted one. */
+    void useTheRealSearchTool() {
+        SearchFolder searchFolder = new SearchFolder(files, false, true, List.of());
+        IndexConfig indexConfig = new IndexConfig(indexFolder, List.of(searchFolder), List.of());
+        toolRegistry = new ToolRegistry();
+        toolRegistry.register(new SearchTool(new SearchEngine(index, indexConfig)));
+    }
+
     AgentController controller(int maxSteps, int maxConversationChars) {
         return new AgentController(
                 toolRegistry,
@@ -107,6 +131,7 @@ class AgentControllerTest {
                 new ResponseParser(),
                 new CitationVerifier(index),
                 index,
+                folderPolicy,
                 maxSteps,
                 maxConversationChars,
                 CLOCK);
@@ -118,6 +143,10 @@ class AgentControllerTest {
 
     static LlmResponse calls(ToolCall... toolCalls) {
         return new LlmResponse("", List.of(toolCalls));
+    }
+
+    static LlmResponse searches(String query) {
+        return calls(new ToolCall("call-" + query, "search", Map.of("query", query)));
     }
 
     static LlmResponse says(String text) {
@@ -172,6 +201,71 @@ class AgentControllerTest {
         assertThat(followUp.messages())
                 .extracting(Message::content)
                 .contains(QUESTION, "And the rent?");
+    }
+
+    @Test
+    void aPassageIsGivenOncePerRequestAndAgainInTheNextRequest() throws Exception {
+        useTheRealSearchTool();
+        ScriptedLlmClient client =
+                new ScriptedLlmClient(
+                        searches("lease ends"),
+                        searches("ends august"),
+                        citing("The lease ends on August 31, 2026."),
+                        searches("ends august"),
+                        says("The rent isn't in your files."));
+        run(client);
+
+        // Each request to the model ends with the result of the search before it.
+        assertThat(last(client.requests.get(1)).content()).contains(LEASE_PASSAGE);
+        assertThat(last(client.requests.get(2)).content())
+                .contains("1 file for \"ends august\"")
+                .contains(LEASE_PASSAGE_NOTE)
+                .doesNotContain("August 31, 2026");
+
+        // The follow-up no longer has the first request's results, so the same search gives the
+        // passage in full.
+        controller(4, 100_000).run("And the rent?", conversation, client, progress::add);
+        assertThat(last(client.requests.get(4)).content())
+                .contains("1 file for \"ends august\"")
+                .contains(LEASE_PASSAGE);
+    }
+
+    @Test
+    void aPassageWithheldFromACloudModelIsGivenInFullByTheNextSearch() throws Exception {
+        Path renewal =
+                indexFile(
+                        "private/renewal.md",
+                        new Chunk(0, 0, "The lease renewal is due in May.", none()));
+        index.commit();
+        folderPolicy.setLocalOnly(files.resolve("private"), true);
+        useTheRealSearchTool();
+
+        // The first result holds the private file, so a cloud model is sent none of it, and the
+        // second search has to give the lease's passage itself.
+        Conversation cloudConversation = new Conversation("c2", CLOUD);
+        ScriptedLlmClient cloudModel =
+                new ScriptedLlmClient(
+                        searches("lease ends"),
+                        searches("ends august"),
+                        citing("The lease ends on August 31, 2026."));
+        controller(4, 100_000).run(QUESTION, cloudConversation, cloudModel, progress::add);
+        assertThat(last(cloudModel.requests.get(1)).sourceFiles()).contains(lease, renewal);
+        assertThat(last(cloudModel.requests.get(2)).sourceFiles()).containsExactly(lease);
+        assertThat(last(cloudModel.requests.get(2)).content())
+                .contains(LEASE_PASSAGE)
+                .doesNotContain("already given above");
+
+        // A local model is sent everything, so its second search names the first.
+        ScriptedLlmClient localModel =
+                new ScriptedLlmClient(
+                        searches("lease ends"),
+                        searches("ends august"),
+                        citing("The lease ends on August 31, 2026."));
+        run(localModel);
+        assertThat(last(localModel.requests.get(1)).sourceFiles()).contains(lease, renewal);
+        assertThat(last(localModel.requests.get(2)).content())
+                .contains(LEASE_PASSAGE_NOTE)
+                .doesNotContain("August 31, 2026");
     }
 
     @Test
