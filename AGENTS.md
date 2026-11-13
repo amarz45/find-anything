@@ -62,6 +62,12 @@ Tests mirror the main package structure under `src/test/java`.
   names). Never read `.env`, print a key, write one to a file, or put one in a log, test or commit.
 - **Errors are never silent.** Every failure the design lists (unreadable file, model unavailable,
   invalid tool call, and so on) produces the status or message the design describes.
+- **No downloads without permission.** Never download anything (models such as `ollama pull`,
+  packages, tools or files) unless Amar has said to. A question like "how do I install it?" is
+  not permission: answer it and ask.
+- **No agent memory.** Don't write to the coding agent's own memory (such as Claude Code's
+  memory folder). Rules for agents go in this file; the state of the work goes in
+  `docs/notes/handoff.md`; deferred improvements go in `TODO.md`.
 
 ## Working with the IDE
 
@@ -79,6 +85,10 @@ on its diagnostics.
   to `docs/logs/design-changes.md`.
 - When a feature's code lands, update its row in `docs/traceability.md`.
 - When a test or check catches a real bug, add an entry to `docs/logs/test-failures.md`.
+- Low-priority improvements to remember go in `TODO.md` under a fitting section, in its style: a
+  bold lead sentence, what happens today, what a better version would do, and whether it needs a
+  design-changes entry. Before choosing where any note goes, look for a file that already has that
+  purpose.
 
 ## Commits
 
@@ -91,3 +101,10 @@ commit (one piece of code with its tests, `./gradlew build` green), propose the 
 then stop so Amar can review the diff and commit it. Only start the next piece after that one is
 dealt with. After a commit, wait for Amar before starting the next piece. Work goes on a feature
 branch such as `gui`, never directly on `master`. **Never push** unless Amar asks you to.
+
+- **Fetch before stating branch state.** Branches are merged through GitHub pull requests, so
+  local branches lag. Run `git fetch` and check `origin/master` before saying what is or isn't
+  merged, or asking where to branch from.
+- **No branch operations beyond what was asked.** When Amar says "commit," make only that commit
+  on the current branch. Don't fast-forward, merge, rebase or move any branch (local `master`
+  included) unless asked; if syncing looks useful, mention it in one line.
