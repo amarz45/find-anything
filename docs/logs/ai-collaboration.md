@@ -284,3 +284,54 @@ The first entries were drafted from the planning conversation in the claude.ai a
   editing rule in `AGENTS.md` and the plan in `docs/notes/handoff.md` ("Plan: smaller search
   results"). `qwen3:8b` is installed in Ollama and works with the app. No code changed.
 
+### 2026-11-12 to 2026-11-13: Smaller search results, measured, and a 14B local model
+- **Tool / model:** Claude Code, Claude Fable 5.2
+- **Task:** implement the three agreed ideas for smaller search results, measure what they save,
+  and find out whether a better local model fits in 16 GB of VRAM and why it is slow.
+- **Input / instruction:** "Read AGENTS.md and the handoff. Start working on Idea 1 from the
+  plan"; then "How do you measure the saving?", "I ran the query. Measure the savings", "Test it
+  yourself", "Commit the change, and work on Idea 2" and the same for idea 3; later questions on
+  a character budget, embeddings, whether a better model fits, and why `qwen3:14b` took about a
+  minute, with a screenshot of its answer.
+- **AI contribution:**
+  - Wrote the three changes with tests, one commit each, with one edit per file as the rules
+    ask: `ShownPassages` (a passage is given once per request), identical files as one entry,
+    and whole passages for the first three entries only. The first followed the design approved
+    in the handoff; for the other two it chose the details itself (the `Same content at:` lines,
+    three whole passages, 200-character parts) and listed those choices for review.
+  - Measured from the privacy log with a small read-only script that prints sizes only: the
+    two-search GPA request went from 34,019 to 12,385 characters and the resume request from
+    21,456 to 10,321. Ran four questions on the test corpus with the cloud model in a scratch
+    `FINDANY_HOME` and showed the notes working, with every answer correct and verified.
+  - From Ollama's log, showed that `qwen3:14b` loads entirely on the GPU (11.3 GB at a 16k
+    context), reads prompts at about 600 tokens per second and writes at 24, and that it wrote
+    853 tokens for an answer of about 150, most likely hidden thinking. Related the writing
+    speed to the card's memory bandwidth and estimated other hardware from published figures.
+  - Raised things it then left alone: a note saves nothing on a very short passage; parts are
+    sent again by a second search; the transcript's two copies weren't joined.
+  - Weak points:
+    - It reported idea 1 as done before any real run showed a saving. Amar's first run made one
+      search, so it saved nothing, and the 41% figure it then gave was a replay of an older log,
+      not a measurement. The real figures came only after Amar ran both questions again.
+    - Its live check of idea 3 on the test corpus returned two files, so it never exercised a
+      part; that change went in on a unit test and Amar's own run.
+    - It looked for the screenshot in the wrong folder and was stopped.
+    - Its first version of the idea 3 test failed on its own query, which matched another file.
+- **Human contribution:** ran the GPA and resume questions on his own documents before and after,
+  which gave the only like-for-like measurements; told the AI to run the corpus test itself;
+  asked what "the first line still counts every file" meant; passed over the offer of a
+  `--verbose` count and the short-passage fix; had each change committed in turn and merged the
+  pull request; downloaded `qwen3:14b` himself and tested it, judging it much better than the
+  8B model, not as good as the cloud model, and slower than he likes; questioned the assumption
+  behind the embeddings estimate; had the documentation commit made on `master`, not the merged
+  branch.
+- **Outcome:** [add80fd](https://github.com/amarz45/find-anything/commit/add80fd004c538008225df69074c4654a84dc6d8)
+  (a passage once per request),
+  [5f41301](https://github.com/amarz45/find-anything/commit/5f41301bc2860ed5a42bc3c5c2df511e49a2b27c)
+  (identical files as one entry),
+  [158e6d0](https://github.com/amarz45/find-anything/commit/158e6d0f181b801d333c6ef61dedb86ad5136bb9)
+  (whole passages for the first three entries),
+  [a9c2322](https://github.com/amarz45/find-anything/commit/a9c2322e06f7b71417dcdb0055de3de56ad144dd)
+  (handoff and `TODO.md`), merged as pull request #9. `qwen3:14b` is installed and works with
+  the app. Not done: turning the local model's thinking off, a character budget, embeddings.
+

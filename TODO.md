@@ -72,6 +72,16 @@ report describes.
   when the first reply has no tool calls, `AgentController` could send the model back once with
   "search the files before answering", like the reformat request. Changes behaviour the report
   describes, so log it in `docs/logs/design-changes.md`.
+- **Try the local model with its thinking turned off.** `LangChain4jClient` doesn't set
+  `think()`, so a thinking model such as Qwen3 reasons before every reply. Seen on 2026-11-13
+  with `qwen3:14b` on the RX 7600 XT: "What's my cumulative GPA?" took 39 seconds, 35 of them
+  writing 853 tokens at 24 per second for an answer of about 150 tokens; the rest is most likely
+  hidden thinking (inferred from Ollama's token counts). Reading the search results took under 5
+  seconds, so smaller results no longer help the speed. A better version would turn thinking off
+  for local models, or make it a setting, after comparing the time and the answers on the same
+  questions: it may cost quality, and some models reject the option, which is why it isn't set
+  today. The design doesn't describe this, so it needs no design-changes entry unless it becomes
+  a setting.
 
 ## The answer format
 

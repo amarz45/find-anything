@@ -560,3 +560,28 @@ surprising.)*
     characters per token) against `OLLAMA_NUM_CTX` of 16,384, which is still a placeholder.
   - Next: merge the `optimization` pull request (no squash), the 14B check, then `TODO.md` items
     and Tier 2 until the freeze on Nov 14.
+- **2026-11-13 (Session 7, continued: the 14B local model):**
+  - `optimization` is merged into `master` as PR #9. This entry and the collaboration log's were
+    committed on local `master` at Amar's request; they still need to reach GitHub.
+  - `qwen3:14b` is installed and works with the app. Amar's verdict on "What's my cumulative
+    GPA?": much better than `qwen3:8b` (it searched and answered with two sources), not as good
+    as the cloud model, and slower than he likes. One of its two citations was unverified (the
+    quote isn't in the PDF's text in that form).
+  - Measured from Ollama's log (`journalctl -u ollama`), RX 7600 XT, 16,384-token context:
+    - Memory: 11.3 GB on the GPU (8.4 weights, 2.5 context, 0.3 working), nothing on the CPU, so
+      about 5 GB is spare. `OLLAMA_NUM_CTX` of 16,384 works for this model.
+    - Speed: about 600 tokens per second reading the prompt, 24 writing. The question took 39
+      seconds in two requests (8 and 31), 35 of them writing.
+    - It wrote 853 tokens for an answer of about 150. The rest is most likely hidden thinking
+      (inferred from the counts; the log doesn't label it). `LangChain4jClient` doesn't set
+      `think()`.
+  - So smaller results no longer matter for speed with this model; the number of tokens written
+    does. Turning thinking off for local models is the one lever (see `TODO.md`, "The agent's
+    search"); not tried, and Amar hasn't asked for it.
+  - Hardware estimates given to Amar, from the bandwidth ratio and not benchmarks: writing speed
+    follows memory bandwidth (288 GB/s here, a ceiling of about 34 tokens per second for 8.4 GB
+    of weights). An RTX 5070 (672 GB/s) would write about 2.3 times as fast but has 12 GB, too
+    little for this model at 16k. Apple chips run from about 0.4 times (M4, 120 GB/s) to 1.9
+    times (M4 Max, 546 GB/s).
+  - Next: `TODO.md` items and Tier 2 until the freeze on Nov 14; the Ollama check the slice owes
+    (the lease question on `testdata/corpus` with the local model) can now use `qwen3:14b`.
