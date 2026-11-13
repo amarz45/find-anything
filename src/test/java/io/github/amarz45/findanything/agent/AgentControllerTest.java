@@ -106,7 +106,7 @@ class AgentControllerTest {
                         IndexedFile.fileTypeOf(path),
                         Files.size(path),
                         Files.getLastModifiedTime(path).toInstant(),
-                        "h",
+                        "hash of " + name,
                         ExtractionStatus.OK),
                 List.of(chunk));
         return path;

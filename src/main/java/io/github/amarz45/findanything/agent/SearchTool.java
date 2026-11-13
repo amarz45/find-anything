@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,6 +27,9 @@ import java.util.Set;
  *
  * <p>A passage is given once per request. When a later search of the same request finds it again,
  * the file is still listed, with a line naming the earlier search in place of the passage's text.
+ *
+ * <p>Files with the same content share one entry and one passage: the best-ranked copy is listed
+ * with its details, and the other copies as paths under it.
  */
 public final class SearchTool implements Tool {
 
@@ -151,9 +155,18 @@ public final class SearchTool implements Tool {
             return ToolResult.success(describeNoResults(query, searchFilters), List.of());
         }
         List<Path> sourceFiles = results.stream().map(result -> result.file().path()).toList();
-        String content = describe(query, results, shownPassages);
-        // Recorded only after the text is written, so a result never refers to itself.
-        shownPassages.record(query, results);
+        List<List<SearchResult>> entries = groupCopies(results);
+        String content = describe(query, entries, shownPassages);
+        // Recorded only after the text is written, so a result never refers to itself. A copy is
+        // recorded with its entry's passage, which it holds at the same position.
+        List<SearchResult> given = new ArrayList<>();
+        for (List<SearchResult> entry : entries) {
+            Chunk passage = entry.get(0).bestChunk();
+            for (SearchResult result : entry) {
+                given.add(new SearchResult(result.file(), passage, result.score()));
+            }
+        }
+        shownPassages.record(query, given);
         return ToolResult.success(content, sourceFiles);
     }
 
@@ -185,7 +198,33 @@ public final class SearchTool implements Tool {
     }
 
     /**
-     * Lists the results for the model: the path to cite, the file's details, and the passage.
+     * Puts the results into entries, best first. Each file gets its own entry, except that a file
+     * with the same content as a better-ranked one joins that file's entry, so the passage is sent
+     * once for all the copies. Only files with a passage are joined: a file matched by its name
+     * only, or listed for an empty query, keeps its own entry.
+     */
+    private static List<List<SearchResult>> groupCopies(List<SearchResult> results) {
+        List<List<SearchResult>> entries = new ArrayList<>();
+        Map<String, List<SearchResult>> byContentHash = new HashMap<>();
+        for (SearchResult result : results) {
+            String contentHash = result.file().contentHash();
+            boolean canJoin = result.bestChunk() != null && !contentHash.isEmpty();
+            List<SearchResult> entry = canJoin ? byContentHash.get(contentHash) : null;
+            if (entry == null) {
+                entry = new ArrayList<>();
+                entries.add(entry);
+                if (canJoin) {
+                    byContentHash.put(contentHash, entry);
+                }
+            }
+            entry.add(result);
+        }
+        return entries;
+    }
+
+    /**
+     * Lists the entries for the model: the path to cite, the file's details, the paths of its
+     * copies, and the passage.
      *
      * <p>A passage's text always starts on the line after its "Best passage" label. A passage the
      * request was already given isn't repeated: the label line itself names the earlier search.
@@ -193,15 +232,17 @@ public final class SearchTool implements Tool {
      * by its place.
      */
     private static String describe(
-            String query, List<SearchResult> results, ShownPassages shownPassages) {
+            String query, List<List<SearchResult>> entries, ShownPassages shownPassages) {
         StringBuilder text = new StringBuilder();
-        text.append(results.size()).append(results.size() == 1 ? " file" : " files");
+        int files = entries.stream().mapToInt(List::size).sum();
+        text.append(files).append(files == 1 ? " file" : " files");
         text.append(
                 query.isEmpty()
                         ? ", most recently modified first:"
                         : " for \"" + query + "\", best match first:");
         int number = 0;
-        for (SearchResult result : results) {
+        for (List<SearchResult> entry : entries) {
+            SearchResult result = entry.get(0);
             IndexedFile file = result.file();
             number++;
             text.append("\n\n").append(number).append(". ").append(file.path());
@@ -211,6 +252,9 @@ public final class SearchTool implements Tool {
                     .append(file.sizeBytes())
                     .append(" bytes, modified ")
                     .append(file.modifiedTime().atZone(ZoneId.systemDefault()).toLocalDate());
+            for (SearchResult copy : entry.subList(1, entry.size())) {
+                text.append("\n   Same content at: ").append(copy.file().path());
+            }
             Chunk chunk = result.bestChunk();
             if (chunk != null) {
                 text.append("\n   Best passage");

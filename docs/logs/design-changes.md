@@ -643,6 +643,27 @@ Diagrams updated:
   leave a note that names a result the model is no longer sent.
   Diagrams updated: not yet (cd05 and SD03 at the freeze).
 
+### The agent's search lists identical files as one entry (2026-11-12, after Slice 3)
+- **Original design:** a result list holds each file once, and two copies of a file are two
+  results (`SearchResult`). `SearchTool` gives the model every result as its own entry with its
+  own passage.
+- **Implemented change:** in the text `SearchTool` writes for the model, results whose files have
+  the same `contentHash` share one entry: the best-ranked copy with its details and its passage,
+  and each other copy on a line of its own before the passage, `Same content at: <path>`. The
+  first line still counts every file, and every copy stays in the result's `sourceFiles`.
+  - Only files with a passage and a known hash are joined. A file matched by its name only, or
+    listed for an empty query, keeps its own entry.
+  - A copy is recorded in `ShownPassages` with its entry's passage, so a later search that finds
+    only the copy names the earlier search and doesn't send the text again.
+  - Nothing else changes: `SearchEngine`, `findany search` and the GUI's results table still show
+    copies as separate results.
+- **Reason:** identical files send the same passage (up to 1,500 characters) once per copy. Seen
+  on 2026-11-12 in a search of ten real documents, which held two pairs of identical files.
+  Checked on the test corpus the same day: the syllabus and its copy came to the cloud model as
+  one entry with one passage.
+- **Impact:** F07; `SearchTool` only (a private `groupCopies()`). The limit counts files, so a
+  result with copies has fewer entries than files. No pattern changes and no diagram changes.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
