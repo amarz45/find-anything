@@ -9,6 +9,7 @@ import io.github.amarz45.findanything.storage.IndexedFile;
 import io.github.amarz45.findanything.storage.SearchFilters;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
@@ -24,6 +25,10 @@ import java.util.Set;
  * The agent's search command (F07): runs the same instant search as the search bar, with the same
  * filters (F04), and gives the model each matching file with its best passage. The model plans with
  * it: it searches, reads the results, and searches again with other words or filters.
+ *
+ * <p>The first {@value #FULL_PASSAGES} entries come with their whole passage. A later entry comes
+ * with the part of its passage around the words of the query, unless the passage is short; the
+ * model reads an excerpt when it needs more of that file.
  *
  * <p>A passage is given once per request. When a later search of the same request finds it again,
  * the file is still listed, with a line naming the earlier search in place of the passage's text.
@@ -44,6 +49,12 @@ public final class SearchTool implements Tool {
 
     static final int DEFAULT_LIMIT = 5;
     static final int MAX_LIMIT = 20;
+
+    /** How many entries of a result, from the best match down, come with their whole passage. */
+    static final int FULL_PASSAGES = 3;
+
+    /** The most characters of a passage that a later entry shows; a shorter passage comes whole. */
+    static final int PART_CHARS = 200;
 
     private static final String QUERY = "query";
     private static final String FILE_TYPE = "file_type";
@@ -158,10 +169,16 @@ public final class SearchTool implements Tool {
         List<List<SearchResult>> entries = groupCopies(results);
         String content = describe(query, entries, shownPassages);
         // Recorded only after the text is written, so a result never refers to itself. A copy is
-        // recorded with its entry's passage, which it holds at the same position.
+        // recorded with its entry's passage, which it holds at the same position. An entry that
+        // showed only part of its passage is recorded without one, so a later search can still
+        // give the whole passage.
         List<SearchResult> given = new ArrayList<>();
-        for (List<SearchResult> entry : entries) {
+        for (int i = 0; i < entries.size(); i++) {
+            List<SearchResult> entry = entries.get(i);
             Chunk passage = entry.get(0).bestChunk();
+            if (passage != null && !comesWhole(i + 1, passage)) {
+                passage = null;
+            }
             for (SearchResult result : entry) {
                 given.add(new SearchResult(result.file(), passage, result.score()));
             }
@@ -223,13 +240,23 @@ public final class SearchTool implements Tool {
     }
 
     /**
-     * Lists the entries for the model: the path to cite, the file's details, the paths of its
-     * copies, and the passage.
+     * Whether an entry shows its whole passage: it is one of the first {@value #FULL_PASSAGES}, or
+     * the passage is no longer than the part that would be shown of it.
      *
-     * <p>A passage's text always starts on the line after its "Best passage" label. A passage the
-     * request was already given isn't repeated: the label line itself names the earlier search.
-     * Only this method writes on a label line, so the text of a file can't be taken for that note
-     * by its place.
+     * @param number the entry's place in the result, from 1
+     */
+    private static boolean comesWhole(int number, Chunk passage) {
+        return number <= FULL_PASSAGES || oneLine(passage.text()).length() <= PART_CHARS;
+    }
+
+    /**
+     * Lists the entries for the model: the path to cite, the file's details, the paths of its
+     * copies, and the passage or a part of it.
+     *
+     * <p>A passage's text always starts on the line after its label. A passage the request was
+     * already given isn't repeated: the label line itself names the earlier search. Only this
+     * method writes on a label line, so the text of a file can't be taken for that note by its
+     * place.
      */
     private static String describe(
             String query, List<List<SearchResult>> entries, ShownPassages shownPassages) {
@@ -257,24 +284,90 @@ public final class SearchTool implements Tool {
             }
             Chunk chunk = result.bestChunk();
             if (chunk != null) {
-                text.append("\n   Best passage");
+                String page = "";
                 if (chunk.pageNumber() > 0) {
-                    text.append(file.fileType().equals("pptx") ? " (slide " : " (page ")
-                            .append(chunk.pageNumber())
-                            .append(")");
+                    String unit = file.fileType().equals("pptx") ? "slide" : "page";
+                    page = " (" + unit + " " + chunk.pageNumber() + ")";
                 }
                 Optional<String> earlierQuery = shownPassages.queryThatGave(file.path(), chunk);
                 if (earlierQuery.isPresent()) {
-                    text.append(": already given above, in the results for \"")
+                    text.append("\n   Best passage")
+                            .append(page)
+                            .append(": already given above, in the results for \"")
                             .append(earlierQuery.get())
                             .append("\".");
+                } else if (comesWhole(number, chunk)) {
+                    text.append("\n   Best passage")
+                            .append(page)
+                            .append(":\n")
+                            .append(chunk.text().strip());
                 } else {
-                    text.append(":\n").append(chunk.text().strip());
+                    text.append("\n   Part of the best passage")
+                            .append(page)
+                            .append(":\n")
+                            .append(partAroundTheQuery(chunk.text(), query));
                 }
             } else if (!query.isEmpty()) {
                 text.append("\n   Matched by its name only; none of its text is indexed.");
             }
         }
         return text.toString();
+    }
+
+    /**
+     * At most {@value #PART_CHARS} characters of a passage, on one line, starting a little before
+     * the first word of the query that the passage holds (or at the passage's start when it holds
+     * none, as for a file matched by its name). The part is cut between words, and an ellipsis
+     * marks each end where text was left out. Apart from line breaks it is the file's own text, so
+     * the model can quote from it.
+     */
+    private static String partAroundTheQuery(String passage, String query) {
+        String line = oneLine(passage);
+        String folded = fold(line);
+        int match = -1;
+        for (String word : fold(query).split("[^\\p{L}\\p{N}]+")) {
+            int at = word.isEmpty() ? -1 : folded.indexOf(word);
+            if (at >= 0 && (match < 0 || at < match)) {
+                match = at;
+            }
+        }
+        int start = Math.max(0, match - PART_CHARS / 4);
+        int end = Math.min(line.length(), start + PART_CHARS);
+        start = Math.max(0, end - PART_CHARS);
+        if (start > 0) {
+            // Move to the start of the next word, unless that would pass the matched word.
+            int space = line.indexOf(' ', start);
+            if (space >= 0 && space < Math.max(match, start + PART_CHARS / 4)) {
+                start = space + 1;
+            }
+        }
+        if (end < line.length()) {
+            int space = line.lastIndexOf(' ', end);
+            if (space > start + PART_CHARS / 2) {
+                end = space;
+            }
+        }
+        return (start > 0 ? "…" : "")
+                + line.substring(start, end)
+                + (end < line.length() ? "…" : "");
+    }
+
+    /** The text with every run of whitespace as one space, and none at the ends. */
+    private static String oneLine(String text) {
+        return text.strip().replaceAll("\\s+", " ");
+    }
+
+    /**
+     * The text in lowercase without accents, character for character, so a position in the result
+     * is the same position in the text. The index matches words the same way.
+     */
+    private static String fold(String text) {
+        StringBuilder folded = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            String decomposed =
+                    Normalizer.normalize(String.valueOf(text.charAt(i)), Normalizer.Form.NFD);
+            folded.append(Character.toLowerCase(decomposed.charAt(0)));
+        }
+        return folded.toString();
     }
 }

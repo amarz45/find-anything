@@ -664,6 +664,29 @@ Diagrams updated:
 - **Impact:** F07; `SearchTool` only (a private `groupCopies()`). The limit counts files, so a
   result with copies has fewer entries than files. No pattern changes and no diagram changes.
 
+### The agent's search gives whole passages for the first three entries only (2026-11-12, after Slice 3)
+- **Original design:** `SearchTool` gives every result its whole best passage, up to the chunk
+  size of 1,500 characters (see "Small members added for the tools" and the entries above).
+- **Implemented change:** the first three entries of a result (`SearchTool.FULL_PASSAGES`) come
+  with their whole passage, as before. A later entry comes with one line of at most 200
+  characters (`PART_CHARS`) under the label `Part of the best passage (page N):`. The part starts
+  a little before the first word of the query that the passage holds, is cut between words, and
+  has an ellipsis at each cut end.
+  - A passage of 200 characters or fewer comes whole at any place in the result.
+  - The query's words are found the way the index matches them: case and accents are ignored. A
+    passage that holds none of them (a file matched by its name) is shown from its start.
+  - Apart from line breaks the part is the file's own text, so a quote from it still verifies.
+  - A part isn't recorded in `ShownPassages`: a later search that ranks the file in the first
+    three gives the whole passage. A passage already given whole is still replaced by its note.
+- **Reason:** both models ask for ten results, and nearly all of a result is passages: the
+  measured result of 2026-11-12 was 15,665 characters for ten files, and an estimate on its
+  logged text puts it near 7,000 with this change. Parts for every entry would be smaller still,
+  but the answer would then need `read_excerpt` more often, which weak local models skip; the
+  best matches keep their whole passages for that reason.
+- **Impact:** F07, F08; `SearchTool` only. When the answer is in a later entry's passage outside
+  the part shown, the model has to read an excerpt of that file (the prompt already tells it to).
+  No pattern changes and no diagram changes.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

@@ -202,6 +202,61 @@ class SearchToolTest {
     }
 
     @Test
+    void givesOnlyThePartAroundTheQuerysWordsAfterTheFirstThreeEntries() throws Exception {
+        LocalDate date = LocalDate.of(2025, 5, 1);
+        for (int i = 1; i <= 3; i++) {
+            Path strongMatch = ROOT.resolve("cv-" + i + ".txt");
+            String text = "Résumé, résumé, résumé " + i + ".";
+            index.put(
+                    file(strongMatch, date, ExtractionStatus.OK),
+                    List.of(new Chunk(0, 0, text, none())));
+        }
+        // A long passage with the query's word once, in the middle, so it ranks last.
+        Path handout = ROOT.resolve("handout.pdf");
+        String sentence = "Bring a printed résumé to the session.";
+        String passage =
+                "OPENING "
+                        + "Filler words that say nothing. ".repeat(10)
+                        + "\n"
+                        + sentence
+                        + " More filler words that say nothing.".repeat(10)
+                        + " CLOSING";
+        index.put(
+                file(handout, date, ExtractionStatus.OK),
+                List.of(new Chunk(0, 7, passage, none())));
+        index.commit();
+        ShownPassages shownPassages = new ShownPassages(file -> false);
+
+        ToolResult result = search(Map.of("query", "resume"), shownPassages);
+        assertThat(result.sourceFiles()).hasSize(4);
+        assertThat(result.sourceFiles().get(3)).isEqualTo(handout);
+        // The first three entries have their whole passage.
+        assertThat(result.content()).contains("Best passage:\nRésumé, résumé, résumé 1.");
+        // The fourth has one line of at most PART_CHARS characters, cut at both ends.
+        String fourth = result.content().substring(result.content().indexOf("4. " + handout));
+        assertThat(fourth)
+                .contains("\n   Part of the best passage (page 7):\n…")
+                .contains(sentence)
+                .endsWith("…")
+                .doesNotContain("OPENING")
+                .doesNotContain("CLOSING");
+        String part = fourth.substring(fourth.lastIndexOf('\n') + 1);
+        assertThat(part.length()).isLessThanOrEqualTo(SearchTool.PART_CHARS + 2);
+
+        // A part isn't the passage: a later search that ranks the file first gives all of it.
+        ToolResult later = search(Map.of("query", "printed"), shownPassages);
+        assertThat(later.sourceFiles()).containsExactly(handout);
+        assertThat(later.content()).contains("Best passage (page 7):\nOPENING").endsWith("CLOSING");
+
+        // And once it was given whole, a still later search names that one.
+        ToolResult last = search(Map.of("query", "resume"), shownPassages);
+        assertThat(last.content())
+                .endsWith(
+                        "Best passage (page 7): already given above, in the results for"
+                                + " \"printed\".");
+    }
+
+    @Test
     void aLaterSearchOfTheRequestNamesTheEarlierSearchInPlaceOfAPassage() {
         ShownPassages shownPassages = new ShownPassages(file -> false);
         search(Map.of("query", "lease ends"), shownPassages);
