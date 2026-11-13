@@ -65,6 +65,9 @@ Tests mirror the main package structure under `src/test/java`.
 - **No downloads without permission.** Never download anything (models such as `ollama pull`,
   packages, tools or files) unless Amar has said to. A question like "how do I install it?" is
   not permission: answer it and ask.
+- **Edit files with the editing tools.** Create and change files with the agent's own file tools
+  (Claude Code's Edit and Write), never with shell commands or scripts (`sed`, Python, heredocs
+  and the like). Scripted edits waste Amar's time: they're slow to review and approve.
 - **No agent memory.** Don't write to the coding agent's own memory (such as Claude Code's
   memory folder). Rules for agents go in this file; the state of the work goes in
   `docs/notes/handoff.md`; deferred improvements go in `TODO.md`.

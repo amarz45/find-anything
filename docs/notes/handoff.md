@@ -261,6 +261,101 @@ on hand-written PEM blocks. Throwaway keys can be generated for the corpus and t
 each spelling, and keys with each prefix `ApiKeyPattern` knows, so redaction and the exclusions are
 checked on the real formats. Generated keys only, never one that was ever used.
 
+## Plan: smaller search results (branch `optimization`)
+
+Written 2026-11-12. Nothing is implemented yet: `optimization` differs from `master` only by an
+uncommitted rule in `AGENTS.md` (edit files with the Edit and Write tools, never scripts).
+
+**Goal.** Higher answer quality per context used, so a bigger local model fits in the desktop's
+16 GB of VRAM. `qwen3:8b` is installed and works with the app, but it often answers without
+searching (see `TODO.md`, "The agent's search"); the cloud model handles the same results fine.
+
+**Measured** (privacy log, cloud run of "What's my cumulative GPA?", 2026-11-12):
+- One `search` with `limit=10` returned 15,665 characters (about 3,900 tokens), nearly all of it
+  the ten passages of about 1,500 characters each (`Chunker` is built with 1,500).
+- The model ran two searches that returned the same ten files, so the request was 34,019
+  characters, half of it repeated. The answer needed under 100 characters from two files.
+- Both models ask for `limit=10` themselves; the default of 5 is rarely used.
+
+**Agreed with Amar: implement these three, in this order.**
+1. **Don't repeat a passage within one request.** A later search lists the file with a one-line
+   note in place of a passage the model already has. Design below.
+2. **Collapse identical files.** `IndexedFile.contentHash` is already there: show one passage and
+   "same content at: …" (seen: `transcript.pdf` and `Student Document Services.pdf`, and
+   `resume.pdf` twice).
+3. **Full passages for the top few, one line for the rest** (for example top 3 with passages, the
+   others with name, type, date and a short snippet around the matched words). Snippets for every
+   result would be smaller, but the answer then often needs `read_excerpt`, which weak models skip.
+
+**Other ideas, only raised. Amar hasn't agreed to any of them; ask before doing one.**
+- A character budget per search result (say 4,000), so steps × budget fits the context. With 1
+  to 3 it would bring the measured request from about 34,000 characters to about 8,000.
+- Stricter matching: the query is OR across words (`SearchIndex`); require all words first and
+  fall back to OR.
+- Cleaner extracted text (the transcript's page 2 ends with about 20 duplicated URL lines).
+- Marking each passage separately as file content (see "Imitation" below).
+
+**What embeddings (F05, which Amar plans to add anyway) would change.**
+- They don't shrink results; they improve the ranking, which makes showing fewer results safe.
+- Fewer searches per question: the taxes run on Nov 10 made four searches with reworded queries.
+- Probably smaller chunks: small embedding models limit their input (from memory, unchecked: 256
+  tokens for `all-MiniLM-L6-v2`, 512 for `bge-small`; a 1,500-character chunk is about 375
+  tokens). Smaller chunks mean smaller results, and a reindex.
+- Risk: vector search always returns the nearest chunks, never "no match", so it needs a
+  similarity cutoff.
+- The same vectors can pick the best sentences in a chunk and detect near-duplicates.
+- No VRAM cost: the design runs the embedding model in-process on the CPU.
+
+**Model size.** The saving matters most for a 14 GB model such as `gpt-oss:20b`, which fits 16 GB
+only with a small context. `qwen3:14b` (9.3 GB) already fits at 16k; there the gain is more steps
+before the context runs out. Neither model's memory use per context size is measured. Nothing may
+be downloaded without Amar's say-so. `LangChain4jClient.OLLAMA_NUM_CTX` (16,384) is still a
+placeholder.
+
+**To compare variants** (a suggestion): run the questions in `testdata/FACTS.md` through
+`ask --json` and record correct, verified answers against characters sent.
+
+**Design for idea 1** (approved by Amar on 2026-11-12; needs an entry in
+`docs/logs/design-changes.md` and the Command row of `docs/traceability.md`):
+- **The note.** It never says "shown above", which file text could say too. It replaces the
+  passage on the label line, which only the tool writes, and names the earlier search:
+  `Best passage (page 1): already given above, in the results for "cumulative GPA".` A passage's
+  text always starts on the line after a label. The file stays in the result's `sourceFiles`.
+- **Imitation.** A file can already imitate any label, because `PromptBuilder` wraps the whole
+  result in one `[FILE CONTENT START]`…`[FILE CONTENT END]` block. The note adds one more line to
+  imitate; the worst case is the model looking for a passage that isn't there. Marking each
+  passage separately would fix it (about 45 characters per passage); not part of this change.
+- **Never point at text the model can't see.**
+  - Only passages of the request in progress count, because `dropToolMessages()` removes earlier
+    tool results when a request starts.
+  - `RedactingLlmClient` withholds a whole result from a cloud model when any of its files is
+    local-only. A result that holds such a file records nothing, so its passages are given again
+    later. A local model has nothing withheld.
+- **Code.**
+  - New class `agent/ShownPassages`, one per request: built with a `Predicate<Path>` (whether a
+    file is withheld from this request's model); `queryThatGave(Path, Chunk)` returns the query of
+    the search that gave a passage (keyed by file and `Chunk.position()`);
+    `record(String query, List<SearchResult>)` records a result's passages, keeping the first
+    query, and nothing when any file of the result is withheld.
+  - `Tool.execute(arguments, shownPassages)` and `ToolRegistry.execute(toolCall, shownPassages)`
+    take it, because the registry and its tools are shared by all requests. `ReadExcerptTool`
+    ignores it; `SearchTool.describe()` writes the note and `execute()` records the result.
+  - `AgentController` takes the `FolderPolicy` in its constructor (from `FindAnythingService`);
+    `run()` creates the record: withheld means the conversation's backend is `CLOUD` and
+    `folderPolicy.isLocalOnly(file)`.
+- **Tests.**
+  - `SearchToolTest`: a second search with the same record gives the note and not the text; a
+    different passage of the same file comes in full; a new record gets the passage in full; a
+    record whose predicate withholds a file of the first result gets it in full again. Queries
+    with one clear best chunk: "lease ends", then "ends august".
+  - `AgentControllerTest` with a real `SearchTool`: two searches in one request, then a follow-up
+    request; a cloud conversation with a local-only file against a local one.
+  - `ScriptedTool` and the other callers of `execute()` need the new argument.
+
+**How Amar wants the work done** (also in `AGENTS.md`): one edit per file, never a run of small
+edits and never scripts; stop after any rejected edit; one commit at a time, not committed by the
+agent.
+
 ## State
 
 *(Update at the end of each session: what's done, what's in progress, what's next, anything
