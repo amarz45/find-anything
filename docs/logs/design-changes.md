@@ -608,6 +608,85 @@ Diagrams updated:
 - **Impact:** F01, F06, F07, F08, F11, F12; cd01 (update at the freeze). The `SettingsDialog` and
   F12 entries above cover the rest of the GUI's changes.
 
+### A search passage is given once per request: `ShownPassages` (2026-11-12, after Slice 3)
+- **Original design:** `SearchTool` gives each matching file with its best passage on every
+  call. `Tool.execute()` takes the call's arguments and `ToolRegistry.execute()` takes the
+  `ToolCall`, nothing else (cd05, SD03). `AgentController` doesn't know the `FolderPolicy`.
+- **Implemented change:** within one request, a passage's text is sent once. When a later search
+  finds the same passage as its file's best one, the file is still listed (and stays in the
+  result's `sourceFiles`), and its label line names the earlier search in place of the text:
+  `Best passage (page 1): already given above, in the results for "cumulative GPA".` Another
+  passage of the same file comes in full.
+  - New class `agent/ShownPassages`, one per request: `record(query, results)` records each
+    result's best passage by file and chunk position, keeping the first query, and
+    `queryThatGave(file, chunk)` returns that query.
+  - `Tool.execute(arguments, shownPassages)` and `ToolRegistry.execute(toolCall, shownPassages)`
+    take the record. `SearchTool` reads and fills it; `ReadExcerptTool` ignores it.
+  - `AgentController` takes the `FolderPolicy` in its constructor (from `FindAnythingService`)
+    and `run()` creates the record. A new request starts with an empty one, because
+    `dropToolMessages()` has just removed the earlier results.
+  - `RedactingLlmClient` withholds a whole search result from a cloud model when any of its files
+    is local-only. So in a cloud conversation such a result records nothing, and a later search
+    gives its passages in full. A local model has nothing withheld.
+- **Reason:** measured on 2026-11-12 with the cloud model and "What's my cumulative GPA?": two
+  searches returned the same ten files, so the request was 34,019 characters, half of it
+  repeated, for an answer that needed under 100. A smaller request leaves a local model's context
+  room for more steps, or for a larger model. The record is passed with each call because the
+  registry and its tools are shared by all requests; kept in the tool, it would mix them. The
+  note sits on the label line, which only the tool writes, and names the search, so a file's own
+  text ("shown above") can't stand in for it by its place.
+- **Impact:** F07, F14; the Command pattern keeps its roles, with one more parameter on
+  `Tool.execute()` and `ToolRegistry.execute()`; `SearchTool`, `ReadExcerptTool`,
+  `AgentController`, `FindAnythingService`; the `agent` package now uses `privacy`. Not solved
+  here: a file's text can still imitate any line of a result, the note included, because the
+  whole result is one marked block; and a folder marked local-only while a request is running can
+  leave a note that names a result the model is no longer sent.
+  Diagrams updated: not yet (cd05 and SD03 at the freeze).
+
+### The agent's search lists identical files as one entry (2026-11-12, after Slice 3)
+- **Original design:** a result list holds each file once, and two copies of a file are two
+  results (`SearchResult`). `SearchTool` gives the model every result as its own entry with its
+  own passage.
+- **Implemented change:** in the text `SearchTool` writes for the model, results whose files have
+  the same `contentHash` share one entry: the best-ranked copy with its details and its passage,
+  and each other copy on a line of its own before the passage, `Same content at: <path>`. The
+  first line still counts every file, and every copy stays in the result's `sourceFiles`.
+  - Only files with a passage and a known hash are joined. A file matched by its name only, or
+    listed for an empty query, keeps its own entry.
+  - A copy is recorded in `ShownPassages` with its entry's passage, so a later search that finds
+    only the copy names the earlier search and doesn't send the text again.
+  - Nothing else changes: `SearchEngine`, `findany search` and the GUI's results table still show
+    copies as separate results.
+- **Reason:** identical files send the same passage (up to 1,500 characters) once per copy. Seen
+  on 2026-11-12 in a search of ten real documents, which held two pairs of identical files.
+  Checked on the test corpus the same day: the syllabus and its copy came to the cloud model as
+  one entry with one passage.
+- **Impact:** F07; `SearchTool` only (a private `groupCopies()`). The limit counts files, so a
+  result with copies has fewer entries than files. No pattern changes and no diagram changes.
+
+### The agent's search gives whole passages for the first three entries only (2026-11-12, after Slice 3)
+- **Original design:** `SearchTool` gives every result its whole best passage, up to the chunk
+  size of 1,500 characters (see "Small members added for the tools" and the entries above).
+- **Implemented change:** the first three entries of a result (`SearchTool.FULL_PASSAGES`) come
+  with their whole passage, as before. A later entry comes with one line of at most 200
+  characters (`PART_CHARS`) under the label `Part of the best passage (page N):`. The part starts
+  a little before the first word of the query that the passage holds, is cut between words, and
+  has an ellipsis at each cut end.
+  - A passage of 200 characters or fewer comes whole at any place in the result.
+  - The query's words are found the way the index matches them: case and accents are ignored. A
+    passage that holds none of them (a file matched by its name) is shown from its start.
+  - Apart from line breaks the part is the file's own text, so a quote from it still verifies.
+  - A part isn't recorded in `ShownPassages`: a later search that ranks the file in the first
+    three gives the whole passage. A passage already given whole is still replaced by its note.
+- **Reason:** both models ask for ten results, and nearly all of a result is passages: the
+  measured result of 2026-11-12 was 15,665 characters for ten files, and an estimate on its
+  logged text puts it near 7,000 with this change. Parts for every entry would be smaller still,
+  but the answer would then need `read_excerpt` more often, which weak local models skip; the
+  best matches keep their whole passages for that reason.
+- **Impact:** F07, F08; `SearchTool` only. When the answer is in a later entry's passage outside
+  the part shown, the model has to read an excerpt of that file (the prompt already tells it to).
+  No pattern changes and no diagram changes.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

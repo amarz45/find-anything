@@ -43,7 +43,7 @@ public final class ScriptedTool implements Tool {
     }
 
     @Override
-    public ToolResult execute(Map<String, Object> arguments) {
+    public ToolResult execute(Map<String, Object> arguments, ShownPassages shownPassages) {
         executed.add(arguments);
         if (failure != null) {
             throw failure;

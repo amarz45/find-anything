@@ -9,8 +9,8 @@ import java.util.Map;
  * tool and gives JSON arguments; {@link ToolRegistry} finds the tool, validates the call and
  * executes it, so every tool gets the same checks, error handling and logging.
  *
- * <p>A tool is deterministic and only reads the index, so it is safe to call from any background
- * thread.
+ * <p>A tool only reads the index and keeps no state between calls, so it is safe to call from any
+ * background thread. What one request has already been given is passed in with each call.
  */
 public interface Tool {
 
@@ -33,6 +33,9 @@ public interface Tool {
      * Runs the tool. Called only with arguments that passed {@link #validate}. A failure the tool
      * expects, such as a file that isn't indexed, is returned as {@link ToolResult#failure}, not
      * thrown.
+     *
+     * @param shownPassages the passages the request in progress has already been given; a tool that
+     *     gives search passages leaves out the ones in it and records the ones it gives
      */
-    ToolResult execute(Map<String, Object> arguments);
+    ToolResult execute(Map<String, Object> arguments, ShownPassages shownPassages);
 }

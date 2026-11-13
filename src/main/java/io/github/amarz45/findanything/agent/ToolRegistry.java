@@ -48,9 +48,13 @@ public final class ToolRegistry {
      * unknown tool name, arguments that don't match the tool's spec, and anything {@link
      * Tool#validate} objects to each return a failure naming the problems, without executing. A
      * tool that throws is reported as a failure too, so one broken call can't end the request.
+     *
+     * @param shownPassages the passages the call's request has already been given, passed on to the
+     *     tool
      */
-    public ToolResult execute(ToolCall toolCall) {
+    public ToolResult execute(ToolCall toolCall, ShownPassages shownPassages) {
         Objects.requireNonNull(toolCall, "toolCall");
+        Objects.requireNonNull(shownPassages, "shownPassages");
         Tool tool;
         synchronized (this) {
             callLog.add(toolCall);
@@ -74,7 +78,7 @@ public final class ToolRegistry {
                     "Invalid call to " + toolCall.name() + ": " + String.join(" ", errors));
         }
         try {
-            return tool.execute(arguments);
+            return tool.execute(arguments, shownPassages);
         } catch (RuntimeException e) {
             log.error("Tool {} failed on {}", toolCall.name(), arguments, e);
             return ToolResult.failure("The tool " + toolCall.name() + " failed: " + e);

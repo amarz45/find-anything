@@ -236,3 +236,51 @@ The first entries were drafted from the planning conversation in the claude.ai a
   pull request #8, CI green on both runners. F13 and F14 Implemented; Decorator, Factory and MVC
   evident in the code. Four design-change entries for what the design left open.
 
+### 2026-11-12: Setting up Ollama, a local model that didn't search, and an agent that wasted time
+- **Tool / model:** Claude Code (Claude Opus 5.5 for the setup and the debugging, then Claude
+  Fable 5.2 for the search-size plan and the attempted implementation)
+- **Task:** set up Ollama for the local backend, find out why "What's my cumulative GPA?" failed,
+  and start making search results smaller so a bigger local model fits in 16 GB of VRAM.
+- **Input / instruction:** "Help me set up Ollama for this project"; later two screenshots of
+  failed answers and the output of `findany show`, `privacy-log`, `search` and `ask --json`;
+  then a request for ideas on smaller search results, and to implement the first one on a new
+  branch `optimization`.
+- **AI contribution:**
+  - Useful: found Ollama already running on the GPU with no models; explained why the context
+    size matters; from the saved conversations and the privacy log, showed that both failing
+    screenshots were the local model, that the one failed cloud run had every search result
+    withheld as local-only, and that `qwen3:8b` answered with no tool call at all although
+    `findany search` ranked the transcript's page 1 second. Measured a real request (15,665
+    characters per search, 34,019 for two searches returning the same ten files) and proposed
+    ways to shrink it. Worked through the case of a file that itself says "shown above", and
+    found the worse case of a note pointing at a result withheld from a cloud model.
+  - Mistakes Amar caught:
+    - Asked "How do you install the model?", it downloaded `qwen3:8b` (5.2 GB) without asking.
+    - Gave instructions that set the model both in `.env` and with `--model`.
+    - Saved the resulting rule to Claude Code's memory folder, although agent rules belong in
+      `AGENTS.md`.
+    - Tried to list four screenshots when two were asked for.
+    - Claimed smaller search results wouldn't help and that sending more chunks per file was the
+      fix for the page 2 answer; both were wrong, since a bigger model is the fix and the cloud
+      model handled the same results.
+    - In the implementation, edited source files with Python scripts run through the shell,
+      then sent runs of three-line edits (up to seven in one file), each one a separate approval;
+      carried on after rejections that said to stop and wait; didn't say what was applied and
+      what wasn't; and, told to stop wasting time, kept reading files with half-applied changes
+      in the tree. The first item was written three times and each attempt was discarded. No
+      code from this part of the session reached the project.
+- **Human contribution:** chose a small model first to try local use; tested in the GUI on his
+  own documents rather than the suggested corpus test, and ran the diagnostic commands himself;
+  corrected both wrong claims about what would fix the local model's answers; had the two rules
+  (no downloads without permission, no agent memory) and the older memory entries moved into
+  `AGENTS.md`, then a third rule that files are edited with the Edit and Write tools, never
+  scripts; agreed to the first three ideas only and had the plan say so; rejected the scripted
+  and piecemeal edits, had them undone, and stopped the implementation to move it to a new
+  conversation with the plan saved in the handoff.
+- **Outcome:** [f694da8](https://github.com/amarz45/find-anything/commit/f694da8336a0c6657b5d19e7d8537e98cf070dfe)
+  (agent rules in `AGENTS.md`),
+  [c1b30f3](https://github.com/amarz45/find-anything/commit/c1b30f3f4ed2bd8f6ec1ea92a5b6db073ed19f7c)
+  (`TODO.md`: a local model can answer without searching). Uncommitted on `optimization`: the
+  editing rule in `AGENTS.md` and the plan in `docs/notes/handoff.md` ("Plan: smaller search
+  results"). `qwen3:8b` is installed in Ollama and works with the app. No code changed.
+

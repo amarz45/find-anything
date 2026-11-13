@@ -29,6 +29,7 @@ class ToolRegistryTest {
 
     ToolRegistry registry;
     ScriptedTool search;
+    final ShownPassages shownPassages = new ShownPassages(file -> false);
 
     @BeforeEach
     void setUp() {
@@ -50,7 +51,8 @@ class ToolRegistryTest {
     void executesAValidCallAndReturnsTheToolsResult() {
         Map<String, Object> arguments =
                 Map.of("query", "lease", "limit", 5, "file_type", "pdf", "names_only", false);
-        ToolResult result = registry.execute(new ToolCall("call-1", "search", arguments));
+        ToolResult result =
+                registry.execute(new ToolCall("call-1", "search", arguments), shownPassages);
         assertThat(result).isEqualTo(FOUND);
         assertThat(search.validated).containsExactly(arguments);
         assertThat(search.executed).containsExactly(arguments);
@@ -62,12 +64,15 @@ class ToolRegistryTest {
         arguments.put("query", "lease");
         arguments.put("limit", 5.0);
         arguments.put("file_type", null);
-        assertThat(registry.execute(new ToolCall(null, "search", arguments)).succeeded()).isTrue();
+        ToolResult result =
+                registry.execute(new ToolCall(null, "search", arguments), shownPassages);
+        assertThat(result.succeeded()).isTrue();
     }
 
     @Test
     void reportsAnUnknownToolWithTheNamesThatExist() {
-        ToolResult result = registry.execute(new ToolCall("c", "delete_file", Map.of()));
+        ToolResult result =
+                registry.execute(new ToolCall("c", "delete_file", Map.of()), shownPassages);
         assertThat(result.succeeded()).isFalse();
         assertThat(result.errorMessage())
                 .contains("no tool named \"delete_file\"")
@@ -82,7 +87,7 @@ class ToolRegistryTest {
         arguments.put("file_type", "xlsx");
         arguments.put("names_only", "yes");
         arguments.put("folder", "taxes");
-        ToolResult result = registry.execute(new ToolCall("c", "search", arguments));
+        ToolResult result = registry.execute(new ToolCall("c", "search", arguments), shownPassages);
         assertThat(result.succeeded()).isFalse();
         assertThat(result.errorMessage())
                 .startsWith("Invalid call to search: ")
@@ -94,15 +99,17 @@ class ToolRegistryTest {
         assertThat(search.validated).isEmpty();
         assertThat(search.executed).isEmpty();
 
-        assertThat(registry.execute(call(Map.of("query", 7))).errorMessage())
+        assertThat(registry.execute(call(Map.of("query", 7)), shownPassages).errorMessage())
                 .contains("Parameter \"query\" must be a string, but was 7.");
-        assertThat(registry.execute(call(Map.of("query", "x", "limit", 2.5))).errorMessage())
+        assertThat(
+                        registry.execute(call(Map.of("query", "x", "limit", 2.5)), shownPassages)
+                                .errorMessage())
                 .contains("Parameter \"limit\" must be a whole number, but was 2.5.");
     }
 
     @Test
     void returnsTheToolsOwnValidationErrorsWithoutExecuting() {
-        ToolResult result = registry.execute(call(Map.of("query", "bad")));
+        ToolResult result = registry.execute(call(Map.of("query", "bad")), shownPassages);
         assertThat(result.succeeded()).isFalse();
         assertThat(result.errorMessage())
                 .isEqualTo("Invalid call to search: The query \"bad\" isn't allowed.");
@@ -114,7 +121,7 @@ class ToolRegistryTest {
     void reportsAToolThatThrowsAsAFailure() {
         ToolRegistry failing = new ToolRegistry();
         failing.register(new ScriptedTool(SEARCH, new IllegalStateException("index closed")));
-        ToolResult result = failing.execute(call(Map.of("query", "lease")));
+        ToolResult result = failing.execute(call(Map.of("query", "lease")), shownPassages);
         assertThat(result.succeeded()).isFalse();
         assertThat(result.errorMessage())
                 .contains("The tool search failed")
@@ -127,9 +134,9 @@ class ToolRegistryTest {
         ToolCall invalid = call(Map.of());
         ToolCall unknown = new ToolCall("c", "delete_file", Map.of());
         assertThat(registry.getCallLog()).isEmpty();
-        registry.execute(valid);
-        registry.execute(invalid);
-        registry.execute(unknown);
+        registry.execute(valid, shownPassages);
+        registry.execute(invalid, shownPassages);
+        registry.execute(unknown, shownPassages);
         List<ToolCall> callLog = registry.getCallLog();
         assertThat(callLog).containsExactly(valid, invalid, unknown);
         assertThatThrownBy(() -> callLog.add(valid))

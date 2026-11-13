@@ -96,7 +96,9 @@ class ReadExcerptToolTest {
     }
 
     ToolResult read(Map<String, Object> arguments) {
-        return registry.execute(new ToolCall("call-1", ReadExcerptTool.NAME, arguments));
+        return registry.execute(
+                new ToolCall("call-1", ReadExcerptTool.NAME, arguments),
+                new ShownPassages(file -> false));
     }
 
     @Test

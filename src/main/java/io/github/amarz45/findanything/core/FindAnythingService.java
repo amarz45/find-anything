@@ -198,6 +198,7 @@ public final class FindAnythingService implements AutoCloseable {
                         new ResponseParser(),
                         new CitationVerifier(searchIndex),
                         searchIndex,
+                        folderPolicy,
                         MAX_AGENT_STEPS,
                         MAX_CONVERSATION_CHARS,
                         clock);

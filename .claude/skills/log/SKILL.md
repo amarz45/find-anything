@@ -16,9 +16,9 @@ Draft one log entry from this session. The user's arguments: $ARGUMENTS
     - For collaboration entries, the tool is "Claude Code" and the model is the one this session
       runs on. "AI contribution" describes what you generated, suggested or diagnosed, plainly,
       including mistakes the user caught.
-    - Write "Human contribution" as a short factual draft of what the user decided, reviewed,
-      corrected or rejected, and end it with "*(edit in your own words)*". Never invent their
-      reasoning.
+    - Write "Human contribution" as a short factual account of what the user decided, reviewed,
+      corrected or rejected. Never invent their reasoning, and never add a note asking them to
+      edit it.
     - Link commits as `[short hash](https://github.com/amarz45/find-anything/commit/<full hash>)`
       when there is one.
 4. Show the user the entry you added and the file it went into. Don't commit it.
