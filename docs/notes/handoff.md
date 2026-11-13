@@ -525,3 +525,38 @@ surprising.)*
     `TODO.md` items and Tier 2 in order (F05, F04, live watcher, F10) until the freeze. Still
     owed: the Ollama check; the test for the duplicated citation entries; a decision on the
     sensitive-file leak; finer withholding (only the local-only entries of a search result).
+- **2026-11-12 (Session 7: smaller search results, Claude Code):**
+  - Done, on branch `optimization` (3 code commits): the three ideas agreed in "Plan: smaller
+    search results" above, so that section's "nothing is implemented yet" is out of date. All
+    three are in `SearchTool`, each with an entry in `docs/logs/design-changes.md`. 271 tests.
+    1. A passage is given once per request (`ShownPassages`, passed through
+       `ToolRegistry.execute()` and `Tool.execute()`): a later search writes
+       `Best passage (page 1): already given above, in the results for "…".`
+    2. Files with the same `contentHash` share one entry, with `Same content at: <path>` lines.
+    3. The first three entries (`FULL_PASSAGES`) get whole passages; later ones get one line of
+       at most 200 characters (`PART_CHARS`) under `Part of the best passage`.
+  - Measured from the privacy log, on Amar's documents with the cloud model, same searches before
+    and after: "What's my cumulative GPA?" (two searches) went from 34,019 to 12,385 characters
+    in its last request (64% less); "Which version of my resume is the most recent one?" (one
+    search of 12 files) from 21,456 to 10,321 (52% less). Whether the answers stayed as good was
+    Amar's to judge; the log only shows what was sent.
+  - To check a run: `tail -n 1 <FINDANY_HOME>/privacy-log.jsonl | grep -o 'already given
+    above[^.]*\.'` prints the notes of the last request. Nothing shows them for a local model.
+  - Noticed, not done (ask before doing one):
+    - A part isn't recorded as given, so a second search sends the same parts again (seven of
+      them, about 1,400 characters, in the GPA run).
+    - The note is about 70 characters plus the query, so on a very short passage it saves
+      nothing; such a passage could come whole.
+    - The transcript's two files weren't joined in the GPA run, probably the same text in
+      different bytes (unchecked); joining by extracted text would catch that.
+    - The result's first line counts files, not entries, so "2 files" can have one entry.
+    - `--verbose` could say how many passages a search left out.
+  - Discussed, not agreed: a character budget per result (recommendation: skip; lowering
+    `FULL_PASSAGES` to 2 gives nearly the same); embeddings (F05) would allow five results and
+    smaller chunks, roughly 3,000 characters per result by arithmetic, unmeasured.
+  - Local model: only `qwen3:8b` was installed; Amar started pulling `qwen3:14b` (9.3 GB) on
+    2026-11-12. Next: ask the GPA and resume questions with it and read `ollama ps` for the
+    loaded size and any spill to the CPU. Requests are now about 2,600 to 3,100 tokens (at four
+    characters per token) against `OLLAMA_NUM_CTX` of 16,384, which is still a placeholder.
+  - Next: merge the `optimization` pull request (no squash), the 14B check, then `TODO.md` items
+    and Tier 2 until the freeze on Nov 14.
