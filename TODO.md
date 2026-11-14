@@ -20,6 +20,47 @@ report describes.
   needs), so one match on page 3 of a long PDF means scrolling past pages 1 and 2. A
   `--context <lines>` or `--matches-only` option would print just the lines around each match.
 
+## Semantic search
+
+- **Deal with matches that are just over or just under the similarity floor.** One floor
+  (`SearchEngine.MIN_SIMILARITY`, 0.62) decides whether a passage or a file name matches a query
+  by meaning. Seen on 2026-11-14: "my CV" also lists `dentist.txt` on the test corpus (its name
+  scores 0.63), and on Amar's documents "marks" didn't list his transcript (not measured;
+  presumably under the floor). A better version would measure names and passages separately on
+  more data and give each its own floor, or drop hits that are far below the query's best hit.
+  It changes the floor that the design-changes log records, so it needs an entry.
+- **Rank a file higher when its name and its text both match by meaning.** `vectorSearch()` puts
+  name hits and text hits in one list by similarity, so a file found both ways is placed by its
+  better hit and gets nothing for the other. A better version would give `fuseRankings()` the
+  names as a third list. The design's `fuseRankings()` takes two lists, so it needs an entry.
+- **Reuse the vectors of a copied or renamed file.** A copy's entries start without vectors, so
+  its text is embedded again (about 27 passages a second on the development machine). The index
+  can now read a file's vectors back, so `Indexer.indexFile()` could take them from another file
+  with the same content hash. This is the part of the postponed `ContentStore` that matters for
+  speed; it needs an entry.
+- **Add a file's name vector in the same step as its text vectors.** Lucene can't add a vector to
+  an existing entry, so a file's entries are stored three times: when it is indexed, when its
+  passages are embedded, and when its name is. For a file with hundreds of passages the third
+  time is wasted work (not measured). No design change.
+- **Notice that the embedding model changed.** Vectors from two models can't be compared. Today
+  a model with vectors of another length turns semantic search off with a warning, and one with
+  the same length would be mixed in silently; either way `findany index rebuild` is the fix. A
+  better version would store the model's name in the index and embed everything again when it
+  differs. No design change.
+- **Embed faster.** The model runs on the processor at about 27 passages a second (16 cores), and
+  neither more calling threads nor one ONNX Runtime thread per text made it faster (see the
+  design changes). What could: the quantized build of the model (`…-bge-small-en-v15-q`, slightly
+  less accurate), or a graphics card. ONNX Runtime's Java library is published for the processor
+  and for CUDA only, and LangChain4j's model class doesn't let the session be configured, so a
+  graphics card means building the session ourselves, and an AMD card a custom ONNX Runtime
+  build. Asked about by Amar on 2026-11-14 out of curiosity. No design change.
+- **Don't load the model for every CLI search.** A CLI process loads the model when its command
+  embeds something, about a second each time (2.1 seconds for a search against 1.1 with
+  `--keyword-only`). The GUI loads it once. Avoiding it would take a long-running process that
+  the CLI asks, which the design doesn't have.
+- **Intel Macs get keyword search only.** The tokenizer library has no native file for them, so
+  the model fails to load there and the app says so. Not checked on one.
+
 ## Conversation history
 
 - **Handle a latest exchange that is too long by itself.** `Conversation.trimToFit()` drops whole

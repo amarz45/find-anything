@@ -2,6 +2,8 @@ package io.github.amarz45.findanything.indexing;
 
 import io.github.amarz45.findanything.config.IndexConfig;
 import io.github.amarz45.findanything.config.SearchFolder;
+import io.github.amarz45.findanything.embedding.EmbeddingException;
+import io.github.amarz45.findanything.embedding.EmbeddingModel;
 import io.github.amarz45.findanything.storage.Chunk;
 import io.github.amarz45.findanything.storage.ExtractionStatus;
 import io.github.amarz45.findanything.storage.IndexMode;
@@ -23,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -38,12 +41,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The single writer of the index (F02, F03). Only started in {@link IndexMode#WRITER} mode. Its
- * worker thread takes paths from the {@link ChangeQueue}: a path that no longer exists is removed,
- * a folder is rescanned, and a file is extracted, chunked and stored. It commits when the queue
- * empties or enough files changed, then tells its {@link IndexStatusListener}s (Observer; they are
- * called on the worker thread). {@link #requestUpdate} only offers a path to the queue, so it
- * returns immediately and is safe from any thread.
+ * The single writer of the index (F02, F03, F05). Only started in {@link IndexMode#WRITER} mode.
+ * Its worker thread takes paths from the {@link ChangeQueue}: a path that no longer exists is
+ * removed, a folder is rescanned, and a file is extracted, chunked and stored (phase 1). Whenever
+ * no path is waiting, it embeds the chunks that have no vectors yet, a batch at a time (phase 2),
+ * so a file is found by keywords first and by meaning a little later. It commits when the queue
+ * empties, when enough files changed and after each embedded batch, then tells its {@link
+ * IndexStatusListener}s (Observer; they are called on the worker thread). {@link #requestUpdate}
+ * only offers a path to the queue, so it returns immediately and is safe from any thread.
  */
 public final class Indexer {
 
@@ -55,6 +60,24 @@ public final class Indexer {
     /** A file that can't be read (locked) is retried this many times, then marked failed. */
     static final int MAX_READ_RETRIES = 3;
 
+    /**
+     * Phase 2 commits and looks at the queue again once about this many chunks are embedded, so a
+     * file that changed meanwhile doesn't wait long and the status shows the progress.
+     */
+    static final int EMBED_CHUNKS_PER_BATCH = 64;
+
+    /** How many contents phase 2 asks the index for at a time. */
+    static final int EMBED_CONTENTS_PER_BATCH = 16;
+
+    /** Texts handed to the model in one call; a stop request is noticed between calls. */
+    static final int EMBED_TEXTS_PER_CALL = 16;
+
+    /** File names embedded per pass of phase 2; a name takes a few milliseconds. */
+    static final int EMBED_NAMES_PER_BATCH = 64;
+
+    /** After this many contents in a row fail to embed, phase 2 is off until the next start. */
+    static final int MAX_EMBEDDING_FAILURES = 3;
+
     /** How long the worker waits for a path before checking whether it was asked to stop. */
     private static final Duration POLL = Duration.ofMillis(200);
 
@@ -63,28 +86,35 @@ public final class Indexer {
     private final TextExtractor textExtractor;
     private final Chunker chunker;
     private final SearchIndex searchIndex;
+    private final EmbeddingModel embeddingModel;
     private final List<IndexStatusListener> statusListeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean rebuildRequested = new AtomicBoolean();
     private final AtomicLong requested = new AtomicLong(); // requests made so far
     private volatile long completedRequests; // requests the worker knows it has finished
     private final Map<Path, Integer> readRetries = new HashMap<>(); // worker thread only
+    private final Set<String> unembeddedContent = new HashSet<>(); // worker only: failed this run
+    private final Set<Path> unnamedFiles = new HashSet<>(); // worker only: names that failed
     private Thread workerThread;
     private volatile IndexerState state = IndexerState.OPENING;
     private volatile boolean stopRequested;
     private int uncommittedChanges; // worker thread only
     private boolean reportedPending; // worker thread only: the last status sent had work pending
+    private int embeddingFailures; // worker thread only: contents that failed in a row
+    private boolean embeddingOff; // worker thread only: too many failures, no more tries this run
 
     public Indexer(
             IndexConfig indexConfig,
             ChangeQueue changeQueue,
             TextExtractor textExtractor,
             Chunker chunker,
-            SearchIndex searchIndex) {
+            SearchIndex searchIndex,
+            EmbeddingModel embeddingModel) {
         this.indexConfig = Objects.requireNonNull(indexConfig, "indexConfig");
         this.changeQueue = Objects.requireNonNull(changeQueue, "changeQueue");
         this.textExtractor = Objects.requireNonNull(textExtractor, "textExtractor");
         this.chunker = Objects.requireNonNull(chunker, "chunker");
         this.searchIndex = Objects.requireNonNull(searchIndex, "searchIndex");
+        this.embeddingModel = Objects.requireNonNull(embeddingModel, "embeddingModel");
     }
 
     /** Starts the worker thread. The index must be open in WRITER mode. */
@@ -138,11 +168,18 @@ public final class Indexer {
             log.error("Could not count failed files: {}", e.getMessage());
             failed = 0;
         }
+        int withoutEmbeddings;
+        try {
+            withoutEmbeddings = searchIndex.countChunksWithoutEmbeddings();
+        } catch (IOException e) {
+            log.error("Could not count the chunks without embeddings: {}", e.getMessage());
+            withoutEmbeddings = 0;
+        }
         int pending = changeQueue.size();
         if (pending == 0 && completedRequests < requested.get()) {
             pending = 1; // taken from the queue, being handled right now
         }
-        return new IndexStatus(state, pending, failed, 0);
+        return new IndexStatus(state, pending, failed, withoutEmbeddings);
     }
 
     public void addStatusListener(IndexStatusListener listener) {
@@ -157,9 +194,10 @@ public final class Indexer {
 
     private void runLoop() {
         try {
+            boolean embedded = false; // the last pass embedded a batch, so there may be more
             while (!stopRequested) {
                 long seenRequests = requested.get(); // read before taking, see getStatus()
-                Path path = changeQueue.takeReady(POLL);
+                Path path = changeQueue.takeReady(embedded ? Duration.ZERO : POLL);
                 if (rebuildRequested.getAndSet(false)) {
                     dropEverything(); // before rescanning the folders rebuild() just offered
                 }
@@ -171,8 +209,13 @@ public final class Indexer {
                 } else {
                     commitIfNeeded();
                 }
-                if (changeQueue.size() == 0 && !embedNextBatch()) {
+                embedded = false;
+                if (changeQueue.size() == 0) {
+                    // The files asked for so far are indexed; embedding them is not a pending file.
                     completedRequests = Math.max(completedRequests, seenRequests);
+                    embedded = embedNextBatch();
+                }
+                if (changeQueue.size() == 0 && !embedded) {
                     boolean wasIdle = state == IndexerState.IDLE;
                     state = IndexerState.IDLE;
                     // A request made while the worker was waiting counts as finished only on the
@@ -182,7 +225,7 @@ public final class Indexer {
                     if (path != null || !wasIdle || caughtUp) {
                         notifyStatus();
                     }
-                } else if (path != null) {
+                } else if (path != null || embedded) {
                     notifyStatus();
                 }
             }
@@ -370,11 +413,159 @@ public final class Indexer {
     }
 
     /**
-     * Phase 2: embeds chunks that have no vectors yet. There is no embedding model until F05, so
-     * there is never anything to do.
+     * Phase 2 (F05): embeds the next contents whose chunks have no vectors yet, or, once every
+     * chunk has one, the next file names that have none, and commits them. Called only when no path
+     * is waiting, and it stops early when one arrives.
+     *
+     * @return true when it embedded something, so there may be more to embed
      */
     private boolean embedNextBatch() {
-        return false;
+        if (embeddingOff) {
+            return false;
+        }
+        int embedded = embedContents();
+        if (embedded == 0 && !embeddingOff && !stopRequested && changeQueue.size() == 0) {
+            embedded = embedNames();
+        }
+        commitIfNeeded();
+        return embedded > 0;
+    }
+
+    /**
+     * Embeds the text of the next contents without vectors.
+     *
+     * @return the number of chunks embedded
+     */
+    private int embedContents() {
+        List<String> contentHashes;
+        try {
+            // Contents that failed earlier in this run are still without vectors, so ask for
+            // that many more and leave them out.
+            contentHashes =
+                    new ArrayList<>(
+                            searchIndex.findContentWithoutEmbeddings(
+                                    EMBED_CONTENTS_PER_BATCH + unembeddedContent.size()));
+        } catch (IOException e) {
+            log.error("Could not look for chunks without embeddings: {}", e.getMessage());
+            return 0;
+        }
+        contentHashes.removeAll(unembeddedContent);
+        if (contentHashes.isEmpty()) {
+            return 0;
+        }
+        showEmbedding();
+        int embeddedChunks = 0;
+        for (String contentHash : contentHashes) {
+            if (stopRequested
+                    || embeddingOff
+                    || changeQueue.size() > 0
+                    || embeddedChunks >= EMBED_CHUNKS_PER_BATCH) {
+                break;
+            }
+            embeddedChunks += embedContent(contentHash);
+        }
+        return embeddedChunks;
+    }
+
+    /**
+     * Embeds the names of the next files without a name vector, so a file is also found by what its
+     * name means. A name is embedded with its folder's, as in {@code Résumé/resume.pdf}.
+     *
+     * @return the number of names embedded
+     */
+    private int embedNames() {
+        List<Path> files;
+        try {
+            files =
+                    new ArrayList<>(
+                            searchIndex.findFilesWithoutNameEmbeddings(
+                                    EMBED_NAMES_PER_BATCH + unnamedFiles.size()));
+        } catch (IOException e) {
+            log.error("Could not look for file names without embeddings: {}", e.getMessage());
+            return 0;
+        }
+        files.removeAll(unnamedFiles);
+        if (files.isEmpty()) {
+            return 0;
+        }
+        showEmbedding();
+        try {
+            List<float[]> vectors =
+                    embeddingModel.embed(files.stream().map(Indexer::nameText).toList());
+            for (int i = 0; i < files.size(); i++) {
+                searchIndex.addNameEmbedding(files.get(i), vectors.get(i));
+                uncommittedChanges++;
+            }
+            embeddingFailures = 0;
+            return files.size();
+        } catch (EmbeddingException | IOException | IllegalArgumentException e) {
+            unnamedFiles.addAll(files);
+            embeddingFailed(e, "some files' names");
+            return 0;
+        }
+    }
+
+    /** What is embedded for a file's name: its folder's name and its own. */
+    static String nameText(Path file) {
+        Path folder = file.getParent() == null ? null : file.getParent().getFileName();
+        String name = file.getFileName().toString();
+        return folder == null ? name : folder + "/" + name;
+    }
+
+    private void showEmbedding() {
+        if (state != IndexerState.EMBEDDING) {
+            state = IndexerState.EMBEDDING;
+            notifyStatus();
+        }
+    }
+
+    /** Counts a failure of phase 2; after too many in a row, phase 2 is off for this run. */
+    private void embeddingFailed(Exception failure, String what) {
+        embeddingFailures++;
+        if (embeddingFailures < MAX_EMBEDDING_FAILURES) {
+            log.warn(
+                    "Could not embed {}; keyword search still finds the files: {}",
+                    what,
+                    failure.getMessage());
+        } else {
+            embeddingOff = true;
+            log.warn(
+                    "Embedding failed {} times in a row and is off until the next start; files"
+                            + " without embeddings are found by keywords only. The last failure:"
+                            + " {}",
+                    MAX_EMBEDDING_FAILURES,
+                    failure.getMessage());
+        }
+    }
+
+    /**
+     * Embeds one content's chunks and stores the vectors on every file with that content. A content
+     * that fails is left for the next start, and its files are still found by keywords.
+     *
+     * @return the number of chunks embedded; 0 when the content failed or a stop was requested
+     */
+    private int embedContent(String contentHash) {
+        try {
+            List<Chunk> chunks = searchIndex.getChunksOfContent(contentHash);
+            List<float[]> vectors = new ArrayList<>();
+            for (int from = 0; from < chunks.size(); from += EMBED_TEXTS_PER_CALL) {
+                if (stopRequested) {
+                    return 0; // nothing is stored for a content until all of it is embedded
+                }
+                int to = Math.min(from + EMBED_TEXTS_PER_CALL, chunks.size());
+                vectors.addAll(
+                        embeddingModel.embed(
+                                chunks.subList(from, to).stream().map(Chunk::text).toList()));
+            }
+            searchIndex.addEmbeddings(contentHash, vectors);
+            uncommittedChanges++;
+            embeddingFailures = 0;
+            return chunks.size();
+        } catch (EmbeddingException | IOException | IllegalArgumentException e) {
+            unembeddedContent.add(contentHash);
+            embeddingFailed(e, "a file's text");
+            return 0;
+        }
     }
 
     private void notifyStatus() {

@@ -18,6 +18,8 @@ import io.github.amarz45.findanything.config.InvalidPatternException;
 import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.config.SettingsStore;
+import io.github.amarz45.findanything.embedding.EmbeddingException;
+import io.github.amarz45.findanything.embedding.EmbeddingModel;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.IndexStatus;
@@ -128,6 +130,7 @@ public final class FindAnythingService implements AutoCloseable {
     private final ConversationStore conversationStore;
     private final TextExtractor textExtractor;
     private final Chunker chunker;
+    private final EmbeddingModel embeddingModel;
     private final ChangeQueue changeQueue;
     private final Path indexDirectory;
     private final ExecutorService backgroundExecutor;
@@ -141,6 +144,7 @@ public final class FindAnythingService implements AutoCloseable {
     private AgentController agentController;
     private ScheduledExecutorService refresher; // only in READ_ONLY mode
     private ModelSettings modelSettings; // loaded on first use; the model for new conversations
+    private boolean semanticSearchWanted = true; // false after the CLI's --keyword-only
 
     public FindAnythingService(
             IndexConfig indexConfig,
@@ -152,6 +156,7 @@ public final class FindAnythingService implements AutoCloseable {
             ConversationStore conversationStore,
             TextExtractor textExtractor,
             Chunker chunker,
+            EmbeddingModel embeddingModel,
             ChangeQueue changeQueue,
             Path indexDirectory,
             ExecutorService backgroundExecutor,
@@ -165,6 +170,7 @@ public final class FindAnythingService implements AutoCloseable {
         this.conversationStore = Objects.requireNonNull(conversationStore, "conversationStore");
         this.textExtractor = Objects.requireNonNull(textExtractor, "textExtractor");
         this.chunker = Objects.requireNonNull(chunker, "chunker");
+        this.embeddingModel = Objects.requireNonNull(embeddingModel, "embeddingModel");
         this.changeQueue = Objects.requireNonNull(changeQueue, "changeQueue");
         this.indexDirectory = Objects.requireNonNull(indexDirectory, "indexDirectory");
         this.backgroundExecutor = Objects.requireNonNull(backgroundExecutor, "backgroundExecutor");
@@ -187,7 +193,8 @@ public final class FindAnythingService implements AutoCloseable {
         }
         searchIndex = SearchIndex.open(indexDirectory);
         indexMode = searchIndex.getMode();
-        searchEngine = new SearchEngine(searchIndex, indexConfig);
+        searchEngine = new SearchEngine(searchIndex, indexConfig, embeddingModel);
+        searchEngine.setSemanticSearchEnabled(semanticSearchWanted);
         ToolRegistry toolRegistry = new ToolRegistry();
         toolRegistry.register(new SearchTool(searchEngine));
         toolRegistry.register(new ReadExcerptTool(searchIndex, indexConfig, MAX_EXCERPT_CHARS));
@@ -203,7 +210,14 @@ public final class FindAnythingService implements AutoCloseable {
                         MAX_CONVERSATION_CHARS,
                         clock);
         if (indexMode == IndexMode.WRITER) {
-            indexer = new Indexer(indexConfig, changeQueue, textExtractor, chunker, searchIndex);
+            indexer =
+                    new Indexer(
+                            indexConfig,
+                            changeQueue,
+                            textExtractor,
+                            chunker,
+                            searchIndex,
+                            embeddingModel);
             statusListeners.forEach(indexer::addStatusListener);
             indexer.start();
             for (SearchFolder folder : indexConfig.getSearchFolders()) {
@@ -399,6 +413,53 @@ public final class FindAnythingService implements AutoCloseable {
 
     // ------------------------------------------------------------------ search and preview (F06,
     // F11)
+
+    /**
+     * Turns semantic search (F05) on or off for every later search, the agent's included. It is on
+     * unless this turns it off, as the CLI's {@code --keyword-only} does. May be called before or
+     * after {@link #open}.
+     */
+    public synchronized void setSemanticSearchEnabled(boolean enabled) {
+        semanticSearchWanted = enabled;
+        if (searchEngine != null) {
+            searchEngine.setSemanticSearchEnabled(enabled);
+        }
+    }
+
+    /**
+     * Whether searches also match by meaning. False once it was turned off, and also once the
+     * embedding model has failed: the search engine then goes on with keywords only.
+     */
+    public synchronized boolean isSemanticSearchEnabled() {
+        return searchEngine != null ? searchEngine.isSemanticSearchEnabled() : semanticSearchWanted;
+    }
+
+    /**
+     * Loads the embedding model on a background thread, so the first search by meaning doesn't wait
+     * for it (about a second). The GUI calls this at startup; a CLI command loads the model only
+     * when it needs it. If the model can't be loaded, semantic search is turned off with a warning
+     * in the log, and search goes on with keywords only.
+     *
+     * @return whether searches match by meaning afterwards
+     */
+    public CompletableFuture<Boolean> loadEmbeddingModel() {
+        requireOpen();
+        return supply(
+                () -> {
+                    if (!isSemanticSearchEnabled()) {
+                        return false;
+                    }
+                    try {
+                        embeddingModel.embed(List.of("load the model"));
+                    } catch (EmbeddingException e) {
+                        log.warn(
+                                "Semantic search is unavailable, so search uses keywords only: {}",
+                                e.getMessage());
+                        setSemanticSearchEnabled(false);
+                    }
+                    return isSemanticSearchEnabled();
+                });
+    }
 
     /** Searches with the default result limit. */
     public CompletableFuture<List<SearchResult>> search(String query, SearchFilters searchFilters) {
@@ -642,7 +703,17 @@ public final class FindAnythingService implements AutoCloseable {
         if (worker != null) {
             return worker.getStatus();
         }
-        return new IndexStatus(IndexerState.READ_ONLY, 0, countFailed(index), 0);
+        return new IndexStatus(
+                IndexerState.READ_ONLY, 0, countFailed(index), countWithoutEmbeddings(index));
+    }
+
+    private static int countWithoutEmbeddings(SearchIndex index) {
+        try {
+            return index.countChunksWithoutEmbeddings();
+        } catch (IOException e) {
+            log.error("Could not count the chunks without embeddings: {}", e.getMessage());
+            return 0;
+        }
     }
 
     private static int countFailed(SearchIndex index) {

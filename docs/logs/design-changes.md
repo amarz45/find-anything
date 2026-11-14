@@ -783,8 +783,211 @@ Diagrams updated:
   Not checked with the cloud model. Not solved: a model that declines when it should search.
   Diagrams updated: not yet (SD03 at the freeze).
 
+### The embedding model: which one, when it loads, and how it fails (2026-11-14, Tier 2)
+- **Original design:** `LocalEmbeddingModel` adapts "an in-process ONNX model" to
+  `EmbeddingModel` and has one field, `modelFile: Path`. The model was to be chosen by
+  benchmarking. A model that fails to load is found at startup, and the facade turns semantic
+  search off. `EmbeddingModel` has `embed()` and `getDimension()` and names no exception.
+- **Implemented change:**
+  - **The model** is BAAI's bge-small-en-v1.5 (384 numbers per vector, English), from
+    LangChain4j's `langchain4j-embeddings-bge-small-en-v15`. It is inside that jar, so there is no
+    `modelFile`. `LocalEmbeddingModel` takes `nativeLibraryFolder: Path` instead: where the
+    tokenizer library unpacks its native code, a folder under the app's data folder.
+  - **Loading** happens on the first `embed()` call, not at startup. A failed load is remembered
+    and every later call fails at once.
+  - **Failure** is the new unchecked `EmbeddingException`, for a model that can't be loaded and
+    for a text that can't be embedded (a blank one).
+  - **Two process-wide properties** are set before the load, because the tokenizer library
+    (DJL) has no other configuration: `DJL_CACHE_DIR`, and `ai.djl.offline`.
+  - **No thread pool.** A call's texts are embedded one after another on the calling thread.
+- **Reason:**
+  - The model was chosen without a benchmark of candidates: of the four small models the
+    library offers, it is the one whose input limit (510 tokens) holds a whole 1,500-character
+    chunk, so `Chunker` stays as it is.
+  - Loading takes about 0.9 seconds (measured), which a command such as `findany show` would pay
+    for nothing. `embed()` can fail on any call anyway, so its callers need a fallback either
+    way, and a failed load is one more case of it.
+  - Left alone, the tokenizer library unpacks into `~/.djl.ai`, and on a computer with CUDA it
+    downloads a different build of itself.
+  - ONNX Runtime already spreads one text's computation over the processor's cores. Measured on
+    a Ryzen 9 5900XT (16 cores) with 256 chunks of 1,500 characters: 27 chunks a second one text
+    at a time, 29 with 4 texts at once, 20 with 32 (the library's default). With ONNX Runtime
+    held to one thread per text, 16 callers gave 26. No setting was meaningfully faster, so the
+    one without a number of ours was kept.
+- **Impact:** F05; `EmbeddingModel`, `LocalEmbeddingModel`, the new `EmbeddingException`. The
+  run-time class path grows by about 180 MB (the model, ONNX Runtime, the tokenizer). An Intel
+  Mac has no native tokenizer library in the jar, so it will get keyword search with the warning.
+  Nothing uses the model yet. Diagrams updated: not yet (cd02 at the freeze).
+
+### Vectors in `SearchIndex`, with no `ContentStore` (2026-11-14, Tier 2)
+- **Original design:** `SearchIndex` has `addEmbeddings(contentHash, vectors)`,
+  `findContentWithoutEmbeddings(limit)` and `vectorSearch(queryVector, searchFilters, limit)`. The
+  chunks to embed come from `ContentStore.get()`, and `addEmbeddings()` writes to both stores.
+  Nothing says where `IndexStatus.chunksWithoutEmbeddings` is counted.
+- **Implemented change:** the three methods as designed, on the index alone, plus two new ones:
+  - `getChunksOfContent(contentHash)`: the chunks of one indexed file with that hash whose chunks
+    have no vectors. It stands in for `ContentStore.get()`.
+  - `countChunksWithoutEmbeddings()`: the number for the status.
+
+  What the design left open:
+  - A chunk's vector is kept on the chunk's own index entry, and `put()` stores the vector of a
+    chunk that has one. Lucene can't add a vector to an existing entry, so `addEmbeddings()`
+    stores each file with that content again, chunks and vectors together. It works from the
+    last committed snapshot.
+  - Two files can have the same hash and different chunks, when one extraction was cut short.
+    `addEmbeddings()` gives the vectors only to the files with as many chunks as there are
+    vectors; the other file's chunks are handed out by `getChunksOfContent()` next.
+  - "Without embeddings" is worked out from the entries (a chunk, and no vector), not from a
+    mark written at indexing time, so an index made before F05 is embedded with no rebuild.
+  - A vector hit's score is the cosine similarity (1 for the same direction, 0 for unrelated).
+  - Chunks read back from the index carry no vector: vectors are searched, never handed out.
+- **Reason:** `ContentStore` is postponed (see its entry), and the index already holds every
+  chunk's text and each file's content hash.
+- **Impact:** F05; `SearchIndex`. A copied or renamed file is embedded again, because the copy's
+  entries start without vectors and vectors can't be read back for reuse. Nothing calls these
+  methods yet. Diagrams updated: not yet (cd02 at the freeze).
+
+### The indexer's embedding phase: batches, failures, and what the CLI waits for (2026-11-14, Tier 2)
+- **Original design:** when `takeReady()` returns nothing, `Indexer.embedNextBatch()` takes
+  content hashes from `findContentWithoutEmbeddings()`, loads their chunks from `ContentStore`,
+  embeds them and calls `addEmbeddings()`. Files not embedded yet are found by keywords, and the
+  status shows that embedding is in progress. The design gives no batch size and doesn't say what
+  happens when a content can't be embedded.
+- **Implemented change:** `embedNextBatch()` as designed, with the chunks from
+  `SearchIndex.getChunksOfContent()`. `Indexer` and `FindAnythingService` take the
+  `EmbeddingModel` in their constructors. What the design left open:
+  - **Batches.** A pass embeds whole contents until about 64 chunks are done
+    (`EMBED_CHUNKS_PER_BATCH`), commits, tells the listeners, and looks at the queue again, so a
+    file that changed meanwhile is indexed first. The model gets 16 texts per call
+    (`EMBED_TEXTS_PER_CALL`), and a stop request is noticed between calls; a content cut off by a
+    stop is embedded from its start on the next run.
+  - **Failures.** A content that can't be embedded, or whose vectors can't be stored, is logged
+    and left alone for the rest of the run. After three contents in a row
+    (`MAX_EMBEDDING_FAILURES`), embedding is off until the next start, with one warning. Either
+    way the status reaches "up to date" with `chunksWithoutEmbeddings` above zero, and the files
+    are found by keywords.
+  - **The status.** `IndexStatus.chunksWithoutEmbeddings` is now the real number, in the writer
+    and in a read-only process. A request for a file stops counting as pending when the queue is
+    empty, not when embedding ends, so `pendingFiles` is 0 while the state is `EMBEDDING`.
+  - **The CLI waits for embedding.** `IndexStatus.isUpToDate()` is false in the `EMBEDDING`
+    state, so a CLI command that waits for the index also waits for the vectors. A CLI process
+    ends with its command; if it didn't wait, a folder used only from the CLI would never be
+    embedded. The GUI searches meanwhile, as designed.
+  - **`SearchIndex.put()` is one step** (delete and add together), so a file whose new entries
+    can't be stored keeps its old ones. Found while writing the failure handling: a vector of
+    another length than the index's would otherwise have removed the file's entries.
+- **Reason:** the batch sizes come from the measured speed (about 27 chunks a second on the
+  development machine, so a batch is two to three seconds). Three failures in a row means the
+  model itself is broken (a load failure fails every content), and one warning says so better
+  than one per file.
+- **Impact:** F03, F05; `Indexer`, `FindAnythingService`, `CliApp.createService()`,
+  `SearchIndex.put()`. New test double `ScriptedEmbeddingModel`. Checked with the real model on
+  `testdata/corpus` in a scratch data folder: `findany folders add` indexed and embedded the 23
+  files in 16 seconds. Search doesn't use the vectors yet. Diagrams updated: not yet (cd03, SD01
+  at the freeze).
+
+### Hybrid search: a similarity floor, and who turns semantic search off (2026-11-14, Tier 2)
+- **Original design:** `SearchEngine.search()` embeds the query, calls `vectorSearch()` and merges
+  the semantic hits with the keyword hits in `fuseRankings()`. If the model fails to load at
+  startup, or the CLI gets `--keyword-only`, the facade calls
+  `SearchEngine.setSemanticSearchEnabled(false)`. F05's example: "CV" finds a file that only says
+  "résumé". No similarity floor is mentioned, and the facade has no method for the switch.
+- **Implemented change:**
+  - `SearchEngine` takes the `EmbeddingModel` and does what the design says. The facade turns
+    semantic search on in `open()`, so the agent's `SearchTool` gets hybrid results too.
+  - **A floor.** A chunk is a semantic match only at a cosine similarity of 0.62 or more
+    (`SearchEngine.MIN_SIMILARITY`).
+  - **The engine turns itself off.** The model loads on first use (see "The embedding model"),
+    so a failure shows up inside a search. `SearchEngine` then logs one warning, turns semantic
+    search off and returns the keyword results; later searches don't ask the model again. The
+    same happens when the index's vectors have another length than the model's.
+  - **The facade** gets `setSemanticSearchEnabled(enabled)` and `isSemanticSearchEnabled()`.
+    `findany search --keyword-only` calls the first for that one search.
+  - **No query prefix.** The model's authors recommend putting "Represent this sentence for
+    searching relevant passages: " before a query. It isn't used.
+- **Reason:** vector search always returns the nearest chunks, however far, so without a floor
+  every query lists unrelated files and "No results" never appears. Measured with the real model
+  on `testdata/corpus` (56 queries, the nearest chunk's similarity):
+  - 25 queries about things the corpus doesn't hold: 0.49 to 0.61, except the one-letter query
+    "a" (0.64).
+  - 31 queries about things it holds: 25 scored 0.63 to 0.90 ("tooth doctor" finds
+    `dentist.txt` at 0.71, "spending plan" the budget at 0.70, "groceries" the grocery list at
+    0.73).
+  - The other 6 scored 0.56 to 0.60, no higher than nonsense, and for most of them the right
+    file wasn't the nearest either. **F05's own example is one of them:** "CV" and "my CV"
+    reach the résumé at 0.56 to 0.57, and "curriculum vitae" doesn't have it in the nearest
+    four. With this model, "CV" does not find the résumé.
+  - With the prefix (tried on 25 of the queries), most scores in both groups were a few
+    hundredths lower and the groups overlapped as much; "CV" stayed at 0.57.
+- **Impact:** F05, F06, F07; `SearchEngine`, `FindAnythingService`, `CliApp`. A search that
+  embeds its query takes about a second longer in the CLI (the model's load): 2.1 seconds
+  against 1.1 with `--keyword-only`, on `testdata/corpus`. Checked by Amar the same day: the
+  agent with hybrid results, on his own documents and with the "tooth doctor" question; he
+  reported no problem. Diagrams updated: not yet (cd01, cd04, SD02 at the freeze).
+
+### File names are embedded too, so "CV" finds `resume.pdf` (2026-11-14, Tier 2)
+- **Original design:** only chunk text is embedded. A file's name is matched by keywords.
+- **Implemented change:** every indexed file also gets a vector for its name, written with its
+  folder's name, as in `Résumé/resume.pdf` (`Indexer.nameText()`).
+  - **`SearchIndex`** keeps it on the file's first entry. Two new methods:
+    `findFilesWithoutNameEmbeddings(limit)` and `addNameEmbedding(file, vector)`.
+    `addEmbeddings()` keeps a file's name vector, and `addNameEmbedding()` keeps the chunks'
+    vectors; for that, the index now reads a file's vectors back when it stores the file again.
+    `put()` stores a file without a name vector, so a changed file's name is embedded again.
+  - **`vectorSearch()`** looks up the nearest chunk texts and the nearest names with the one
+    query vector and the same filters, and returns one list, nearest first. A file found by its
+    name comes with its first chunk (none for a file without text), as a keyword match on the
+    name does. An entry found both ways is one hit with the higher similarity. The names go
+    through the same floor (0.62) in `SearchEngine`, which is unchanged.
+  - **`Indexer.embedNextBatch()`** embeds names once no chunk is left to embed, 64 per pass
+    (`EMBED_NAMES_PER_BATCH`), with the same failure handling as the texts.
+    `IndexStatus.chunksWithoutEmbeddings` still counts chunks only.
+- **Reason:** Amar searched his own documents for "cv" and got one file, not his résumé files;
+  the hybrid-search entry above records the same on the test corpus. A résumé rarely says what
+  it is in its text, but its name does. Measured with the model (cosine similarity to the query
+  "cv"): `Résumé/resume.pdf` 0.68, `Résumé/template.typ` 0.64,
+  `work/resume-jordan-rivera.docx` 0.64, against 0.45 to 0.60 for eleven other names. The
+  name must be embedded on its own: put in front of a résumé's text, the two together scored
+  0.60, under the floor. Written as it is (`folder/name.ext`), a name scored as well as or better
+  than with the punctuation and the extension removed.
+- **Impact:** F05, F06; `SearchIndex`, `Indexer`. Checked on `testdata/corpus` with the real
+  model: "cv", "my CV" and "curriculum vitae" each put `resume-jordan-rivera.docx` first, which
+  makes F05's example work; "picture" finds `photo.png`, a file with no text; nonsense queries
+  still find nothing. An index made before this change got its 23 name vectors on the next
+  start, with no rebuild. Seen and not acted on: a name can pass the floor by a little without
+  being related ("my CV" also lists `dentist.txt`, second). Diagrams updated: not yet (cd02,
+  cd03, SD01, SD02 at the freeze).
+
+### Embedding in the status, the warning, and loading the model at GUI startup (2026-11-14, Tier 2)
+- **Original design:** the status indicator shows that embedding is in progress. When the model
+  fails to load, search falls back to keywords "with a warning". The facade has no method for
+  loading the model, and the design doesn't word the status or the warning.
+- **Implemented change:**
+  - **GUI status** (`MainWindow.statusText()`): "Embedding… 120 passages left" while the indexer
+    embeds, and "Embedding…" while only file names are left. Once the index is up to date,
+    passages that still have no embedding are named: "Up to date · 8 passages not embedded"
+    (also in a read-only window). That is what a failed model leaves behind.
+  - **GUI warning**: `GuiController` shows one message in the error bar when semantic search is
+    off, "The embedding model could not be loaded, so search matches words only, not meaning."
+    It checks after the model's load at startup and after each search.
+  - **Loading at GUI startup**: new `FindAnythingService.loadEmbeddingModel()`, which loads the
+    model on the background thread and, if that fails, turns semantic search off. `GuiController`
+    calls it when the window opens. The CLI doesn't: a command loads the model only if it embeds
+    something.
+  - **CLI**: the progress line reads "Embedding... 637 passages left", then "Embedding the file
+    names...". `findany index status` gets a line, "Embeddings: every passage has one" or
+    "Embeddings: 3 passages without one (found by keywords only)". The CLI's warning is the log's
+    line on stderr ("Semantic search is unavailable, so search uses keywords only: …").
+- **Reason:** the model takes about a second to load (measured), which the first search in the
+  window would otherwise wait for. Loading it at startup is also where the design looks for a
+  failed load. "Up to date" alone would hide that some passages can't be found by meaning.
+- **Impact:** F03, F05; `MainWindow`, `GuiController`, `FindAnythingService`, `CliApp`. Checked
+  from the CLI on `testdata/corpus` with the real model. **Not looked at on a real display:**
+  the status texts and the warning in the window; the GUI tests cover them on the headless
+  toolkit only. Diagrams updated: not yet (cd01 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
-- F05, F10: Tier 2 features that may end up *Not implemented* in Stage 2.
+- F10: a Tier 2 feature that may end up *Not implemented* in Stage 2.
 - GUI: side-by-side comparison (F10), editing exclusions and pausing from the GUI (CLI-only).

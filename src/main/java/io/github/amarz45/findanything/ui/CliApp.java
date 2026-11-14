@@ -18,9 +18,11 @@ import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.config.SettingsStore;
 import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.core.Preview;
+import io.github.amarz45.findanything.embedding.LocalEmbeddingModel;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.IndexStatus;
+import io.github.amarz45.findanything.indexing.IndexerState;
 import io.github.amarz45.findanything.indexing.IsolatedTextExtractor;
 import io.github.amarz45.findanything.indexing.TextExtractor;
 import io.github.amarz45.findanything.llm.LlmClientFactory;
@@ -230,6 +232,8 @@ public final class CliApp implements Callable<Integer> {
                 new ConversationStore(home.resolve("conversations"), settingsStore),
                 textExtractor,
                 new Chunker(1_500),
+                // Loaded on first use, so a command that embeds nothing doesn't pay for it.
+                new LocalEmbeddingModel(home.resolve("embedding")),
                 changeQueue,
                 home.resolve("index"),
                 backgroundExecutor,
@@ -269,18 +273,28 @@ public final class CliApp implements Callable<Integer> {
     /** Waits until the index has caught up, showing progress when it takes more than a moment. */
     private void catchUp(PrintWriter err) throws InterruptedException {
         long started = System.nanoTime();
-        int lastShown = -1;
+        String lastShown = null;
         IndexStatus status;
         while (!(status = findAnythingService.getIndexStatus()).isUpToDate()) {
+            // After the files are indexed, their passages are embedded (F05); a CLI process waits
+            // for that too, because it ends with its command.
+            String progress;
+            if (status.state() != IndexerState.EMBEDDING) {
+                progress = "Indexing... " + status.pendingFiles() + " pending";
+            } else if (status.chunksWithoutEmbeddings() > 0) {
+                progress = "Embedding... " + status.chunksWithoutEmbeddings() + " passages left";
+            } else {
+                progress = "Embedding the file names..."; // the passages are done
+            }
             if (System.nanoTime() - started > PROGRESS_AFTER.toNanos()
-                    && status.pendingFiles() != lastShown) {
-                lastShown = status.pendingFiles();
-                err.print("\rIndexing... " + lastShown + " pending   ");
+                    && !progress.equals(lastShown)) {
+                lastShown = progress;
+                err.printf("\r%-40s", progress); // padded, so a shorter line covers a longer one
                 err.flush();
             }
             Thread.sleep(100);
         }
-        if (lastShown >= 0) {
+        if (lastShown != null) {
             err.println();
         }
     }
@@ -950,6 +964,14 @@ public final class CliApp implements Callable<Integer> {
                         index.app.findAnythingService.countIndexedFiles(),
                         status.failedFiles(),
                         status.pendingFiles());
+                int left = status.chunksWithoutEmbeddings();
+                out.println(
+                        left == 0
+                                ? "Embeddings: every passage has one"
+                                : "Embeddings: "
+                                        + left
+                                        + (left == 1 ? " passage" : " passages")
+                                        + " without one (found by keywords only)");
                 if (failed) {
                     List<IndexedFile> files = index.app.findAnythingService.listFailedFiles();
                     out.println(files.isEmpty() ? "No files failed." : "Failed files:");
@@ -983,8 +1005,9 @@ public final class CliApp implements Callable<Integer> {
     @Command(
             name = "search",
             description =
-                    "Find files by keywords; with no query, list every indexed file, newest first."
-                            + " The filters narrow either by type, date, size and folder.")
+                    "Find files by keywords and by meaning; with no query, list every indexed file,"
+                            + " newest first. The filters narrow either by type, date, size and"
+                            + " folder.")
     static final class Search implements Callable<Integer> {
         @ParentCommand CliApp app;
         @Spec CommandSpec spec;
@@ -1038,11 +1061,17 @@ public final class CliApp implements Callable<Integer> {
                 description = "Only files under this folder, which must be in a search folder.")
         Path location;
 
+        @Option(
+                names = "--keyword-only",
+                description = "Match the query's words only, not also its meaning.")
+        boolean keywordOnly;
+
         @Override
         public Integer call() throws Exception {
             PrintWriter out = spec.commandLine().getOut();
             SearchFilters searchFilters = searchFilters();
             app.openIndex(spec.commandLine().getErr());
+            app.findAnythingService.setSemanticSearchEnabled(!keywordOnly);
             app.catchUp(spec.commandLine().getErr());
             String query = String.join(" ", words);
             List<SearchResult> results =

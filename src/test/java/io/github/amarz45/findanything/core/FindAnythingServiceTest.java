@@ -63,6 +63,10 @@ class FindAnythingServiceTest {
 
     @TempDir Path home;
 
+    /** The model every service of a test is built with; a test may replace it first. */
+    io.github.amarz45.findanything.embedding.EmbeddingModel embeddingModel =
+            new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel();
+
     /** A service with the real factory: clients are built for the settings, never called. */
     FindAnythingService service(Path appData, TextExtractor extractor) throws Exception {
         Redactor redactor = new Redactor(SensitivePattern.builtIn());
@@ -122,6 +126,7 @@ class FindAnythingServiceTest {
                 new ConversationStore(appData.resolve("conversations"), store),
                 extractor,
                 new Chunker(300),
+                embeddingModel,
                 new ChangeQueue(Duration.ZERO),
                 appData.resolve("index"),
                 Executors.newFixedThreadPool(2),
@@ -173,11 +178,14 @@ class FindAnythingServiceTest {
         TextExtractor extractor =
                 new IsolatedTextExtractor(
                         appData.resolve("tika"), Duration.ofSeconds(120), 1024L * 1024 * 1024);
+        // The real extractor and the real embedding model, end to end.
+        embeddingModel = io.github.amarz45.findanything.embedding.RealEmbeddingModel.get();
         try (FindAnythingService service = service(appData, extractor)) {
             assertThat(service.getIndexStatus().state()).isEqualTo(IndexerState.OPENING);
             assertThat(service.open(false)).isEqualTo(IndexMode.WRITER);
             service.addSearchFolder(CORPUS);
             awaitUpToDate(service);
+            assertThat(service.getIndexStatus().chunksWithoutEmbeddings()).isZero();
 
             List<SearchResult> budget =
                     service.search("approved budget", SearchFilters.NONE).join();
@@ -189,6 +197,24 @@ class FindAnythingServiceTest {
             assertThat(resume)
                     .extracting(r -> r.file().path())
                     .contains(CORPUS.resolve("work/resume-jordan-rivera.docx"));
+
+            // By meaning (F05): the note says "Dentist" and never "tooth" or "doctor".
+            assertThat(service.isSemanticSearchEnabled()).isTrue();
+            List<SearchResult> dentist =
+                    service.search("tooth doctor", SearchFilters.NONE, 5).join();
+            assertThat(dentist.get(0).file().path()).isEqualTo(CORPUS.resolve("notes/dentist.txt"));
+            // By the meaning of a file's name: the résumé never says "CV", and neither does its
+            // name (the design's example for F05).
+            List<SearchResult> cv = service.search("my CV", SearchFilters.NONE, 5).join();
+            assertThat(cv.get(0).file().path())
+                    .isEqualTo(CORPUS.resolve("work/resume-jordan-rivera.docx"));
+            // Nothing in the corpus is close to this, so nothing is listed.
+            assertThat(service.search("purple elephant spaceship", SearchFilters.NONE).join())
+                    .isEmpty();
+            // With semantic search off, as after --keyword-only, only words count.
+            service.setSemanticSearchEnabled(false);
+            assertThat(service.isSemanticSearchEnabled()).isFalse();
+            assertThat(service.search("tooth doctor", SearchFilters.NONE, 5).join()).isEmpty();
 
             Preview lease =
                     service.preview(
