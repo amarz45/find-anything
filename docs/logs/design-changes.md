@@ -925,6 +925,39 @@ Diagrams updated:
   hybrid results, on the corpus or on Amar's documents. Diagrams updated: not yet (cd01, cd04,
   SD02 at the freeze).
 
+### File names are embedded too, so "CV" finds `resume.pdf` (2026-11-14, Tier 2)
+- **Original design:** only chunk text is embedded. A file's name is matched by keywords.
+- **Implemented change:** every indexed file also gets a vector for its name, written with its
+  folder's name, as in `Résumé/resume.pdf` (`Indexer.nameText()`).
+  - **`SearchIndex`** keeps it on the file's first entry. Two new methods:
+    `findFilesWithoutNameEmbeddings(limit)` and `addNameEmbedding(file, vector)`.
+    `addEmbeddings()` keeps a file's name vector, and `addNameEmbedding()` keeps the chunks'
+    vectors; for that, the index now reads a file's vectors back when it stores the file again.
+    `put()` stores a file without a name vector, so a changed file's name is embedded again.
+  - **`vectorSearch()`** looks up the nearest chunk texts and the nearest names with the one
+    query vector and the same filters, and returns one list, nearest first. A file found by its
+    name comes with its first chunk (none for a file without text), as a keyword match on the
+    name does. An entry found both ways is one hit with the higher similarity. The names go
+    through the same floor (0.62) in `SearchEngine`, which is unchanged.
+  - **`Indexer.embedNextBatch()`** embeds names once no chunk is left to embed, 64 per pass
+    (`EMBED_NAMES_PER_BATCH`), with the same failure handling as the texts.
+    `IndexStatus.chunksWithoutEmbeddings` still counts chunks only.
+- **Reason:** Amar searched his own documents for "cv" and got one file, not his résumé files;
+  the hybrid-search entry above records the same on the test corpus. A résumé rarely says what
+  it is in its text, but its name does. Measured with the model (cosine similarity to the query
+  "cv"): `Résumé/resume.pdf` 0.68, `Résumé/template.typ` 0.64,
+  `work/resume-jordan-rivera.docx` 0.64, against 0.45 to 0.60 for eleven other names. The
+  name must be embedded on its own: put in front of a résumé's text, the two together scored
+  0.60, under the floor. Written as it is (`folder/name.ext`), a name scored as well as or better
+  than with the punctuation and the extension removed.
+- **Impact:** F05, F06; `SearchIndex`, `Indexer`. Checked on `testdata/corpus` with the real
+  model: "cv", "my CV" and "curriculum vitae" each put `resume-jordan-rivera.docx` first, which
+  makes F05's example work; "picture" finds `photo.png`, a file with no text; nonsense queries
+  still find nothing. An index made before this change got its 23 name vectors on the next
+  start, with no rebuild. Seen and not acted on: a name can pass the floor by a little without
+  being related ("my CV" also lists `dentist.txt`, second). Diagrams updated: not yet (cd02,
+  cd03, SD01, SD02 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

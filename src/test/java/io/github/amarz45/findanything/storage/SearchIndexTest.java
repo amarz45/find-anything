@@ -398,7 +398,7 @@ class SearchIndexTest {
         assertThatThrownBy(
                         () -> index.addEmbeddings("known", List.of(new float[] {1}, new float[0])))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("isn't empty");
+                .hasMessageContaining("must not be empty");
         assertThat(index.countChunksWithoutEmbeddings()).isEqualTo(2);
 
         try (SearchIndex reader = SearchIndex.open(folder.resolve("index"))) {
@@ -406,6 +406,96 @@ class SearchIndexTest {
                             () ->
                                     reader.addEmbeddings(
                                             "known", List.of(new float[] {1}, new float[] {1})))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("read-only");
+        }
+    }
+
+    // ------------------------------------------------------------------ name vectors (F05)
+
+    @Test
+    void aFileIsFoundByItsNameVectorAndKeepsItsChunkVectors() throws Exception {
+        Path resume = ROOT.resolve("work/resume.pdf");
+        Path photo = ROOT.resolve("edge/photo.png");
+        Path notes = ROOT.resolve("notes.txt");
+        index.put(
+                file("work/resume.pdf", 10, JAN, ExtractionStatus.OK),
+                List.of(embedded(0, "Education", 0, 1, 0), embedded(1, "Experience", 0, 0, 1)));
+        index.put(file("edge/photo.png", 1_000, JAN, ExtractionStatus.METADATA_ONLY), List.of());
+        index.put(file("notes.txt", 10, MAR, ExtractionStatus.OK), chunks("a note"));
+        index.commit();
+        assertThat(index.findFilesWithoutNameEmbeddings(10)).containsExactly(resume, photo, notes);
+        assertThat(index.findFilesWithoutNameEmbeddings(2)).containsExactly(resume, photo);
+
+        index.addNameEmbedding(resume, new float[] {1, 0, 0});
+        index.addNameEmbedding(photo, new float[] {0.6f, 0.8f, 0});
+        index.commit();
+        assertThat(index.findFilesWithoutNameEmbeddings(10)).containsExactly(notes);
+
+        // By name: a file comes with its first chunk, and a file without text with none.
+        List<ChunkHit> byName = index.vectorSearch(new float[] {1, 0, 0}, SearchFilters.NONE, 2);
+        assertThat(byName).extracting(hit -> hit.file().path()).containsExactly(resume, photo);
+        assertThat(byName.get(0).chunk().text()).isEqualTo("Education");
+        assertThat(byName.get(0).score()).isCloseTo(1.0, within(1e-3));
+        assertThat(byName.get(1).chunk()).isNull();
+        assertThat(byName.get(1).score()).isCloseTo(0.6, within(1e-3));
+
+        // The chunks kept their own vectors when the name's was added.
+        assertThat(index.countChunksWithoutEmbeddings()).isEqualTo(1);
+        assertThat(index.vectorSearch(new float[] {0, 0, 1}, SearchFilters.NONE, 1))
+                .extracting(hit -> hit.chunk().text())
+                .containsExactly("Experience");
+
+        // An entry close by its name and by its text is one hit, with the higher score.
+        List<ChunkHit> both =
+                index.vectorSearch(new float[] {0.6f, 0.8f, 0}, SearchFilters.NONE, 10);
+        assertThat(both).hasSize(3);
+        assertThat(both.get(0).file().path()).isEqualTo(photo);
+        assertThat(both.get(1).chunk().text()).isEqualTo("Education");
+        assertThat(both.get(1).score()).isCloseTo(0.8, within(1e-3));
+
+        // The filters apply to names too.
+        SearchFilters pdfs = new SearchFilters(Set.of("pdf"), null, null, -1, -1, null);
+        assertThat(index.vectorSearch(new float[] {0.6f, 0.8f, 0}, pdfs, 10))
+                .extracting(hit -> hit.file().path())
+                .containsOnly(resume);
+    }
+
+    @Test
+    void theNameVectorOutlastsAddEmbeddingsButNotStoringTheFileAgain() throws Exception {
+        Path notes = ROOT.resolve("notes.txt");
+        index.put(fileWithContent("notes.txt", "old"), chunks("a note"));
+        index.commit();
+        index.addNameEmbedding(notes, new float[] {1, 0});
+        index.commit();
+        index.addEmbeddings("old", List.of(new float[] {0, 1}));
+        index.commit();
+        assertThat(index.findFilesWithoutNameEmbeddings(10)).isEmpty();
+        assertThat(index.countChunksWithoutEmbeddings()).isZero();
+        assertThat(index.vectorSearch(new float[] {1, 0}, SearchFilters.NONE, 1).get(0).score())
+                .isCloseTo(1.0, within(1e-3));
+
+        index.put(fileWithContent("notes.txt", "new"), chunks("a changed note"));
+        index.commit();
+        assertThat(index.findFilesWithoutNameEmbeddings(10)).containsExactly(notes);
+        assertThat(index.vectorSearch(new float[] {1, 0}, SearchFilters.NONE, 1)).isEmpty();
+    }
+
+    @Test
+    void addNameEmbeddingRefusesWhatItCannotStore() throws Exception {
+        Path notes = ROOT.resolve("notes.txt");
+        index.put(fileWithContent("notes.txt", "known"), chunks("a note"));
+        index.commit();
+        assertThatThrownBy(
+                        () -> index.addNameEmbedding(ROOT.resolve("nope.txt"), new float[] {1, 0}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("isn't indexed");
+        assertThatThrownBy(() -> index.addNameEmbedding(notes, new float[0]))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not be empty");
+
+        try (SearchIndex reader = SearchIndex.open(folder.resolve("index"))) {
+            assertThatThrownBy(() -> reader.addNameEmbedding(notes, new float[] {1, 0}))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("read-only");
         }

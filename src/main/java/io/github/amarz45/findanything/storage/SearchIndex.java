@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,8 +31,12 @@ import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.FloatVectorValues;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.KnnVectorValues;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.StoredFields;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.VectorSimilarityFunction;
@@ -64,14 +69,18 @@ import org.apache.lucene.util.BytesRef;
  * (path, type, size, modification time, status), so filters apply inside a query, a removed file
  * disappears from results immediately, and two copies of a file are two separate results. A file
  * without text (unsupported format, failed extraction, no text layer) has one entry with no chunk,
- * so it is still listed and found by name. A chunk's entry also holds the chunk's vector once the
- * embedding phase has added it (F05); until then the chunk is found by keywords only.
+ * so it is still listed and found by name.
+ *
+ * <p>The embedding phase adds two kinds of vectors (F05). Each chunk's entry gets the vector of the
+ * chunk's text, and the file's first entry gets the vector of the file's name. Until then the file
+ * is found by keywords only.
  *
  * <p>{@link #open} takes the index's write lock if it can ({@link IndexMode#WRITER}); otherwise it
  * opens the index {@link IndexMode#READ_ONLY}: the first process wins. Single writer: only the
- * indexing worker thread calls {@link #put}, {@link #remove}, {@link #addEmbeddings} and {@link
- * #commit}. Reads are safe from any thread and see the last committed snapshot; a read-only process
- * calls {@link #refresh} every few seconds to pick up the writer's commits.
+ * indexing worker thread calls {@link #put}, {@link #remove}, {@link #addEmbeddings}, {@link
+ * #addNameEmbedding} and {@link #commit}. Reads are safe from any thread and see the last committed
+ * snapshot; a read-only process calls {@link #refresh} every few seconds to pick up the writer's
+ * commits.
  */
 public final class SearchIndex implements AutoCloseable {
 
@@ -85,7 +94,12 @@ public final class SearchIndex implements AutoCloseable {
     private static final String POSITION = "position";
     private static final String PAGE_NUMBER = "pageNumber";
     private static final String TEXT = "text";
+
+    /** The vector of an entry's chunk. */
     private static final String EMBEDDING = "embedding";
+
+    /** The vector of the file's name, on the file's first entry only. */
+    private static final String NAME_EMBEDDING = "nameEmbedding";
 
     /** Marks the first entry of each file, so listing files returns each file once. */
     private static final String FIRST = "first";
@@ -95,6 +109,8 @@ public final class SearchIndex implements AutoCloseable {
 
     /** How many entries {@link #findContentWithoutEmbeddings} reads at a time. */
     private static final int HASH_PAGE = 500;
+
+    private static final float[] NO_VECTOR = new float[0];
 
     private static final String SEPARATOR = FileSystems.getDefault().getSeparator();
 
@@ -164,23 +180,14 @@ public final class SearchIndex implements AutoCloseable {
     /**
      * Stores a file and its chunks, replacing whatever the index held for that path. A file with no
      * chunks gets a single entry so it is still listed and found by name. A chunk's vector is
-     * stored when it has one; a chunk without one waits for {@link #addEmbeddings}.
+     * stored when it has one; a chunk without one waits for {@link #addEmbeddings}, and the file's
+     * name for {@link #addNameEmbedding}.
      */
     public void put(IndexedFile file, List<Chunk> chunks) throws IOException {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(chunks, "chunks");
         requireWriter();
-        String path = key(file.path());
-        List<Document> entries = new ArrayList<>();
-        if (chunks.isEmpty()) {
-            entries.add(document(file, path, null, true));
-        }
-        for (Chunk chunk : chunks) {
-            entries.add(document(file, path, chunk, entries.isEmpty()));
-        }
-        // One step: if the new entries can't be stored (a vector of another length than the
-        // index's, say), the file keeps its old ones instead of losing them.
-        writer.updateDocuments(new Term(PATH, path), entries);
+        store(file, chunks, NO_VECTOR);
     }
 
     /** Removes a file, or every file under a folder, from the index. */
@@ -197,7 +204,7 @@ public final class SearchIndex implements AutoCloseable {
      * Stores the vectors of a content's chunks on every indexed file with that content (F05), so
      * copies of a file are embedded once. The vectors are in chunk order. A file with that hash but
      * another number of chunks (its extraction ended differently) is left as it is, and {@link
-     * #getChunksOfContent} hands out its chunks next.
+     * #getChunksOfContent} hands out its chunks next. A file keeps the name vector it has.
      *
      * <p>Works from the last committed snapshot, so commit a file before embedding its content.
      *
@@ -209,9 +216,7 @@ public final class SearchIndex implements AutoCloseable {
         Objects.requireNonNull(vectors, "vectors");
         requireWriter();
         for (float[] vector : vectors) {
-            if (vector == null || vector.length == 0) {
-                throw new IllegalArgumentException("Every chunk needs a vector that isn't empty.");
-            }
+            requireVector(vector);
         }
         Query withContent = and(new TermQuery(new Term(CONTENT_HASH, contentHash)), firstOnly());
         List<IndexedFile> files =
@@ -225,7 +230,8 @@ public final class SearchIndex implements AutoCloseable {
                         List.of());
         boolean stored = false;
         for (IndexedFile file : files) {
-            List<Chunk> chunks = getChunks(file.path());
+            StoredEntries entries = storedEntries(file.path());
+            List<Chunk> chunks = entries.chunks();
             if (chunks.size() != vectors.size()) {
                 continue;
             }
@@ -239,13 +245,35 @@ public final class SearchIndex implements AutoCloseable {
                                 chunk.text(),
                                 vectors.get(i)));
             }
-            put(file, embedded);
+            store(file, embedded, entries.nameVector());
             stored = true;
         }
         if (!stored) {
             throw new IllegalArgumentException(
                     "No indexed file with this content has " + vectors.size() + " chunks.");
         }
+    }
+
+    /**
+     * Stores the vector of a file's name on the file (F05), so the file is also found by what its
+     * name means: a search for "CV" finds {@code resume.pdf}. The file keeps its chunks and their
+     * vectors.
+     *
+     * <p>Works from the last committed snapshot, so commit a file before embedding its name.
+     *
+     * @throws IllegalArgumentException when the file isn't indexed, or the vector is empty
+     */
+    public void addNameEmbedding(Path file, float[] vector) throws IOException {
+        Objects.requireNonNull(file, "file");
+        requireWriter();
+        requireVector(vector);
+        IndexedFile indexed =
+                getFile(file)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "The file isn't indexed: " + file));
+        store(indexed, storedEntries(file).chunks(), vector);
     }
 
     /** Makes every change so far durable and visible to readers. */
@@ -260,6 +288,28 @@ public final class SearchIndex implements AutoCloseable {
             throw new IllegalStateException(
                     "The index is open read-only: another process owns it.");
         }
+    }
+
+    private static void requireVector(float[] vector) {
+        if (vector == null || vector.length == 0) {
+            throw new IllegalArgumentException("A vector must not be empty.");
+        }
+    }
+
+    /** Replaces a file's entries in one step, with the name vector on the first one. */
+    private void store(IndexedFile file, List<Chunk> chunks, float[] nameVector)
+            throws IOException {
+        String path = key(file.path());
+        List<Document> entries = new ArrayList<>();
+        if (chunks.isEmpty()) {
+            entries.add(document(file, path, null, nameVector));
+        }
+        for (Chunk chunk : chunks) {
+            entries.add(document(file, path, chunk, entries.isEmpty() ? nameVector : null));
+        }
+        // One step: if the new entries can't be stored (a vector of another length than the
+        // index's, say), the file keeps its old ones instead of losing them.
+        writer.updateDocuments(new Term(PATH, path), entries);
     }
 
     // ------------------------------------------------------------------ reads (any thread)
@@ -294,25 +344,16 @@ public final class SearchIndex implements AutoCloseable {
 
     /**
      * The file's chunks in order; empty when the file isn't indexed or has no text. The chunks come
-     * without their vectors, which the index only searches and never hands back.
+     * without their vectors, which only searches use.
      */
     public List<Chunk> getChunks(Path file) throws IOException {
         Query query = new TermQuery(new Term(PATH, key(file)));
         return withSearcher(
                 searcher -> {
-                    int count = searcher.count(query);
-                    if (count == 0) {
-                        return List.of();
-                    }
-                    TopDocs top =
-                            searcher.search(
-                                    query,
-                                    count,
-                                    new Sort(new SortField(POSITION, SortField.Type.LONG)));
                     List<Chunk> chunks = new ArrayList<>();
                     StoredFields stored = searcher.storedFields();
-                    for (ScoreDoc hit : top.scoreDocs) {
-                        Chunk chunk = toChunk(stored.document(hit.doc));
+                    for (ScoreDoc hit : inOrder(searcher, query)) {
+                        Chunk chunk = toChunk(stored.document(hit.doc), NO_VECTOR);
                         if (chunk != null) {
                             chunks.add(chunk);
                         }
@@ -391,6 +432,33 @@ public final class SearchIndex implements AutoCloseable {
     }
 
     /**
+     * The indexed files whose names have no vector yet (F05), oldest entries first. The embedding
+     * phase asks this to learn which files it still has to do.
+     *
+     * @return at most {@code limit} files; empty when every file's name has its vector
+     */
+    public List<Path> findFilesWithoutNameEmbeddings(int limit) throws IOException {
+        if (limit <= 0) {
+            return List.of();
+        }
+        Query query =
+                new BooleanQuery.Builder()
+                        .add(firstOnly(), BooleanClause.Occur.FILTER)
+                        .add(new FieldExistsQuery(NAME_EMBEDDING), BooleanClause.Occur.MUST_NOT)
+                        .build();
+        return withSearcher(
+                searcher -> {
+                    List<Path> files = new ArrayList<>();
+                    StoredFields stored = searcher.storedFields();
+                    for (ScoreDoc hit : searcher.search(query, limit).scoreDocs) {
+                        files.add(Path.of(stored.document(hit.doc, Set.of(PATH)).get(PATH)));
+                    }
+                    return files;
+                },
+                List.of());
+    }
+
+    /**
      * Finds the chunks that best match the words of the query, by text or file name, with the
      * filters applied inside the query. Special characters in the query are taken literally.
      * Accents are ignored (résumé matches resume). Each file's entries are separate hits.
@@ -413,7 +481,9 @@ public final class SearchIndex implements AutoCloseable {
                     StoredFields stored = searcher.storedFields();
                     for (ScoreDoc hit : top.scoreDocs) {
                         Document document = stored.document(hit.doc);
-                        hits.add(new ChunkHit(toFile(document), toChunk(document), hit.score));
+                        hits.add(
+                                new ChunkHit(
+                                        toFile(document), toChunk(document, NO_VECTOR), hit.score));
                     }
                     return hits;
                 },
@@ -421,12 +491,15 @@ public final class SearchIndex implements AutoCloseable {
     }
 
     /**
-     * Finds the chunks whose vectors are closest to the query's (F05), with the filters applied
-     * inside the query. Only chunks that have a vector can be found. A hit's score is the cosine
-     * similarity of the two vectors: 1 for the same direction, 0 for unrelated ones.
+     * Finds what is closest in meaning to the query's vector (F05), with the filters applied inside
+     * the query: the chunks whose text is closest, and the files whose names are. A file found by
+     * its name comes with its first chunk, or with none when it has no text, as in a keyword search
+     * that matched the name. Only chunks and names that have a vector can be found. A hit's score
+     * is the cosine similarity of the two vectors: 1 for the same direction, 0 for unrelated ones.
+     * An entry found both ways is one hit with the higher of its two scores.
      *
-     * @param queryVector the query's vector, from the same model as the chunks' vectors
-     * @return at most {@code limit} hits, nearest first; empty when no chunk has a vector
+     * @param queryVector the query's vector, from the same model as the stored vectors
+     * @return at most {@code limit} hits, nearest first; empty when nothing has a vector
      */
     public List<ChunkHit> vectorSearch(float[] queryVector, SearchFilters searchFilters, int limit)
             throws IOException {
@@ -442,17 +515,36 @@ public final class SearchIndex implements AutoCloseable {
             filters.forEach(clause -> builder.add(clause, BooleanClause.Occur.FILTER));
             filter = builder.build();
         }
-        Query nearest = new KnnFloatVectorQuery(EMBEDDING, queryVector, limit, filter);
+        Query nearestTexts = new KnnFloatVectorQuery(EMBEDDING, queryVector, limit, filter);
+        Query nearestNames = new KnnFloatVectorQuery(NAME_EMBEDDING, queryVector, limit, filter);
         return withSearcher(
                 searcher -> {
-                    TopDocs top = searcher.search(nearest, limit);
+                    Map<Integer, Float> scores = new HashMap<>(); // by entry
+                    for (Query nearest : List.of(nearestTexts, nearestNames)) {
+                        for (ScoreDoc hit : searcher.search(nearest, limit).scoreDocs) {
+                            scores.merge(hit.doc, hit.score, Math::max);
+                        }
+                    }
+                    List<Map.Entry<Integer, Float>> nearestFirst =
+                            new ArrayList<>(scores.entrySet());
+                    nearestFirst.sort(
+                            Map.Entry.<Integer, Float>comparingByValue()
+                                    .reversed()
+                                    .thenComparing(Map.Entry.comparingByKey()));
                     List<ChunkHit> hits = new ArrayList<>();
                     StoredFields stored = searcher.storedFields();
-                    for (ScoreDoc hit : top.scoreDocs) {
-                        Document document = stored.document(hit.doc);
+                    for (Map.Entry<Integer, Float> entry : nearestFirst) {
+                        if (hits.size() == limit) {
+                            break;
+                        }
+                        Document document = stored.document(entry.getKey());
                         // Lucene scores a cosine similarity c as (1 + c) / 2.
-                        double similarity = 2.0 * hit.score - 1.0;
-                        hits.add(new ChunkHit(toFile(document), toChunk(document), similarity));
+                        double similarity = 2.0 * entry.getValue() - 1.0;
+                        hits.add(
+                                new ChunkHit(
+                                        toFile(document),
+                                        toChunk(document, NO_VECTOR),
+                                        similarity));
                     }
                     return hits;
                 },
@@ -530,6 +622,62 @@ public final class SearchIndex implements AutoCloseable {
         } finally {
             manager.release(searcher);
         }
+    }
+
+    /** A file's entries as the index holds them: the chunks with their vectors, and the name's. */
+    private record StoredEntries(List<Chunk> chunks, float[] nameVector) {}
+
+    /** Reads a file's entries back with their vectors, to store them again with something added. */
+    private StoredEntries storedEntries(Path file) throws IOException {
+        Query query = new TermQuery(new Term(PATH, key(file)));
+        return withSearcher(
+                searcher -> {
+                    List<Chunk> chunks = new ArrayList<>();
+                    float[] nameVector = NO_VECTOR;
+                    StoredFields stored = searcher.storedFields();
+                    for (ScoreDoc hit : inOrder(searcher, query)) {
+                        float[] name = readVector(searcher, hit.doc, NAME_EMBEDDING);
+                        if (name.length > 0) {
+                            nameVector = name;
+                        }
+                        Chunk chunk =
+                                toChunk(
+                                        stored.document(hit.doc),
+                                        readVector(searcher, hit.doc, EMBEDDING));
+                        if (chunk != null) {
+                            chunks.add(chunk);
+                        }
+                    }
+                    return new StoredEntries(chunks, nameVector);
+                },
+                new StoredEntries(List.of(), NO_VECTOR));
+    }
+
+    /** The entries that match, in chunk order. */
+    private static ScoreDoc[] inOrder(IndexSearcher searcher, Query query) throws IOException {
+        int count = searcher.count(query);
+        if (count == 0) {
+            return new ScoreDoc[0];
+        }
+        Sort byPosition = new Sort(new SortField(POSITION, SortField.Type.LONG));
+        return searcher.search(query, count, byPosition).scoreDocs;
+    }
+
+    /** An entry's vector in the given field, or an empty array when it has none. */
+    private static float[] readVector(IndexSearcher searcher, int entry, String field)
+            throws IOException {
+        List<LeafReaderContext> leaves = searcher.getIndexReader().leaves();
+        LeafReaderContext leaf = leaves.get(ReaderUtil.subIndex(entry, leaves));
+        FloatVectorValues vectors = leaf.reader().getFloatVectorValues(field);
+        if (vectors == null) {
+            return NO_VECTOR;
+        }
+        int entryInLeaf = entry - leaf.docBase;
+        KnnVectorValues.DocIndexIterator iterator = vectors.iterator();
+        if (iterator.advance(entryInLeaf) != entryInLeaf) {
+            return NO_VECTOR;
+        }
+        return vectors.vectorValue(iterator.index()).clone();
     }
 
     private static String key(Path path) {
@@ -618,7 +766,15 @@ public final class SearchIndex implements AutoCloseable {
         return day.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 
-    private static Document document(IndexedFile file, String path, Chunk chunk, boolean first) {
+    /**
+     * One entry of a file.
+     *
+     * @param chunk the entry's chunk, or null for the single entry of a file without text
+     * @param nameVector the file's name vector (possibly empty) for the file's first entry, or null
+     *     for a later entry
+     */
+    private static Document document(
+            IndexedFile file, String path, Chunk chunk, float[] nameVector) {
         Document document = new Document();
         document.add(new StringField(PATH, path, Field.Store.YES));
         document.add(new TextField(FILE_NAME, nameWords(file.path()), Field.Store.NO));
@@ -633,8 +789,13 @@ public final class SearchIndex implements AutoCloseable {
         document.add(
                 new StringField(
                         EXTRACTION_STATUS, file.extractionStatus().name(), Field.Store.YES));
-        if (first) {
+        if (nameVector != null) {
             document.add(new StringField(FIRST, "true", Field.Store.NO));
+            if (nameVector.length > 0) {
+                document.add(
+                        new KnnFloatVectorField(
+                                NAME_EMBEDDING, nameVector, VectorSimilarityFunction.COSINE));
+            }
         }
         int position = chunk == null ? NO_CHUNK : chunk.position();
         document.add(new NumericDocValuesField(POSITION, position));
@@ -671,8 +832,8 @@ public final class SearchIndex implements AutoCloseable {
                 ExtractionStatus.valueOf(document.get(EXTRACTION_STATUS)));
     }
 
-    /** The entry's chunk without its vector, or null for a file's placeholder entry. */
-    private static Chunk toChunk(Document document) {
+    /** The entry's chunk with the given vector, or null for a file's placeholder entry. */
+    private static Chunk toChunk(Document document, float[] embedding) {
         int position = document.getField(POSITION).numericValue().intValue();
         if (position == NO_CHUNK) {
             return null;
@@ -681,7 +842,7 @@ public final class SearchIndex implements AutoCloseable {
                 position,
                 document.getField(PAGE_NUMBER).numericValue().intValue(),
                 document.get(TEXT),
-                new float[0]);
+                embedding);
     }
 
     private static List<IndexedFile> toFiles(IndexSearcher searcher, TopDocs top)

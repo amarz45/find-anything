@@ -72,6 +72,9 @@ public final class Indexer {
     /** Texts handed to the model in one call; a stop request is noticed between calls. */
     static final int EMBED_TEXTS_PER_CALL = 16;
 
+    /** File names embedded per pass of phase 2; a name takes a few milliseconds. */
+    static final int EMBED_NAMES_PER_BATCH = 64;
+
     /** After this many contents in a row fail to embed, phase 2 is off until the next start. */
     static final int MAX_EMBEDDING_FAILURES = 3;
 
@@ -90,6 +93,7 @@ public final class Indexer {
     private volatile long completedRequests; // requests the worker knows it has finished
     private final Map<Path, Integer> readRetries = new HashMap<>(); // worker thread only
     private final Set<String> unembeddedContent = new HashSet<>(); // worker only: failed this run
+    private final Set<Path> unnamedFiles = new HashSet<>(); // worker only: names that failed
     private Thread workerThread;
     private volatile IndexerState state = IndexerState.OPENING;
     private volatile boolean stopRequested;
@@ -409,8 +413,9 @@ public final class Indexer {
     }
 
     /**
-     * Phase 2: embeds the next contents that have no vectors yet and commits them (F05). Called
-     * only when no path is waiting, and it stops early when one arrives.
+     * Phase 2 (F05): embeds the next contents whose chunks have no vectors yet, or, once every
+     * chunk has one, the next file names that have none, and commits them. Called only when no path
+     * is waiting, and it stops early when one arrives.
      *
      * @return true when it embedded something, so there may be more to embed
      */
@@ -418,6 +423,20 @@ public final class Indexer {
         if (embeddingOff) {
             return false;
         }
+        int embedded = embedContents();
+        if (embedded == 0 && !embeddingOff && !stopRequested && changeQueue.size() == 0) {
+            embedded = embedNames();
+        }
+        commitIfNeeded();
+        return embedded > 0;
+    }
+
+    /**
+     * Embeds the text of the next contents without vectors.
+     *
+     * @return the number of chunks embedded
+     */
+    private int embedContents() {
         List<String> contentHashes;
         try {
             // Contents that failed earlier in this run are still without vectors, so ask for
@@ -428,16 +447,13 @@ public final class Indexer {
                                     EMBED_CONTENTS_PER_BATCH + unembeddedContent.size()));
         } catch (IOException e) {
             log.error("Could not look for chunks without embeddings: {}", e.getMessage());
-            return false;
+            return 0;
         }
         contentHashes.removeAll(unembeddedContent);
         if (contentHashes.isEmpty()) {
-            return false;
+            return 0;
         }
-        if (state != IndexerState.EMBEDDING) {
-            state = IndexerState.EMBEDDING;
-            notifyStatus();
-        }
+        showEmbedding();
         int embeddedChunks = 0;
         for (String contentHash : contentHashes) {
             if (stopRequested
@@ -448,8 +464,78 @@ public final class Indexer {
             }
             embeddedChunks += embedContent(contentHash);
         }
-        commitIfNeeded();
-        return embeddedChunks > 0;
+        return embeddedChunks;
+    }
+
+    /**
+     * Embeds the names of the next files without a name vector, so a file is also found by what its
+     * name means. A name is embedded with its folder's, as in {@code Résumé/resume.pdf}.
+     *
+     * @return the number of names embedded
+     */
+    private int embedNames() {
+        List<Path> files;
+        try {
+            files =
+                    new ArrayList<>(
+                            searchIndex.findFilesWithoutNameEmbeddings(
+                                    EMBED_NAMES_PER_BATCH + unnamedFiles.size()));
+        } catch (IOException e) {
+            log.error("Could not look for file names without embeddings: {}", e.getMessage());
+            return 0;
+        }
+        files.removeAll(unnamedFiles);
+        if (files.isEmpty()) {
+            return 0;
+        }
+        showEmbedding();
+        try {
+            List<float[]> vectors =
+                    embeddingModel.embed(files.stream().map(Indexer::nameText).toList());
+            for (int i = 0; i < files.size(); i++) {
+                searchIndex.addNameEmbedding(files.get(i), vectors.get(i));
+                uncommittedChanges++;
+            }
+            embeddingFailures = 0;
+            return files.size();
+        } catch (EmbeddingException | IOException | IllegalArgumentException e) {
+            unnamedFiles.addAll(files);
+            embeddingFailed(e, "some files' names");
+            return 0;
+        }
+    }
+
+    /** What is embedded for a file's name: its folder's name and its own. */
+    static String nameText(Path file) {
+        Path folder = file.getParent() == null ? null : file.getParent().getFileName();
+        String name = file.getFileName().toString();
+        return folder == null ? name : folder + "/" + name;
+    }
+
+    private void showEmbedding() {
+        if (state != IndexerState.EMBEDDING) {
+            state = IndexerState.EMBEDDING;
+            notifyStatus();
+        }
+    }
+
+    /** Counts a failure of phase 2; after too many in a row, phase 2 is off for this run. */
+    private void embeddingFailed(Exception failure, String what) {
+        embeddingFailures++;
+        if (embeddingFailures < MAX_EMBEDDING_FAILURES) {
+            log.warn(
+                    "Could not embed {}; keyword search still finds the files: {}",
+                    what,
+                    failure.getMessage());
+        } else {
+            embeddingOff = true;
+            log.warn(
+                    "Embedding failed {} times in a row and is off until the next start; files"
+                            + " without embeddings are found by keywords only. The last failure:"
+                            + " {}",
+                    MAX_EMBEDDING_FAILURES,
+                    failure.getMessage());
+        }
     }
 
     /**
@@ -477,20 +563,7 @@ public final class Indexer {
             return chunks.size();
         } catch (EmbeddingException | IOException | IllegalArgumentException e) {
             unembeddedContent.add(contentHash);
-            embeddingFailures++;
-            if (embeddingFailures < MAX_EMBEDDING_FAILURES) {
-                log.warn(
-                        "Could not embed a file's text, so it is found by keywords only: {}",
-                        e.getMessage());
-            } else {
-                embeddingOff = true;
-                log.warn(
-                        "Embedding failed {} times in a row and is off until the next start; files"
-                                + " without embeddings are found by keywords only. The last"
-                                + " failure: {}",
-                        MAX_EMBEDDING_FAILURES,
-                        e.getMessage());
-            }
+            embeddingFailed(e, "a file's text");
             return 0;
         }
     }

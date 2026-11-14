@@ -196,12 +196,23 @@ class IndexerTest {
         assertThat(model.timesEmbedded("Rent is $1,850.")).isEqualTo(1);
         assertThat(model.timesEmbedded("The lease ends on August 31, 2026.")).isEqualTo(1);
         assertThat(model.timesEmbedded("Dentist appointment on March 4.")).isEqualTo(1);
-        assertThat(model.calls()).hasSize(2);
+        // After the texts, every indexed file's name is embedded with its folder's, in one call.
+        assertThat(model.calls()).hasSize(3);
+        assertThat(model.calls().get(2))
+                .containsExactlyInAnyOrder(
+                        "docs/lease.pdf", "sub/notes.txt", "docs/photo.bin", "docs/corrupt.txt");
+        assertThat(index.findFilesWithoutNameEmbeddings(10)).isEmpty();
+        assertThat(Indexer.nameText(Path.of("resume.pdf"))).isEqualTo("resume.pdf");
 
         float[] query = model.embed(List.of("Dentist appointment on March 4.")).get(0);
         assertThat(index.vectorSearch(query, SearchFilters.NONE, 1))
                 .extracting(hit -> hit.file().path())
                 .containsExactly(docs.resolve("sub/notes.txt"));
+        // A file without text is found by what its name means.
+        float[] name = model.embed(List.of("docs/photo.bin")).get(0);
+        assertThat(index.vectorSearch(name, SearchFilters.NONE, 1))
+                .extracting(hit -> hit.file().path())
+                .containsExactly(docs.resolve("photo.bin"));
 
         // Embedding comes after indexing, and the listeners hear about both and then the end.
         List<IndexerState> states = notifications.stream().map(IndexStatus::state).toList();

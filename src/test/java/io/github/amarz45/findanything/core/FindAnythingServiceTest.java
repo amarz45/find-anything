@@ -203,6 +203,11 @@ class FindAnythingServiceTest {
             List<SearchResult> dentist =
                     service.search("tooth doctor", SearchFilters.NONE, 5).join();
             assertThat(dentist.get(0).file().path()).isEqualTo(CORPUS.resolve("notes/dentist.txt"));
+            // By the meaning of a file's name: the résumé never says "CV", and neither does its
+            // name (the design's example for F05).
+            List<SearchResult> cv = service.search("my CV", SearchFilters.NONE, 5).join();
+            assertThat(cv.get(0).file().path())
+                    .isEqualTo(CORPUS.resolve("work/resume-jordan-rivera.docx"));
             // Nothing in the corpus is close to this, so nothing is listed.
             assertThat(service.search("purple elephant spaceship", SearchFilters.NONE).join())
                     .isEmpty();
