@@ -565,3 +565,36 @@ The first entries were drafted from the planning conversation in the claude.ai a
   seconds later. Not done: a check on Windows, the diagrams, and the items in `TODO.md` under
   "Live index updates".
 
+### 2026-11-14: Three small GUI fixes chosen from the to-do list
+- **Tool / model:** Claude Code, Claude Fable 5.2
+- **Task:** find out whether anything in `TODO.md` was easy and valuable enough to do on the
+  last day before the freeze, and do it.
+- **Input / instruction:** "Before I stop making any additional code changes, are there any
+  potential low-hanging fruit changes (easy, high value)? If so, list which." Then: all three in
+  one separate branch, one commit at a time.
+- **AI contribution:**
+  - Read the handoff and `TODO.md`, sized the candidates against the code, and proposed three
+    fixes that would be on screen in the videos: hiding the privacy log in the settings dialog,
+    wrapping the "Test connection" result, and emptying the preview of a deleted file. Named a
+    fourth (PDF link annotations in Tika) as borderline and advised against the rest.
+  - Wrote each fix with its test. For the wrapping result it wrote the test first and ran it
+    against the old layout, where it failed with the button squeezed to 29 of its 114 pixels.
+  - Mistake the user caught: its first version of the privacy log could be shown and refreshed
+    but not hidden again without closing the dialog.
+  - Found that the third fix needed a new method on a design class (`DetailPane.clearPreview()`)
+    and asked before adding it, together with the question of when the preview should be
+    emptied.
+- **Human contribution:**
+  - Chose to do the three and to leave the borderline one.
+  - Rejected the first privacy-log version: the log must be showable, refreshable and hideable.
+  - Tested each of the three fixes in the GUI.
+  - Approved the new method, and decided against the AI's recommendation that the preview is
+    emptied whenever the selected file leaves the results, not only after an index update.
+- **Outcome:** pull request #14, three code commits:
+  [3ea0d20](https://github.com/amarz45/find-anything/commit/3ea0d20c068b9a1699acc403b53d120907fe2846)
+  (the privacy log is hidden until asked for),
+  [0d6d5c6](https://github.com/amarz45/find-anything/commit/0d6d5c615d08ae8d1a9f32f4acc64696389d7fca)
+  (the connection test's result wraps),
+  [47a9433](https://github.com/amarz45/find-anything/commit/47a9433ebbbb6576bec33aa93e2443cec37c6327)
+  (the preview is emptied when its file leaves the results).
+

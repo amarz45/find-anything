@@ -187,11 +187,6 @@ Amar may change these later; undecided.
 
 ## GUI
 
-- **Clear the preview when the selected file is deleted.** With live watching, a deleted file
-  leaves the table a moment later, but its preview stays on the right until another file is
-  selected (noticed on 2026-11-14 while fixing the preview of an edited file). A better version
-  empties the detail pane when the selected file is no longer in the results after an index
-  update. No design-changes entry: the design doesn't describe this case.
 - **Render the answer's Markdown.** Models write their answers in Markdown (headings, `**bold**`,
   bullet lists, numbered lists, code spans), and `DetailPane.showAnswer()` shows that text as it
   is, so the marks appear literally in the pane (seen by Amar on 2026-11-07 with a tax question
@@ -202,17 +197,6 @@ Amar may change these later; undecided.
   `WebView`, which needs the `javafx-web` module and loses the citation links unless they are
   rebuilt as HTML. The first keeps the design (one `TextFlow` per answer) and is the likely choice.
   The CLI prints the same text, so a plain-text rendering there is unaffected.
-
-- **Let the settings dialog's long texts wrap instead of squeezing the controls.** Seen by Amar on
-  2026-11-10: after "Test connection", the result ("Connected. New conversations use the cloud
-  model …") was cut with "…" and shrank the Backend, Model and Test connection controls to "…"
-  too, until the window was widened. The result label sits in the same row as the button, inside
-  a grid column that has no width of its own. A better version puts the result on its own row with
-  a maximum width so it wraps, or gives the grid's columns fixed widths.
-- **Hide the privacy log in the settings dialog until the user asks for it.** It opens with the
-  newest requests in full view, which someone recording a video or sharing their screen wouldn't
-  want (Amar, 2026-11-10). A better version shows a "Show privacy log" button, or a collapsed
-  pane, and loads the entries only when it is opened.
 - **The GUI runs on XWayland, not Wayland.** On a Wayland desktop the window is an X11 client
   (Amar, 2026-11-10). This can't be changed from the app: JavaFX's Linux backend is GTK on X11,
   and the OpenJFX maintainers say JavaFX is supported on Wayland through XWayland, as AWT is;

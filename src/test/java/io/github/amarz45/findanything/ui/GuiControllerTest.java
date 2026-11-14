@@ -23,12 +23,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javafx.event.ActionEvent;
+import javafx.event.Event;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.DatePicker;
+import javafx.scene.control.DialogEvent;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
@@ -453,6 +456,46 @@ class GuiControllerTest {
     }
 
     @Test
+    void thePreviewIsEmptiedWhenTheSelectedFileLeavesTheResults() throws Exception {
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        onFxThread(() -> input().setText("merge"));
+        awaitFiles("lecture.pdf");
+        onFxThread(() -> window.getResultsView().getSelectionModel().select(0));
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").size() == 1,
+                () -> "the preview of lecture.pdf with one match");
+
+        // Deleted: the rescan removes it from the index, the table and the preview.
+        Files.delete(docs.resolve("lecture.pdf"));
+        service.addExclusion("*.nothing", null);
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").isEmpty(),
+                () -> "the preview emptied after lecture.pdf was deleted");
+        assertThat(previewMessage()).isEqualTo(DetailPane.SELECT_A_RESULT);
+        assertThat(error(window)).isNull();
+
+        // A new query that doesn't match the selected file empties its preview too.
+        onFxThread(() -> input().setText("dentist"));
+        awaitFiles("dentist.txt");
+        onFxThread(() -> window.getResultsView().getSelectionModel().select(0));
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").size() == 1,
+                () -> "the preview of dentist.txt with one match");
+        onFxThread(() -> input().setText("photo"));
+        awaitFiles("photo.bin");
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").isEmpty(),
+                () -> "the preview emptied after dentist.txt left the results");
+        assertThat(previewMessage()).isEqualTo(DetailPane.SELECT_A_RESULT);
+    }
+
+    String previewMessage() throws Exception {
+        return onFxThread(
+                () -> ((Label) window.getDetailPane().lookup(".preview-message")).getText());
+    }
+
+    @Test
     void folderProblemsAppearInTheErrorBar() throws Exception {
         onFxThread(() -> controller.onAddFolder(docs));
         Path inside = docs.resolve("inside");
@@ -761,6 +804,39 @@ class GuiControllerTest {
     }
 
     @Test
+    void aLongTestResultWrapsAndLeavesTheControlsTheirWidth() throws Exception {
+        Button testConnection = inDialog(".test-connection");
+        ChoiceBox<BackendType> backend = inDialog(".backend-choice");
+        Label resultLabel = inDialog(".test-result");
+        String message =
+                "Connected. New conversations use the cloud model vendor/a-model-with-a-long-name."
+                        + " Conversations that are already open keep the model they started with.";
+        onFxThread(
+                () -> {
+                    DialogPane pane = window.getSettingsDialog().getDialogPane();
+                    window.getSettingsDialog().showTestResult(true, "Connected.");
+                    pane.applyCss();
+                    pane.resize(pane.prefWidth(-1), pane.prefHeight(-1));
+                    pane.layout();
+                });
+        double lineHeight = onFxThread(resultLabel::getHeight);
+        onFxThread(
+                () -> {
+                    DialogPane pane = window.getSettingsDialog().getDialogPane();
+                    window.getSettingsDialog().showTestResult(true, message);
+                    pane.applyCss();
+                    pane.resize(pane.prefWidth(-1), pane.prefHeight(-1));
+                    pane.layout();
+                });
+
+        assertThat(onFxThread(testConnection::getWidth))
+                .isGreaterThanOrEqualTo(onFxThread(() -> testConnection.prefWidth(-1)) - 0.5);
+        assertThat(onFxThread(backend::getWidth))
+                .isGreaterThanOrEqualTo(onFxThread(() -> backend.prefWidth(-1)) - 0.5);
+        assertThat(onFxThread(resultLabel::getHeight)).isGreaterThan(lineHeight * 1.5);
+    }
+
+    @Test
     void settingsDialogTogglesRedactionAndShowsThePrivacyLog() throws Exception {
         List<CheckBox> boxes =
                 onFxThread(
@@ -797,18 +873,50 @@ class GuiControllerTest {
         onFxThread(sinAgain::fire); // on again
         assertThat(service.getRedactionCategories()).containsEntry("sin", true);
 
+        // The log holds text from the user's files, so it is hidden until asked for.
         TextArea log = inDialog(".privacy-log");
+        Button showLog = inDialog(".show-privacy-log");
+        Button refreshLog = inDialog(".refresh-log");
+        assertThat(onFxThread(() -> log.isVisible() || log.isManaged())).isFalse();
+        assertThat(onFxThread(() -> refreshLog.isVisible() || refreshLog.isManaged())).isFalse();
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.SHOW_LOG);
+
+        // Shown: the log as it is now, with "Refresh" beside a button that hides it again.
+        onFxThread(showLog::fire);
+        assertThat(onFxThread(() -> log.isVisible() && log.isManaged())).isTrue();
+        assertThat(onFxThread(() -> refreshLog.isVisible() && refreshLog.isManaged())).isTrue();
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.HIDE_LOG);
         assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+
+        // Refreshed after a cloud request.
         onFxThread(() -> controller.onAskSubmitted("Is anything due this week?"));
         awaitDetail(".answer");
-        onFxThread(
-                () ->
-                        ((Button) window.getSettingsDialog().getDialogPane().lookup(".refresh-log"))
-                                .fire());
+        assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+        onFxThread(refreshLog::fire);
         assertThat(onFxThread(() -> log.getText()))
                 .startsWith("1. ")
                 .contains("vendor/model")
                 .contains("Redacted: nothing")
                 .contains("[user] Is anything due this week?");
+
+        // Hidden again by the same button: the text is dropped with it.
+        onFxThread(showLog::fire);
+        assertThat(onFxThread(() -> log.isVisible() || log.isManaged())).isFalse();
+        assertThat(onFxThread(() -> refreshLog.isVisible() || refreshLog.isManaged())).isFalse();
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.SHOW_LOG);
+        assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+
+        // Shown once more, then the window is closed: hidden as well.
+        onFxThread(showLog::fire);
+        assertThat(onFxThread(() -> log.getText())).startsWith("1. ");
+        onFxThread(
+                () ->
+                        Event.fireEvent(
+                                window.getSettingsDialog(),
+                                new DialogEvent(
+                                        window.getSettingsDialog(), DialogEvent.DIALOG_HIDDEN)));
+        assertThat(onFxThread(() -> log.isVisible() || log.isManaged())).isFalse();
+        assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.SHOW_LOG);
     }
 }

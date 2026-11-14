@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import javafx.geometry.Insets;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
@@ -20,6 +21,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.util.StringConverter;
@@ -30,6 +32,9 @@ import javafx.util.StringConverter;
  * through callbacks; {@link GuiController} does the work. Non-modal, so the main window stays
  * usable while it is open.
  *
+ * <p>The privacy log holds text from the user's files, so it stays hidden until the user asks for
+ * it. The user can hide it again, and closing the window hides it too.
+ *
  * <p>Left to the CLI: the global exclusion rules and rebuilding the index.
  */
 public final class SettingsDialog extends Dialog<Void> {
@@ -39,6 +44,11 @@ public final class SettingsDialog extends Dialog<Void> {
     static final String KEY_MISSING = "API key: none. Put OPENROUTER_API_KEY in .env.";
     static final String LIMITATION = CliApp.Privacy.LIMITATION;
     static final String NOTHING_SENT = "Nothing has been sent to a cloud model.";
+    static final String SHOW_LOG = "Show privacy log";
+    static final String HIDE_LOG = "Hide privacy log";
+
+    /** The widest a connection test's result gets before it wraps onto another line. */
+    private static final double TEST_RESULT_WIDTH = 480;
 
     private final ChoiceBox<BackendType> backend = new ChoiceBox<>();
     private final TextField modelName = new TextField();
@@ -48,6 +58,7 @@ public final class SettingsDialog extends Dialog<Void> {
     private final VBox redactionToggles = new VBox(4);
     private final Map<String, CheckBox> categoryBoxes = new LinkedHashMap<>();
     private final TextArea privacyLog = new TextArea();
+    private final Button showLog = new Button(SHOW_LOG);
     private final Button refreshLog = new Button("Refresh");
 
     private boolean readOnly;
@@ -92,8 +103,12 @@ public final class SettingsDialog extends Dialog<Void> {
                     testConnection.setDisable(true);
                     onTestBackend.accept(backend.getValue(), modelName.getText());
                 });
+        // The result gets a row to itself and a width at which it wraps. Beside the button, a
+        // long result asked for one long line and squeezed every control in the grid.
         testResult.getStyleClass().add("test-result");
         testResult.setWrapText(true);
+        testResult.setMaxWidth(TEST_RESULT_WIDTH);
+        testResult.setMinHeight(Region.USE_PREF_SIZE);
 
         GridPane model = new GridPane();
         model.setHgap(8);
@@ -103,7 +118,8 @@ public final class SettingsDialog extends Dialog<Void> {
         model.add(new Label("Model"), 0, 1);
         model.add(modelName, 1, 1);
         model.add(keyLine, 1, 2);
-        model.add(new HBox(8, testConnection, testResult), 1, 3);
+        model.add(testConnection, 1, 3);
+        model.add(testResult, 1, 4);
         GridPane.setHgrow(modelName, Priority.ALWAYS);
 
         Label limitation = new Label(LIMITATION);
@@ -115,9 +131,18 @@ public final class SettingsDialog extends Dialog<Void> {
         privacyLog.setEditable(false);
         privacyLog.setWrapText(true);
         privacyLog.setPrefRowCount(12);
-        privacyLog.setText(NOTHING_SENT);
+        showLog.getStyleClass().add("show-privacy-log");
+        showLog.setOnAction(
+                event -> {
+                    boolean show = !privacyLog.isVisible();
+                    setPrivacyLogShown(show);
+                    if (show) {
+                        onShowPrivacyLog.run();
+                    }
+                });
         refreshLog.getStyleClass().add("refresh-log");
         refreshLog.setOnAction(event -> onShowPrivacyLog.run());
+        setPrivacyLogShown(false);
 
         VBox content =
                 new VBox(
@@ -131,19 +156,44 @@ public final class SettingsDialog extends Dialog<Void> {
                         new HBox(
                                 8,
                                 heading("Privacy log: what was sent to cloud models"),
+                                showLog,
                                 refreshLog),
                         privacyLog);
         content.setPadding(new Insets(8));
         VBox.setVgrow(privacyLog, Priority.ALWAYS);
         getDialogPane().setContent(content);
         getDialogPane().setPrefWidth(620);
-        setOnShowing(event -> onShowPrivacyLog.run());
+        setOnHidden(event -> setPrivacyLogShown(false));
     }
 
     private static Label heading(String text) {
         Label label = new Label(text);
         label.getStyleClass().add("detail-header");
         return label;
+    }
+
+    /**
+     * Shows or hides the privacy log's text area together with its "Refresh" button. Hiding it also
+     * drops its text. The window is then sized again to fit what it shows.
+     */
+    private void setPrivacyLogShown(boolean shown) {
+        if (!shown) {
+            privacyLog.setText(NOTHING_SENT);
+        }
+        privacyLog.setVisible(shown);
+        privacyLog.setManaged(shown);
+        refreshLog.setVisible(shown);
+        refreshLog.setManaged(shown);
+        showLog.setText(shown ? HIDE_LOG : SHOW_LOG);
+        fitWindow();
+    }
+
+    /** Sizes the window again to fit its content, after the content's height has changed. */
+    private void fitWindow() {
+        Scene scene = getDialogPane().getScene();
+        if (scene != null && scene.getWindow() != null) {
+            scene.getWindow().sizeToScene();
+        }
     }
 
     // ------------------------------------------------------------------ what the controller shows
@@ -167,12 +217,18 @@ public final class SettingsDialog extends Dialog<Void> {
         keyLine.setManaged(cloud);
     }
 
-    /** Shows the connection test's outcome (SD08). */
+    /**
+     * Shows the connection test's outcome (SD08). A long one wraps onto more lines, so the window
+     * grows to fit it, unless the privacy log is shown: its text area gives up the height instead.
+     */
     public void showTestResult(boolean succeeded, String message) {
         testConnection.setDisable(false);
         testResult.getStyleClass().removeAll("citation-verified", "unverified");
         testResult.getStyleClass().add(succeeded ? "citation-verified" : "unverified");
         testResult.setText(Objects.requireNonNull(message, "message"));
+        if (!privacyLog.isVisible()) {
+            fitWindow();
+        }
     }
 
     /** Shows each redaction category with whether it is on, as a toggle. */
@@ -192,7 +248,10 @@ public final class SettingsDialog extends Dialog<Void> {
                 });
     }
 
-    /** Shows the privacy log's entries, newest first (UC09); an empty log says so. */
+    /**
+     * Fills the privacy log with the entries, newest first (UC09); an empty log says so. The text
+     * is visible only while the user has the log shown.
+     */
     public void showPrivacyLog(List<PrivacyLogEntry> entries) {
         Objects.requireNonNull(entries, "entries");
         if (entries.isEmpty()) {
@@ -226,7 +285,7 @@ public final class SettingsDialog extends Dialog<Void> {
         this.onRedactionToggled = Objects.requireNonNull(onRedactionToggled, "onRedactionToggled");
     }
 
-    /** Called when the dialog opens and when "Refresh" is clicked. */
+    /** Called when "Show privacy log" is clicked, and on each "Refresh". */
     public void setOnShowPrivacyLog(Runnable onShowPrivacyLog) {
         this.onShowPrivacyLog = Objects.requireNonNull(onShowPrivacyLog, "onShowPrivacyLog");
     }

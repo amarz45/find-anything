@@ -154,6 +154,33 @@ class DetailPaneTest {
     }
 
     @Test
+    void clearPreviewPutsBackTheEmptyPreview() throws Exception {
+        Preview preview =
+                new Preview(
+                        file(LEASE, ExtractionStatus.OK),
+                        "The lease ends.",
+                        List.of(new Preview.Range(4, 9)));
+        onFxThread(() -> pane.showPreview(preview));
+        assertThat(texts(".highlight")).containsExactly("lease");
+
+        onFxThread(() -> pane.clearPreview());
+
+        assertThat(texts(".highlight")).isEmpty();
+        assertThat(texts(".detail-header")).containsExactly("");
+        assertThat(texts(".detail-meta")).containsExactly("");
+        assertThat(shown(".preview-message")).isTrue();
+        assertThat(texts(".preview-message")).containsExactly(DetailPane.SELECT_A_RESULT);
+        // "Open file" and "Show in folder" have no file to act on.
+        assertThat(
+                        onFxThread(
+                                () ->
+                                        pane.lookupAll(".button").stream()
+                                                .filter(Node::isVisible)
+                                                .count()))
+                .isZero();
+    }
+
+    @Test
     void conversationShowsTheRequestTheStepsThenTheMarkedAnswer() throws Exception {
         onFxThread(() -> pane.showRequest("When does my lease end?"));
         assertThat(texts(".request")).containsExactly("When does my lease end?");

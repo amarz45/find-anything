@@ -599,6 +599,10 @@ Diagrams updated:
   - `ResultsView`: `setOnResultSelected()`, `setOnTryAsk()`.
   - `DetailPane`: `clearConversation()`, `showConversation()`, `showRequest()`,
     `showPastExchange()`, `setOnCitationClicked()`; the Back button is view state.
+    (`clearPreview()` came on 2026-11-14: `GuiController.showResults()` empties the preview when
+    the selected file is no longer among the results, because it was deleted or because a new
+    query doesn't match it. Before, the preview of a deleted file stayed until another file was
+    selected.)
   - `GuiController`: `onRemoveFolder()` (the diagram has no remove handler). Not declared, since
     not built: `onCompareRequested()` (F10), `onAddExclusion()`. (`onFiltersChanged()` came with
     F04 on 2026-11-13; see "F04's filters" below.)
