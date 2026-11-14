@@ -732,6 +732,25 @@ Diagrams updated:
   and the GUI's filters applying to the agent's searches.
   Diagrams updated: not yet (cd01 at the freeze).
 
+### The prompt says a search gives one passage per file (2026-11-13, after Slice 3)
+- **Original design:** `PromptBuilder` tells the model to "search with a few specific keywords".
+  Nothing tells it that a search result holds only each file's best passage for the query.
+- **Implemented change:** one sentence after that instruction: "A search gives each file with the
+  one passage that best matches your query, so include the words you expect to find next to the
+  answer." It names no example and forbids nothing, so a file's name stays a good search word.
+- **Reason:** seen on 2026-11-13 with `qwen3:14b` on Amar's documents. After "What's my current
+  GPA?", the follow-up "It should be in my transcript" made the model run
+  `search(query="transcript")`. The best passage for that word is page 2 of `transcript.pdf`
+  (help links that repeat "transcript"); the GPA table is on page 1. The model never read page 1
+  and answered that the transcript lists no GPA. The index was fine: searching "GPA" gives
+  page 1.
+- **Impact:** F07; `PromptBuilder`. Checked the same evening with `qwen3:14b`, the same two
+  requests three times: the sentence alone did not fix it. The first request was answered
+  without a search all three times (a separate problem, see `TODO.md`, "The agent's search"), and
+  the follow-up searched for "transcript" alone in two runs and tried "GPA transcript" first in
+  the third. Not checked with the cloud model.
+  Diagrams updated: none needed.
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

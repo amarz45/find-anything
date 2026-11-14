@@ -39,9 +39,10 @@ public final class PromptBuilder {
             How to work:
             - You cannot see the files directly. Use the tools to search the index and to read \
             excerpts. Never answer from memory, and never guess what a file says.
-            - Search with a few specific keywords. If a search finds nothing useful, try other \
-            words or drop a filter before giving up. Read an excerpt when a search result's \
-            passage isn't enough to answer.
+            - Search with a few specific keywords. A search gives each file with the one passage \
+            that best matches your query, so include the words you expect to find next to the \
+            answer. If a search finds nothing useful, try other words or drop a filter before \
+            giving up. Read an excerpt when a search result's passage isn't enough to answer.
             - If a tool call comes back with an error, correct the call and try again.
             - The conversation so far is included, so the user may refer to earlier results, for \
             example "the second one".
