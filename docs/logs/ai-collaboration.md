@@ -407,3 +407,88 @@ The first entries were drafted from the planning conversation in the claude.ai a
   done: the label on a search result, checking either agent change with the cloud model, and
   looking at the filter row on a real display.
 
+### 2026-11-14: F05 semantic search, and why "CV" didn't find the résumé
+- **Tool / model:** Claude Code, Claude Fable 5.2
+- **Task:** decide whether F05 (semantic search) fits in the last day before the freeze, then
+  build it: a local embedding model, vectors in the index, the indexer's embedding phase, and
+  hybrid ranking.
+- **Input / instruction:** "Estimate how complex it would be to implement semantic search /
+  embeddings." Then a request to go ahead with "a simple approach that has the possibility for
+  further improvement later". After trying it on his documents: "The results from searching CV
+  aren't very good."
+- **AI contribution:**
+  - **Estimate and plan.** Found what the code already had for F05 (`Chunk.embedding`, the
+    `EMBEDDING` state, a tested `fuseRankings()`, an empty `embedNextBatch()`), estimated five
+    commits, and recommended skipping the feature because of the time left and the new native
+    libraries. When Amar went ahead, it wrote a plan of six commits with the eight design
+    changes listed for approval.
+  - **The model and its libraries.** Chose bge-small-en-v1.5 from the models LangChain4j
+    packages because a 1,500-character chunk fits its input, and read the libraries' sources to
+    find two things to prevent: the tokenizer library unpacks into `~/.djl.ai`, and with CUDA
+    present it downloads another build of itself. `LocalEmbeddingModel` sets both properties.
+  - **The code,** one commit at a time with tests: `EmbeddingModel` and `LocalEmbeddingModel`;
+    the vector methods of `SearchIndex`; `Indexer.embedNextBatch()` with its failure handling;
+    hybrid ranking in `SearchEngine` and `findany search --keyword-only`; file-name vectors; the
+    status texts, the warning and the model's load at GUI startup; then the documents.
+  - **Measurements** that set constants or went into the log: the model's load time (about a
+    second), the embedding speed, and the similarity of 56 queries on the test corpus, from
+    which the floor of 0.62 comes.
+  - **Found on the way.** A vector of the wrong length would have deleted a file's index
+    entries and then failed to add the new ones; `SearchIndex.put()` now replaces them in one
+    step. Two files with the same hash and different chunks would have made the embedding phase
+    loop forever; there is a test for it.
+  - **Mistakes.**
+    - Asked only how to add the dependency, it went on to read the library's sources for the
+      adapter, and was stopped twice.
+    - It said embedding scales almost linearly with cores at "tens of chunks per second per
+      core". Measured, it is 6 per core and about 27 in total.
+    - It hard-coded four embedding threads from a benchmark whose "threads" were not the
+      threads doing the work: ONNX Runtime was already using all 16 cores. The corrected
+      measurement showed no setting was faster, and the thread pool was removed.
+    - It reported that "CV" doesn't find the résumé with this model, and when Amar saw the
+      same on his documents, proposed comparing other models. That was a guess: the semantic
+      half had never been given the file names.
+    - It wrote that the model "uses CUDA on an NVIDIA GPU"; only the tokenizer library looks
+      for CUDA, and the model always runs on the processor.
+- **Human contribution:**
+  - Decided to build F05 against the AI's recommendation to skip it, and allowed changes on
+    November 14 with the freeze on the 15th.
+  - Gave permission for the download, the model and the branch, and stopped the AI when it
+    went past what he had permitted.
+  - Rejected the hard-coded thread count: more threads should be faster up to the core count,
+    and a number fitted to his machine may not suit others. This led to the second measurement
+    and to having no thread pool.
+  - Asked why the model is loaded on first use when the local agent model appeared to be
+    loaded already (13 of 16 GB of his GPU memory in use). The memory was Ollama keeping the
+    model for five minutes after a request.
+  - Tested each stage on his own documents. He found that "cv" listed one file and not his
+    résumé files, refused the model comparison as an unnecessary test, and said that a file
+    named "resume" should match "CV": "Is the search only for file contents?" A measurement
+    confirmed it (`Résumé/resume.pdf` scores 0.68 against "cv", a résumé's text 0.58), and file
+    names were embedded.
+  - Asked how the name and the text vectors are connected, and whether
+    `findFilesWithoutNameEmbeddings()` existed only to spare an old index a rebuild, which he
+    didn't want. It is needed on every run; he accepted that and approved the change.
+  - Confirmed in the CLI and the GUI that "CV" lists his résumé, that the warning appears when
+    the model is made to fail, and that the agent works with hybrid results. "marks" didn't list
+    his transcript; he left that as it is.
+  - Had each commit made only after reviewing it, and asked for the pull request and the
+    documents.
+- **Outcome:** pull request #12, six code commits:
+  [3047ef5](https://github.com/amarz45/find-anything/commit/3047ef5dd1a9d107dd073f9971ef677dfee58416)
+  (the local embedding model),
+  [11c209a](https://github.com/amarz45/find-anything/commit/11c209a4bf6fd22779a2e87b244ce75c35881c9c)
+  (vectors in `SearchIndex`),
+  [dca7718](https://github.com/amarz45/find-anything/commit/dca7718bd4b2e4240d5213cbf5bd0daac9fd7fce)
+  (the indexer's embedding phase),
+  [6a60eb1](https://github.com/amarz45/find-anything/commit/6a60eb1d2b3d2d31b6ae409b98e96972a8f914d2)
+  (hybrid ranking and `--keyword-only`),
+  [f82ee54](https://github.com/amarz45/find-anything/commit/f82ee542d9c20d6fc2dc90e776f2a48303957bde)
+  (file names embedded),
+  [0d3f499](https://github.com/amarz45/find-anything/commit/0d3f499a56770edfa5df6124c037518f717ece41)
+  (the status and the warning); and
+  [ddae1d5](https://github.com/amarz45/find-anything/commit/ddae1d54dfc61b7ff7d40ee879600c7bea28843a)
+  (the documents). F05 is implemented and F06 is hybrid. On the test corpus "cv" finds the
+  résumé, "tooth doctor" the dentist note, and a nonsense query nothing. Not done: the diagrams,
+  and the borderline matches listed in `TODO.md`.
+
