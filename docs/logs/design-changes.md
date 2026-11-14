@@ -819,6 +819,34 @@ Diagrams updated:
   Mac has no native tokenizer library in the jar, so it will get keyword search with the warning.
   Nothing uses the model yet. Diagrams updated: not yet (cd02 at the freeze).
 
+### Vectors in `SearchIndex`, with no `ContentStore` (2026-11-14, Tier 2)
+- **Original design:** `SearchIndex` has `addEmbeddings(contentHash, vectors)`,
+  `findContentWithoutEmbeddings(limit)` and `vectorSearch(queryVector, searchFilters, limit)`. The
+  chunks to embed come from `ContentStore.get()`, and `addEmbeddings()` writes to both stores.
+  Nothing says where `IndexStatus.chunksWithoutEmbeddings` is counted.
+- **Implemented change:** the three methods as designed, on the index alone, plus two new ones:
+  - `getChunksOfContent(contentHash)`: the chunks of one indexed file with that hash whose chunks
+    have no vectors. It stands in for `ContentStore.get()`.
+  - `countChunksWithoutEmbeddings()`: the number for the status.
+
+  What the design left open:
+  - A chunk's vector is kept on the chunk's own index entry, and `put()` stores the vector of a
+    chunk that has one. Lucene can't add a vector to an existing entry, so `addEmbeddings()`
+    stores each file with that content again, chunks and vectors together. It works from the
+    last committed snapshot.
+  - Two files can have the same hash and different chunks, when one extraction was cut short.
+    `addEmbeddings()` gives the vectors only to the files with as many chunks as there are
+    vectors; the other file's chunks are handed out by `getChunksOfContent()` next.
+  - "Without embeddings" is worked out from the entries (a chunk, and no vector), not from a
+    mark written at indexing time, so an index made before F05 is embedded with no rebuild.
+  - A vector hit's score is the cosine similarity (1 for the same direction, 0 for unrelated).
+  - Chunks read back from the index carry no vector: vectors are searched, never handed out.
+- **Reason:** `ContentStore` is postponed (see its entry), and the index already holds every
+  chunk's text and each file's content hash.
+- **Impact:** F05; `SearchIndex`. A copied or renamed file is embedded again, because the copy's
+  entries start without vectors and vectors can't be read back for reuse. Nothing calls these
+  methods yet. Diagrams updated: not yet (cd02 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
