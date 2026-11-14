@@ -7,8 +7,10 @@ This is the EECS3311 (Fall 2026) course project.
 ## Stage 2: implementation (in progress)
 
 The application is being built in Stage 2 (due November 15, 2026). Indexing, search by keywords and
-by meaning, filters, the agent (`ask`), the GUI and the privacy features work; the live file watcher
-and document comparison are the Tier 2 items left out.
+by meaning, filters, the agent (`ask`), the GUI and the privacy features work. Two parts of the
+design are left out: the live file watcher (the index is updated by a rescan at startup and on
+request), and document comparison with a diff (F10). The agent can still be asked what differs
+between two files and answers with citations from both.
 
 ### Prerequisites
 

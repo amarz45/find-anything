@@ -986,8 +986,50 @@ Diagrams updated:
   the status texts and the warning in the window; the GUI tests cover them on the headless
   toolkit only. Diagrams updated: not yet (cd01 at the freeze).
 
+### F10: document comparison is not implemented (2026-11-14, Tier 2)
+1. **Original Stage 1 feature and ID:** F10 Document comparison. Two files are rebuilt from their
+   chunks and diffed line by line; only the diff goes to the model, which summarizes it with
+   verified citations. It is reached from "Compare" on two selected results, from
+   `findany compare <fileA> <fileB> [--diff-only]`, and by the agent through `CompareTool`. The
+   detail pane shows a highlighted side-by-side diff with the summary.
+2. **Implemented feature and its behavior:** none of F10's own parts. What exists is Ask mode
+   (F07, F08, F09, F12): asked about two files, the agent searches, reads excerpts of both and
+   answers with a citation from each, and every citation is verified. On `testdata/corpus` with
+   the cloud model (2026-11-05), "And how much is the rent?" gave $1,850 from the 2025–2026 lease
+   and $1,925 from the 2026–2027 draft, both verified.
+3. **What changed and why:** F10 was last in the Tier 2 order and is left out (status: Not
+   implemented), decided by Amar on 2026-11-14. The benefit doesn't justify the complexity:
+   - **The agent already compares documents, only without a diff.** A question about what differs
+     between two files is answered today with citations from both.
+   - **The cost.** F10 is the largest feature that was left: six classes and records, a third
+     tool, a second model request with its own prompt, a facade method, a CLI command, selecting
+     two rows in the table, and a side-by-side view.
+   - **A line diff suits only two versions of one document.** For two different documents (two
+     job offers, two course outlines) nearly every line differs, and the agent is the better
+     tool.
+   - **A line diff of extracted text is likely to be noisy** (expected, not tested): a PDF's line
+     breaks follow its layout, so a paragraph that reflows between two drafts would show as
+     changed throughout. A usable version would need more than the design's line-by-line diff,
+     such as normalizing whitespace or comparing by words.
+4. **How the scope changed:** the user can still ask what differs between two files and gets a
+   cited, verified answer. What is lost:
+   - **Completeness:** the agent reads the best passage of each file and excerpts of at most
+     6,000 characters, so it finds the differences it looks for, not every changed line.
+   - **Comparing without a model:** `--diff-only`, the "no differences" result for identical
+     texts, and the diff that is still shown when the model is unavailable.
+   - **Sending only the diff to a cloud model:** the agent sends passages of both files (redacted
+     or withheld by F14 as for any request).
+   - **The side-by-side view.**
+5. **Affected use cases, classes, methods, and design patterns:** UC06 Compare documents and SD05
+   have no implementation. Not built: `DocumentComparator` (`diff()`), `DiffResult`, `DiffHunk`,
+   `Comparison`, `CompareTool`, `FindAnythingService.compare()`,
+   `AgentController.summarizeDiff()`, `PromptBuilder.buildDiffSummaryRequest()`,
+   `GuiController.onCompareRequested()`, `DetailPane.showComparison()` and `findany compare`.
+   `ResultsView` selects one row at a time. Command keeps its structure with two concrete
+   commands, `SearchTool` and `ReadExcerptTool`; Facade has one operation fewer.
+   Diagrams updated: not yet (at the freeze: cd01, cd04, cd05, the use-case diagram, SD05).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
-- F10: a Tier 2 feature that may end up *Not implemented* in Stage 2.
-- GUI: side-by-side comparison (F10), editing exclusions and pausing from the GUI (CLI-only).
+- GUI: editing exclusions and pausing from the GUI (CLI-only).

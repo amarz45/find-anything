@@ -103,7 +103,7 @@ public final class ResultsView extends TableView<SearchResult> {
         }
     }
 
-    /** The selected rows, in table order; one row at most for now (Compare is F10, Tier 2). */
+    /** The selected rows, in table order; one row at most for now. */
     public List<SearchResult> getSelectedResults() {
         return List.copyOf(getSelectionModel().getSelectedItems());
     }

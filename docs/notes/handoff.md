@@ -656,7 +656,13 @@ surprising.)*
     engine), on his own documents and with the "tooth doctor" question. He reported no problem.
   - An index made before this session is embedded on the next start, with no rebuild. A command
     that opens the index waits for it and shows the progress.
-  - Next, at the freeze: merge PR #12 (no squash) once CI is green; record the videos (F05 too;
+  - **F10 is Not implemented** (Amar's decision, Nov 14): the benefit doesn't justify the
+    complexity, since Ask mode already answers what differs between two files, only without a
+    diff. The entry is in `docs/logs/design-changes.md` ("F10: document comparison is not
+    implemented"); the F10 and Command rows of `docs/traceability.md` and the README say so too.
+    It needs no video. The diagrams still draw it (cd01, cd04, cd05, the use-case diagram, SD05).
+  - PR #12 is merged into `master`.
+  - Next, at the freeze: record the videos (F05 too;
     the F04 filter row still hasn't been looked at closely on a display); update the diagrams
     (F05 owes cd01, cd02, cd03, cd04, SD01 and SD02, on top of what earlier entries list); the
     report; the token and cost totals; the README check from a fresh clone.
