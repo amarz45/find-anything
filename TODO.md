@@ -209,10 +209,6 @@ Amar may change these later; undecided.
   too, until the window was widened. The result label sits in the same row as the button, inside
   a grid column that has no width of its own. A better version puts the result on its own row with
   a maximum width so it wraps, or gives the grid's columns fixed widths.
-- **Hide the privacy log in the settings dialog until the user asks for it.** It opens with the
-  newest requests in full view, which someone recording a video or sharing their screen wouldn't
-  want (Amar, 2026-11-10). A better version shows a "Show privacy log" button, or a collapsed
-  pane, and loads the entries only when it is opened.
 - **The GUI runs on XWayland, not Wayland.** On a Wayland desktop the window is an X11 client
   (Amar, 2026-11-10). This can't be changed from the app: JavaFX's Linux backend is GTK on X11,
   and the OpenJFX maintainers say JavaFX is supported on Wayland through XWayland, as AWT is;

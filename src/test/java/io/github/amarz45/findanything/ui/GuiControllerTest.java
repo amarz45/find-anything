@@ -23,12 +23,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javafx.event.ActionEvent;
+import javafx.event.Event;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.DatePicker;
+import javafx.scene.control.DialogEvent;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
@@ -797,18 +799,50 @@ class GuiControllerTest {
         onFxThread(sinAgain::fire); // on again
         assertThat(service.getRedactionCategories()).containsEntry("sin", true);
 
+        // The log holds text from the user's files, so it is hidden until asked for.
         TextArea log = inDialog(".privacy-log");
+        Button showLog = inDialog(".show-privacy-log");
+        Button refreshLog = inDialog(".refresh-log");
+        assertThat(onFxThread(() -> log.isVisible() || log.isManaged())).isFalse();
+        assertThat(onFxThread(() -> refreshLog.isVisible() || refreshLog.isManaged())).isFalse();
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.SHOW_LOG);
+
+        // Shown: the log as it is now, with "Refresh" beside a button that hides it again.
+        onFxThread(showLog::fire);
+        assertThat(onFxThread(() -> log.isVisible() && log.isManaged())).isTrue();
+        assertThat(onFxThread(() -> refreshLog.isVisible() && refreshLog.isManaged())).isTrue();
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.HIDE_LOG);
         assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+
+        // Refreshed after a cloud request.
         onFxThread(() -> controller.onAskSubmitted("Is anything due this week?"));
         awaitDetail(".answer");
-        onFxThread(
-                () ->
-                        ((Button) window.getSettingsDialog().getDialogPane().lookup(".refresh-log"))
-                                .fire());
+        assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+        onFxThread(refreshLog::fire);
         assertThat(onFxThread(() -> log.getText()))
                 .startsWith("1. ")
                 .contains("vendor/model")
                 .contains("Redacted: nothing")
                 .contains("[user] Is anything due this week?");
+
+        // Hidden again by the same button: the text is dropped with it.
+        onFxThread(showLog::fire);
+        assertThat(onFxThread(() -> log.isVisible() || log.isManaged())).isFalse();
+        assertThat(onFxThread(() -> refreshLog.isVisible() || refreshLog.isManaged())).isFalse();
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.SHOW_LOG);
+        assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+
+        // Shown once more, then the window is closed: hidden as well.
+        onFxThread(showLog::fire);
+        assertThat(onFxThread(() -> log.getText())).startsWith("1. ");
+        onFxThread(
+                () ->
+                        Event.fireEvent(
+                                window.getSettingsDialog(),
+                                new DialogEvent(
+                                        window.getSettingsDialog(), DialogEvent.DIALOG_HIDDEN)));
+        assertThat(onFxThread(() -> log.isVisible() || log.isManaged())).isFalse();
+        assertThat(onFxThread(() -> log.getText())).isEqualTo(SettingsDialog.NOTHING_SENT);
+        assertThat(onFxThread(showLog::getText)).isEqualTo(SettingsDialog.SHOW_LOG);
     }
 }
