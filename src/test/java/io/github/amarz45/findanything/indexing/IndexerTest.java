@@ -148,6 +148,19 @@ class IndexerTest {
     }
 
     @Test
+    void aPathOfferedStraightToTheQueueIsIndexedAndListenersHearUpToDate() throws Exception {
+        rescanAndWait();
+        notifications.clear();
+        Path added = docs.resolve("added.txt");
+        Files.writeString(added, "The dentist moved the appointment to March 11.");
+        // What the file watcher does: it offers the path itself, without requestUpdate().
+        queue.offer(added);
+        await(() -> notifications.stream().anyMatch(IndexStatus::isUpToDate));
+        assertThat(notifications.get(notifications.size() - 1).isUpToDate()).isTrue();
+        assertThat(index.getFile(added)).isPresent();
+    }
+
+    @Test
     void listenersHearUpToDateAfterASingleChange() throws Exception {
         rescanAndWait();
         notifications.clear();

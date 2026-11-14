@@ -165,8 +165,33 @@ Amar may change these later; undecided.
   real models first. Folding those characters before comparing changes behaviour the report
   describes, so log it in `docs/logs/design-changes.md`.
 
+## Live index updates
+
+- **Check what the watcher reports for a junction on Windows.** The project doesn't follow links
+  or junctions. On Linux the watcher registers each folder itself and never follows a link
+  (checked with a symbolic link on 2026-11-14). On Windows the library asks for the whole tree in
+  one registration, and neither it, the JDK nor Microsoft's `ReadDirectoryChangesW` page says
+  whether changes inside a junction's target are reported. If they are, such a file would be
+  indexed. A better version checks it by hand on Windows and, if needed, drops in
+  `FileWatcher.onChange()` any path that passes through a link. No design-changes entry: it is
+  what the design already says.
+- **Apply the quiet period to watched changes only.** In the GUI every path in `ChangeQueue`
+  waits two seconds, so the startup rescan begins two seconds after the window opens and its
+  changed files wait two more. The period is there for the bursts of events one save produces. A
+  better version gives `ChangeQueue.offer()` a delay per path, with none for a rescan's paths.
+  That changes `ChangeQueue`, so it needs a design-changes entry.
+- **Watch a folder again when it comes back.** A search folder whose watcher ends (the folder
+  was deleted, or its drive removed) is logged and not watched again until the next start, even
+  if it returns. A better version tries again on the next rescan of that folder. It needs a note
+  in the `FileWatcher` design-changes entry.
+
 ## GUI
 
+- **Clear the preview when the selected file is deleted.** With live watching, a deleted file
+  leaves the table a moment later, but its preview stays on the right until another file is
+  selected (noticed on 2026-11-14 while fixing the preview of an edited file). A better version
+  empties the detail pane when the selected file is no longer in the results after an index
+  update. No design-changes entry: the design doesn't describe this case.
 - **Render the answer's Markdown.** Models write their answers in Markdown (headings, `**bold**`,
   bullet lists, numbered lists, code spans), and `DetailPane.showAnswer()` shows that text as it
   is, so the marks appear literally in the pane (seen by Amar on 2026-11-07 with a tax question

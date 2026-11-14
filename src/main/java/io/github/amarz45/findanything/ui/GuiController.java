@@ -152,13 +152,29 @@ public final class GuiController implements IndexStatusListener {
                                                     mainWindow.showError(describe(failure));
                                                 } else {
                                                     resultsView.setFiltersActive(filtered);
-                                                    resultsView.setResults(results);
+                                                    showResults(results);
                                                     // The model can also fail during a search.
                                                     warnIfSemanticSearchIsOff();
                                                 }
                                             }));
         } catch (RuntimeException e) {
             mainWindow.showError(describe(e));
+        }
+    }
+
+    /**
+     * Fills the table with a search's results. The table keeps the selected file selected without
+     * announcing it, so when that file was indexed again meanwhile (its size, time or content
+     * differ), its preview is loaded again here; an unchanged file's preview is left as it is.
+     */
+    private void showResults(List<SearchResult> results) {
+        List<SearchResult> before = resultsView.getSelectedResults();
+        resultsView.setResults(results);
+        List<SearchResult> after = resultsView.getSelectedResults();
+        if (before.size() == 1
+                && after.size() == 1
+                && !after.get(0).file().equals(before.get(0).file())) {
+            onResultSelected(after.get(0));
         }
     }
 

@@ -666,3 +666,26 @@ surprising.)*
     the F04 filter row still hasn't been looked at closely on a display); update the diagrams
     (F05 owes cd01, cd02, cd03, cd04, SD01 and SD02, on top of what earlier entries list); the
     report; the token and cost totals; the README check from a fresh clone.
+- **2026-11-14 (Session 10: the live watcher, Claude Code):**
+  - Done, on branch `live-watcher` (3 code commits, the rest documents; PR #13, CI green on
+    Ubuntu and Windows): F03 is Implemented. The entry is in `docs/logs/design-changes.md`
+    ("`FileWatcher`: one watcher per folder, and what the design left open").
+    1. `a7ca3f5`: `indexing/FileWatcher` over directory-watcher 0.19.1, one library watcher and
+       thread per search folder, hashing off, excluded folders never registered.
+    2. `1f06018`: `FindAnythingService.open(true)` starts it; `addSearchFolder()` and
+       `removeSearchFolder()` watch and unwatch; `findany gui` opens with watching and a
+       two-second quiet period (`CliApp.GUI_QUIET_PERIOD`). The other commands are unchanged.
+    3. `4bdc432`: the selected file's preview is loaded again when the file is indexed again
+       (found by Amar in the GUI; in `docs/logs/test-failures.md`).
+  - Tests: none waits for a real file-system event (Amar's choice: they could be flaky, and
+    most testing is Stage 3). `FileWatcherTest` calls `onChange()` and `onOverflow()` directly.
+  - Checked: on Linux by a script against the built jars, and by Amar in the GUI (the table and,
+    after the fix, the preview update live). **Not checked:** Windows, and junctions there.
+  - Facts read in the library's 0.19.1 sources (in the Gradle cache), worth knowing before
+    changing `FileWatcher`: file hashing is on by default and reads every file at startup; a
+    watcher's folders are fixed once it is built; `watchAsync()` registers on the calling thread
+    before it returns; with hashing off a deleted folder gives one event, for the folder.
+  - Left for later, in `TODO.md` ("Live index updates", and "GUI" for the deleted file's
+    preview).
+  - Next: the freeze, as listed in Session 9's entry. For the F03 video: with a search showing, edit, create, delete and rename a file.
+    cd03 owes `watchedFolders`' type and `FileWatcher`'s two methods.

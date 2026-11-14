@@ -432,6 +432,27 @@ class GuiControllerTest {
     }
 
     @Test
+    void theSelectedFilesPreviewIsLoadedAgainWhenTheFileIsIndexedAgain() throws Exception {
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        onFxThread(() -> input().setText("merge"));
+        awaitFiles("lecture.pdf");
+        onFxThread(() -> window.getResultsView().getSelectionModel().select(0));
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").size() == 1,
+                () -> "the preview of lecture.pdf with one match");
+
+        Files.writeString(
+                docs.resolve("lecture.pdf"), "Slide one.\fTo merge two runs, merge them in order.");
+        // Any new rule makes the folders be rescanned, which finds the edit as the watcher would.
+        service.addExclusion("*.nothing", null);
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").size() == 2,
+                () -> "the preview of the edited lecture.pdf with two matches");
+        assertThat(onFxThread(() -> window.getResultsView().getSelectedResults())).hasSize(1);
+    }
+
+    @Test
     void folderProblemsAppearInTheErrorBar() throws Exception {
         onFxThread(() -> controller.onAddFolder(docs));
         Path inside = docs.resolve("inside");

@@ -22,6 +22,7 @@ import io.github.amarz45.findanything.embedding.EmbeddingException;
 import io.github.amarz45.findanything.embedding.EmbeddingModel;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
+import io.github.amarz45.findanything.indexing.FileWatcher;
 import io.github.amarz45.findanything.indexing.IndexStatus;
 import io.github.amarz45.findanything.indexing.IndexStatusListener;
 import io.github.amarz45.findanything.indexing.Indexer;
@@ -140,6 +141,7 @@ public final class FindAnythingService implements AutoCloseable {
     private SearchIndex searchIndex;
     private IndexMode indexMode;
     private Indexer indexer; // only in WRITER mode
+    private FileWatcher fileWatcher; // only in WRITER mode, when opened with live watching
     private SearchEngine searchEngine;
     private AgentController agentController;
     private ScheduledExecutorService refresher; // only in READ_ONLY mode
@@ -184,8 +186,9 @@ public final class FindAnythingService implements AutoCloseable {
      * queues every search folder for a rescan (the startup catch-up). Otherwise the index is
      * read-only and is refreshed every few seconds. Calling this again returns the same mode.
      *
-     * @param watchFiles whether to watch the search folders for live changes; live watching is not
-     *     available yet, so changes are picked up at startup and on request (F03, modified)
+     * @param watchFiles whether to also watch the search folders, so a change is indexed a moment
+     *     after it happens (F03); without it, changes are picked up at startup and on request. Only
+     *     the process with the write lock watches.
      */
     public synchronized IndexMode open(boolean watchFiles) throws IOException {
         if (searchIndex != null) {
@@ -226,9 +229,8 @@ public final class FindAnythingService implements AutoCloseable {
                 }
             }
             if (watchFiles) {
-                log.info(
-                        "Live file watching is not available in this version; changes are picked up"
-                                + " at startup and on request.");
+                fileWatcher = new FileWatcher(indexConfig, changeQueue);
+                fileWatcher.start();
             }
         } else {
             refresher =
@@ -260,6 +262,10 @@ public final class FindAnythingService implements AutoCloseable {
     /** Stops the worker (finishing its current file and committing), then releases the index. */
     @Override
     public synchronized void close() throws IOException {
+        if (fileWatcher != null) {
+            fileWatcher.stop();
+            fileWatcher = null;
+        }
         if (indexer != null) {
             try {
                 indexer.stop();
@@ -300,6 +306,9 @@ public final class FindAnythingService implements AutoCloseable {
         requireWriter();
         SearchFolder searchFolder = indexConfig.addFolder(folder);
         settingsStore.saveIndexConfig(indexConfig);
+        if (fileWatcher != null) {
+            fileWatcher.watch(searchFolder.getPath());
+        }
         indexer.requestUpdate(searchFolder.getPath());
         return searchFolder;
     }
@@ -316,6 +325,9 @@ public final class FindAnythingService implements AutoCloseable {
                                                 folder + " is not a search folder."));
         indexConfig.removeFolder(folder);
         settingsStore.saveIndexConfig(indexConfig);
+        if (fileWatcher != null) {
+            fileWatcher.unwatch(searchFolder.getPath());
+        }
         // A "local model only" mark on the folder, or on a folder inside it, goes with it.
         boolean policyChanged = false;
         for (Path marked : folderPolicy.getLocalOnlyFolders()) {
