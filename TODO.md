@@ -62,16 +62,6 @@ report describes.
   expose it (see "The agent's search filters by type and date only" in the design changes).
   Indexing the path's words as a searchable field would let a query with the folder's name find
   it. Changes behaviour the report describes, so log it in `docs/logs/design-changes.md`.
-- **Send the model back to search when it answers without searching.** `AgentController` takes
-  any reply without tool calls as the final answer, even on the first step. Seen on 2026-11-12
-  with the local model `qwen3:8b`: asked "What's my cumulative GPA?", it answered at step 1 with
-  no tool calls, once saying no indexed file mentions GPA, although `findany search "cumulative
-  GPA"` finds the transcript with the GPA in its best passage. The system prompt already says to
-  use the tools and never answer from memory. The cloud model searched every time. A larger
-  local model is the main fix (smaller search results would leave room for one). As a safeguard,
-  when the first reply has no tool calls, `AgentController` could send the model back once with
-  "search the files before answering", like the reformat request. Changes behaviour the report
-  describes, so log it in `docs/logs/design-changes.md`.
 - **Try the local model with its thinking turned off.** `LangChain4jClient` doesn't set
   `think()`, so a thinking model such as Qwen3 reasons before every reply. Seen on 2026-11-13
   with `qwen3:14b` on the RX 7600 XT: "What's my cumulative GPA?" took 39 seconds, 35 of them

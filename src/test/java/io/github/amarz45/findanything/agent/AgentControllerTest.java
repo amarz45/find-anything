@@ -360,24 +360,93 @@ class AgentControllerTest {
     }
 
     @Test
+    void aReplyWithoutASearchIsSentBackOnceAndTheModelThenSearches() throws Exception {
+        LlmResponse unsearched = says("Your files don't say when the lease ends.");
+        ScriptedLlmClient client =
+                new ScriptedLlmClient(
+                        unsearched, calls(SEARCH), citing("The lease ends on August 31, 2026."));
+        Answer answer = run(client);
+
+        assertThat(answer.text()).isEqualTo("Your lease ends on August 31, 2026 [1].");
+        assertThat(answer.isVerified()).isTrue();
+        assertThat(searchTool.executed).containsExactly(Map.of("query", "lease end"));
+        assertThat(client.requests).hasSize(3);
+        // The model sees its reply and the instruction; the conversation keeps neither.
+        List<Message> searchFirst = client.requests.get(1).messages();
+        assertThat(searchFirst.get(searchFirst.size() - 2).content()).isEqualTo(unsearched.text());
+        assertThat(last(client.requests.get(1)).role()).isEqualTo(Role.USER);
+        assertThat(last(client.requests.get(1)).content())
+                .startsWith("You replied without searching the user's files.")
+                .endsWith(PromptBuilder.NO_SEARCH_NEEDED);
+        assertThat(client.requests.get(2).messages())
+                .extracting(Message::content)
+                .doesNotContain(unsearched.text());
+        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT, Role.TOOL, Role.ASSISTANT);
+        assertThat(progress)
+                .containsExactly(
+                        "Step 1: asking the model",
+                        "The model replied without searching; asking it to search the files first",
+                        "Step 1: search(query=\"lease end\")",
+                        "Step 1: search returned: 2 files for \"lease end\", best match first",
+                        "Step 2: asking the model");
+    }
+
+    @Test
+    void aRequestThatNeedsNoSearchKeepsTheModelsFirstReply() throws Exception {
+        LlmResponse greeting = says("Hello! Ask me about your files.");
+        ScriptedLlmClient client = new ScriptedLlmClient(greeting, says("No search needed."));
+        Answer answer = controller(4, 100_000).run("hi", conversation, client, progress::add);
+
+        assertThat(answer.text()).isEqualTo(greeting.text());
+        assertThat(answer.notices()).isEmpty();
+        assertThat(client.requests).hasSize(2);
+        assertThat(searchTool.executed).isEmpty();
+        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT);
+        assertThat(conversation.getMessages().get(1).content()).isEqualTo(greeting.text());
+        assertThat(progress).endsWith("The model says the request needs no search");
+    }
+
+    @Test
+    void aSecondReplyWithoutASearchIsTheAnswerAndTheModelIsNotAskedAgain() throws Exception {
+        ScriptedLlmClient client =
+                new ScriptedLlmClient(
+                        says("I can't see your files."), says("Nothing in your files says."));
+        Answer answer = run(client);
+
+        assertThat(answer.text()).isEqualTo("Nothing in your files says.");
+        assertThat(client.requests).hasSize(2);
+        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT);
+        assertThat(conversation.getMessages().get(1).content()).isEqualTo(answer.text());
+    }
+
+    @Test
+    void aModelFailureWhenAskedToSearchFirstStillGivesTheReply() throws Exception {
+        LlmException unreachable = new LlmException("The model didn't answer within 60 seconds.");
+        Answer answer = run(new FailingSecondCall(says("Hello!"), unreachable));
+
+        assertThat(answer.text()).isEqualTo("Hello!");
+        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT);
+    }
+
+    @Test
     void asksOnceForTheAnswerFormatAndKeepsTheReplyThatFollowsIt() throws Exception {
         LlmResponse rejected = says("Your lease ends on August 31, 2026 [1].");
         LlmResponse corrected = citing("The lease ends on August 31, 2026.");
-        ScriptedLlmClient client = new ScriptedLlmClient(rejected, corrected);
+        ScriptedLlmClient client = new ScriptedLlmClient(calls(SEARCH), rejected, corrected);
         Answer answer = run(client);
 
         assertThat(answer.isVerified()).isTrue();
         assertThat(answer.notices()).isEmpty();
-        assertThat(client.requests).hasSize(2);
-        List<Message> reformat = client.requests.get(1).messages();
+        assertThat(client.requests).hasSize(3);
+        List<Message> reformat = client.requests.get(2).messages();
         assertThat(reformat.get(reformat.size() - 2).content()).isEqualTo(rejected.text());
-        assertThat(last(client.requests.get(1)).role()).isEqualTo(Role.USER);
-        assertThat(last(client.requests.get(1)).content())
+        assertThat(last(client.requests.get(2)).role()).isEqualTo(Role.USER);
+        assertThat(last(client.requests.get(2)).content())
                 .startsWith("Your last reply can't be used")
                 .contains("The answer uses [1]");
-        // The conversation keeps the request and the reply the answer came from, nothing else.
-        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT);
-        assertThat(conversation.getMessages().get(1).content()).isEqualTo(corrected.text());
+        // The conversation keeps the reply the answer came from, not the rejected one.
+        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT, Role.TOOL, Role.ASSISTANT);
+        assertThat(conversation.getMessages().get(3).content()).isEqualTo(corrected.text());
         assertThat(progress)
                 .contains(
                         "The reply isn't in the answer format; asking the model to send it again");
@@ -404,15 +473,16 @@ class AgentControllerTest {
     @Test
     void aToolCallInPlaceOfTheReformattedReplyIsNotRun() throws Exception {
         ScriptedLlmClient client =
-                new ScriptedLlmClient(says("It ends in August [1]."), calls(SEARCH));
+                new ScriptedLlmClient(calls(SEARCH), says("It ends in August [1]."), calls(SEARCH));
         Answer answer = run(client);
 
-        assertThat(client.requests).hasSize(2);
-        assertThat(searchTool.executed).isEmpty();
-        assertThat(toolRegistry.getCallLog()).isEmpty();
+        // The search of the first step ran; the one sent in place of the reformatted reply didn't.
+        assertThat(client.requests).hasSize(3);
+        assertThat(searchTool.executed).hasSize(1);
+        assertThat(toolRegistry.getCallLog()).containsExactly(SEARCH);
         assertThat(answer.text()).isEqualTo("It ends in August [1].");
         assertThat(answer.notices()).containsExactly(AgentController.UNREADABLE_NOTICE);
-        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT);
+        assertThat(roles()).containsExactly(Role.USER, Role.ASSISTANT, Role.TOOL, Role.ASSISTANT);
     }
 
     @Test

@@ -20,6 +20,12 @@ import java.util.Objects;
  */
 public final class PromptBuilder {
 
+    /**
+     * What the model replies to {@link #buildSearchFirstRequest} when the request needs nothing
+     * from the files, such as a greeting.
+     */
+    static final String NO_SEARCH_NEEDED = "NO SEARCH NEEDED";
+
     /** The line before file text in a tool result. */
     static final String FILE_CONTENT_START = "[FILE CONTENT START]";
 
@@ -111,6 +117,26 @@ public final class PromptBuilder {
             messages.add(message.role() == Message.Role.TOOL ? markFileContent(message) : message);
         }
         return new LlmRequest(messages, toolSpecs, List.of());
+    }
+
+    /**
+     * Builds the one request that asks a model that replied without calling a tool to search first
+     * (F07), or to say that the request needs no search by replying {@link #NO_SEARCH_NEEDED}. The
+     * conversation must already hold that reply. The request is the same as {@link #buildRequest}
+     * plus a closing instruction, which is not added to the conversation.
+     */
+    public LlmRequest buildSearchFirstRequest(
+            Conversation conversation, List<ToolSpec> toolSpecs, LocalDate today) {
+        LlmRequest request = buildRequest(conversation, toolSpecs, today);
+        List<Message> messages = new ArrayList<>(request.messages());
+        messages.add(
+                Message.user(
+                        "You replied without searching the user's files. If the request is about"
+                                + " the user's files or anything they might say, search them now"
+                                + " with a tool call. If answering it needs nothing from the"
+                                + " files, reply with only: "
+                                + NO_SEARCH_NEEDED));
+        return request.withMessages(messages);
     }
 
     /**
