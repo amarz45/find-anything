@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -161,6 +162,16 @@ public final class AgentController {
             progressListener.accept("Step " + step + ": asking the model");
             LlmResponse response =
                     llmClient.complete(promptBuilder.buildRequest(conversation, toolSpecs, today));
+            if (step == 1 && !response.hasToolCalls() && !response.text().isBlank()) {
+                response =
+                        askToSearchFirst(
+                                response,
+                                conversation,
+                                llmClient,
+                                toolSpecs,
+                                today,
+                                progressListener);
+            }
             if (!response.hasToolCalls()) {
                 return finalAnswer(
                         response,
@@ -200,6 +211,64 @@ public final class AgentController {
                                         + " was reached before the model gave an answer. The"
                                         + " files found so far are listed."));
         return finish(stopped, filesFound, conversation);
+    }
+
+    /**
+     * Asks a model that replied to a request without calling a tool, once, to search the files
+     * first (F07). A weak model often answers "your files don't say" without having looked. What
+     * comes back is the reply to go on with:
+     *
+     * <ul>
+     *   <li>the model's tool calls, when it now searches; the loop runs them as its first step;
+     *   <li>the first reply, when the model says the request needs no search (a greeting, say), or
+     *       sends nothing, or can't be reached;
+     *   <li>the second reply, when the model answers again without a tool call. It isn't asked a
+     *       third time.
+     * </ul>
+     *
+     * Like a reply the parser rejects, the first reply and the instruction reach the model through
+     * a copy of the conversation and aren't stored.
+     */
+    private LlmResponse askToSearchFirst(
+            LlmResponse first,
+            Conversation conversation,
+            LlmClient llmClient,
+            List<ToolSpec> toolSpecs,
+            LocalDate today,
+            Consumer<String> progressListener) {
+        log.info("The model replied without searching in conversation {}", conversation.getId());
+        progressListener.accept(
+                "The model replied without searching; asking it to search the files first");
+        Conversation withFirst =
+                new Conversation(
+                        conversation.getId(),
+                        conversation.getModelSettings(),
+                        conversation.getMessages(),
+                        List.of());
+        withFirst.addAssistantMessage(first);
+        LlmResponse second;
+        try {
+            second =
+                    llmClient.complete(
+                            promptBuilder.buildSearchFirstRequest(withFirst, toolSpecs, today));
+        } catch (LlmException e) {
+            // There is a reply to show, even though the model couldn't be asked again.
+            log.warn("The request to search first failed: {}", e.getMessage());
+            return first;
+        }
+        if (second.hasToolCalls()) {
+            return second;
+        }
+        boolean keepsFirst =
+                second.text().isBlank()
+                        || second.text()
+                                .toUpperCase(Locale.ROOT)
+                                .contains(PromptBuilder.NO_SEARCH_NEEDED);
+        if (keepsFirst) {
+            progressListener.accept("The model says the request needs no search");
+            return first;
+        }
+        return second;
     }
 
     /**

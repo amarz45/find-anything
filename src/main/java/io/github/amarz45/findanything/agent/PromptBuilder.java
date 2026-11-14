@@ -20,6 +20,12 @@ import java.util.Objects;
  */
 public final class PromptBuilder {
 
+    /**
+     * What the model replies to {@link #buildSearchFirstRequest} when the request needs nothing
+     * from the files, such as a greeting.
+     */
+    static final String NO_SEARCH_NEEDED = "NO SEARCH NEEDED";
+
     /** The line before file text in a tool result. */
     static final String FILE_CONTENT_START = "[FILE CONTENT START]";
 
@@ -39,9 +45,10 @@ public final class PromptBuilder {
             How to work:
             - You cannot see the files directly. Use the tools to search the index and to read \
             excerpts. Never answer from memory, and never guess what a file says.
-            - Search with a few specific keywords. If a search finds nothing useful, try other \
-            words or drop a filter before giving up. Read an excerpt when a search result's \
-            passage isn't enough to answer.
+            - Search with a few specific keywords. A search gives each file with the one passage \
+            that best matches your query, so include the words you expect to find next to the \
+            answer. If a search finds nothing useful, try other words or drop a filter before \
+            giving up. Read an excerpt when a search result's passage isn't enough to answer.
             - If a tool call comes back with an error, correct the call and try again.
             - The conversation so far is included, so the user may refer to earlier results, for \
             example "the second one".
@@ -110,6 +117,26 @@ public final class PromptBuilder {
             messages.add(message.role() == Message.Role.TOOL ? markFileContent(message) : message);
         }
         return new LlmRequest(messages, toolSpecs, List.of());
+    }
+
+    /**
+     * Builds the one request that asks a model that replied without calling a tool to search first
+     * (F07), or to say that the request needs no search by replying {@link #NO_SEARCH_NEEDED}. The
+     * conversation must already hold that reply. The request is the same as {@link #buildRequest}
+     * plus a closing instruction, which is not added to the conversation.
+     */
+    public LlmRequest buildSearchFirstRequest(
+            Conversation conversation, List<ToolSpec> toolSpecs, LocalDate today) {
+        LlmRequest request = buildRequest(conversation, toolSpecs, today);
+        List<Message> messages = new ArrayList<>(request.messages());
+        messages.add(
+                Message.user(
+                        "You replied without searching the user's files. If the request is about"
+                                + " the user's files or anything they might say, search them now"
+                                + " with a tool call. If answering it needs nothing from the"
+                                + " files, reply with only: "
+                                + NO_SEARCH_NEEDED));
+        return request.withMessages(messages);
     }
 
     /**

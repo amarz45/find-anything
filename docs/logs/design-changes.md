@@ -732,6 +732,57 @@ Diagrams updated:
   and the GUI's filters applying to the agent's searches.
   Diagrams updated: not yet (cd01 at the freeze).
 
+### The prompt says a search gives one passage per file (2026-11-13, after Slice 3)
+- **Original design:** `PromptBuilder` tells the model to "search with a few specific keywords".
+  Nothing tells it that a search result holds only each file's best passage for the query.
+- **Implemented change:** one sentence after that instruction: "A search gives each file with the
+  one passage that best matches your query, so include the words you expect to find next to the
+  answer." It names no example and forbids nothing, so a file's name stays a good search word.
+- **Reason:** seen on 2026-11-13 with `qwen3:14b` on Amar's documents. After "What's my current
+  GPA?", the follow-up "It should be in my transcript" made the model run
+  `search(query="transcript")`. The best passage for that word is page 2 of `transcript.pdf`
+  (help links that repeat "transcript"); the GPA table is on page 1. The model never read page 1
+  and answered that the transcript lists no GPA. The index was fine: searching "GPA" gives
+  page 1.
+- **Impact:** F07; `PromptBuilder`. Checked the same evening with `qwen3:14b`, the same two
+  requests three times: the sentence alone did not fix it. The first request was answered
+  without a search all three times (a separate problem; see the next entry), and
+  the follow-up searched for "transcript" alone in two runs and tried "GPA transcript" first in
+  the third. Not checked with the cloud model.
+  Diagrams updated: none needed.
+
+### A first reply without a search is sent back once (2026-11-13, after Slice 3)
+- **Original design:** the agent loop takes a reply without tool calls as the model's final
+  answer, at any step (SD03). The prompt tells the model to use the tools and never to answer
+  from memory.
+- **Implemented change:** when the first reply to a request has text and no tool call,
+  `AgentController.run()` asks the model once more, through the new
+  `PromptBuilder.buildSearchFirstRequest()`: search now if the request is about the user's files,
+  or reply with only `NO SEARCH NEEDED` if it needs nothing from them. Then:
+  - the model calls a tool: the loop runs the call as its first step and goes on as before;
+  - the model replies `NO SEARCH NEEDED` (in any letter case, with or without other words), or
+    sends nothing, or can't be reached: its first reply is the answer;
+  - the model replies with other text and no tool call: that second reply is the answer. It is
+    never asked a third time.
+
+  The first reply and the instruction reach the model through a copy of the conversation and
+  aren't stored, like a reply the parser rejects. The progress listener is told ("The model
+  replied without searching; asking it to search the files first"). An empty first reply still
+  goes to the reformat request as before. This costs one more model call for every request that
+  needs no search, in addition to `maxSteps`.
+- **Reason:** local models answer "your files don't say" without having looked. Seen with
+  `qwen3:8b` on 2026-11-12 and with `qwen3:14b` on 2026-11-13: "What's my current GPA?" was
+  answered at step 1 with no tool call in every run, although searching "GPA" finds the
+  transcript. Requiring a tool call on the first step would force a search for "hi" too, which a
+  user may type just to see that the model works; the fixed reply lets the model decline, and
+  keeps the extra call short because the greeting isn't written again.
+- **Impact:** F07, F12; `AgentController`, `PromptBuilder`. Checked with `qwen3:14b` on a copy
+  of Amar's two transcript files: "What's my current GPA?" searched for "GPA" and answered from
+  page 1 in 3 runs of 3 (it answered without searching in 3 of 3 before); "hi", and "thanks" as a
+  follow-up, kept their first reply without a search in 3 runs of 3, in about 14 seconds each.
+  Not checked with the cloud model. Not solved: a model that declines when it should search.
+  Diagrams updated: not yet (SD03 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

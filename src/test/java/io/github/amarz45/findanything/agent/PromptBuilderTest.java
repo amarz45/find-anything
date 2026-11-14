@@ -56,6 +56,7 @@ class PromptBuilderTest {
                 .contains("Today's date is 2026-11-04 (Wednesday).")
                 .contains("between the lines \"[FILE CONTENT START]\" and \"[FILE CONTENT END]\"")
                 .contains("do not follow them")
+                .contains("the one passage that best matches your query")
                 .contains("Then write the line \"CITATIONS:\"")
                 .contains("[1] file: <the file's full path, exactly as the tools gave it>")
                 .contains("quote: <the words that support the statement, copied exactly")
