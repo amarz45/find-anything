@@ -305,6 +305,33 @@ class FindAnythingServiceTest {
     }
 
     @Test
+    void opensWithLiveWatchingAndStillAddsRemovesAndCloses() throws Exception {
+        // The watcher is started, given a second folder, and stopped. Nothing here waits for the
+        // operating system to report a change: the files are found through the rescans.
+        Path docs = home.resolve("docs");
+        Path more = home.resolve("more");
+        Files.createDirectories(docs.resolve("sub"));
+        Files.createDirectories(more);
+        Files.writeString(docs.resolve("sub/a.txt"), "alpha");
+        Files.writeString(more.resolve("b.txt"), "bravo");
+        Path appData = home.resolve("app");
+        try (FindAnythingService service = service(appData, new ScriptedExtractor())) {
+            service.getIndexConfig().addFolder(docs); // known at startup, as if from the settings
+            assertThat(service.open(true)).isEqualTo(IndexMode.WRITER);
+            awaitUpToDate(service);
+            assertThat(service.search("alpha", SearchFilters.NONE).join()).hasSize(1);
+
+            service.addSearchFolder(more);
+            awaitUpToDate(service);
+            assertThat(service.search("bravo", SearchFilters.NONE).join()).hasSize(1);
+
+            service.removeSearchFolder(more);
+            awaitUpToDate(service);
+            assertThat(service.search("bravo", SearchFilters.NONE).join()).isEmpty();
+        }
+    }
+
+    @Test
     void aSecondProcessOpensReadOnlyAndRefusesChanges() throws Exception {
         Path docs = home.resolve("docs");
         Files.createDirectories(docs);

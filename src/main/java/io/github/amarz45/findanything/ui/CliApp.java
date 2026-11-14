@@ -129,7 +129,13 @@ public final class CliApp implements Callable<Integer> {
                         System.getenv(),
                         System.getProperty("os.name", ""),
                         System.getProperty("user.home"));
-        try (FindAnythingService service = createService(home, loadEnvironment(home))) {
+        // The service is built before the command line is parsed, so the one command that watches
+        // files is recognised here: its changes wait for the quiet period, as one save often
+        // arrives as several events. Every other command runs once and exits, so it waits for none.
+        boolean gui = args.length > 0 && args[0].equals("gui");
+        Duration quietPeriod = gui ? GUI_QUIET_PERIOD : Duration.ZERO;
+        try (FindAnythingService service =
+                createService(home, loadEnvironment(home), quietPeriod)) {
             exitCode = new CliApp(service).run(args);
         } catch (IOException e) {
             System.err.println("findany: " + e.getMessage());
@@ -198,16 +204,22 @@ public final class CliApp implements Callable<Integer> {
         return EnvFile.load(System.getenv(), home.resolve(".env"), Path.of(".env"));
     }
 
-    /** Builds the facade and everything behind it for one CLI run. */
-    static FindAnythingService createService(Path home, Map<String, String> environment)
-            throws IOException {
+    /** How long a changed path must stay unchanged before the GUI's worker indexes it (F03). */
+    static final Duration GUI_QUIET_PERIOD = Duration.ofSeconds(2);
+
+    /**
+     * Builds the facade and everything behind it for one run.
+     *
+     * @param quietPeriod how long a changed path must stay unchanged before it is indexed
+     */
+    static FindAnythingService createService(
+            Path home, Map<String, String> environment, Duration quietPeriod) throws IOException {
         SettingsStore settingsStore = new SettingsStore(home.resolve("settings.json"), environment);
         IndexConfig indexConfig = settingsStore.loadIndexConfig();
         TextExtractor textExtractor =
                 new IsolatedTextExtractor(
                         home.resolve("tika"), Duration.ofSeconds(120), 1024L * 1024 * 1024);
-        // The CLI runs once and exits, so it needs no quiet period before indexing a changed file.
-        ChangeQueue changeQueue = new ChangeQueue(Duration.ZERO);
+        ChangeQueue changeQueue = new ChangeQueue(quietPeriod);
         ExecutorService backgroundExecutor =
                 Executors.newFixedThreadPool(
                         2,
@@ -261,7 +273,12 @@ public final class CliApp implements Callable<Integer> {
 
     /** Opens the index and says so once if this process only got read access. */
     private IndexMode openIndex(PrintWriter err) throws IOException {
-        IndexMode mode = findAnythingService.open(false);
+        return openIndex(err, false);
+    }
+
+    /** As {@link #openIndex(PrintWriter)}; {@code watchFiles} also starts live file watching. */
+    private IndexMode openIndex(PrintWriter err, boolean watchFiles) throws IOException {
+        IndexMode mode = findAnythingService.open(watchFiles);
         if (mode == IndexMode.READ_ONLY && !readOnlyNoteShown) {
             readOnlyNoteShown = true;
             err.println(
@@ -623,7 +640,7 @@ public final class CliApp implements Callable<Integer> {
         @Override
         public Integer call() throws Exception {
             PrintWriter err = spec.commandLine().getErr();
-            app.openIndex(err);
+            app.openIndex(err, true); // the window stays open, so the folders are watched
             CountDownLatch closed = new CountDownLatch(1);
             AtomicBoolean failed = new AtomicBoolean();
             try {
