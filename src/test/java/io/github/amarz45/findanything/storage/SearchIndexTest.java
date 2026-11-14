@@ -348,6 +348,24 @@ class SearchIndexTest {
     }
 
     @Test
+    void aFileWhoseNewEntriesCannotBeStoredKeepsItsOldOnes() throws Exception {
+        index.put(fileWithContent("notes.txt", "old"), List.of(embedded(0, "a note", 1, 0)));
+        index.commit();
+        // The index's vectors have two numbers; one with three can't be stored.
+        assertThatThrownBy(
+                        () ->
+                                index.put(
+                                        fileWithContent("notes.txt", "new"),
+                                        List.of(embedded(0, "a changed note", 1, 0, 0))))
+                .isInstanceOf(IllegalArgumentException.class);
+        index.commit();
+        assertThat(index.getChunks(ROOT.resolve("notes.txt")))
+                .extracting(Chunk::text)
+                .containsExactly("a note");
+        assertThat(index.vectorSearch(new float[] {1, 0}, SearchFilters.NONE, 10)).hasSize(1);
+    }
+
+    @Test
     void filesWithTheSameHashButOtherChunksAreEmbeddedOneAfterTheOther() throws Exception {
         // The same bytes, but one extraction was cut short.
         index.put(fileWithContent("full.pdf", "same"), chunks("page one", "page two"));

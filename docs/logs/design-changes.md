@@ -847,6 +847,45 @@ Diagrams updated:
   entries start without vectors and vectors can't be read back for reuse. Nothing calls these
   methods yet. Diagrams updated: not yet (cd02 at the freeze).
 
+### The indexer's embedding phase: batches, failures, and what the CLI waits for (2026-11-14, Tier 2)
+- **Original design:** when `takeReady()` returns nothing, `Indexer.embedNextBatch()` takes
+  content hashes from `findContentWithoutEmbeddings()`, loads their chunks from `ContentStore`,
+  embeds them and calls `addEmbeddings()`. Files not embedded yet are found by keywords, and the
+  status shows that embedding is in progress. The design gives no batch size and doesn't say what
+  happens when a content can't be embedded.
+- **Implemented change:** `embedNextBatch()` as designed, with the chunks from
+  `SearchIndex.getChunksOfContent()`. `Indexer` and `FindAnythingService` take the
+  `EmbeddingModel` in their constructors. What the design left open:
+  - **Batches.** A pass embeds whole contents until about 64 chunks are done
+    (`EMBED_CHUNKS_PER_BATCH`), commits, tells the listeners, and looks at the queue again, so a
+    file that changed meanwhile is indexed first. The model gets 16 texts per call
+    (`EMBED_TEXTS_PER_CALL`), and a stop request is noticed between calls; a content cut off by a
+    stop is embedded from its start on the next run.
+  - **Failures.** A content that can't be embedded, or whose vectors can't be stored, is logged
+    and left alone for the rest of the run. After three contents in a row
+    (`MAX_EMBEDDING_FAILURES`), embedding is off until the next start, with one warning. Either
+    way the status reaches "up to date" with `chunksWithoutEmbeddings` above zero, and the files
+    are found by keywords.
+  - **The status.** `IndexStatus.chunksWithoutEmbeddings` is now the real number, in the writer
+    and in a read-only process. A request for a file stops counting as pending when the queue is
+    empty, not when embedding ends, so `pendingFiles` is 0 while the state is `EMBEDDING`.
+  - **The CLI waits for embedding.** `IndexStatus.isUpToDate()` is false in the `EMBEDDING`
+    state, so a CLI command that waits for the index also waits for the vectors. A CLI process
+    ends with its command; if it didn't wait, a folder used only from the CLI would never be
+    embedded. The GUI searches meanwhile, as designed.
+  - **`SearchIndex.put()` is one step** (delete and add together), so a file whose new entries
+    can't be stored keeps its old ones. Found while writing the failure handling: a vector of
+    another length than the index's would otherwise have removed the file's entries.
+- **Reason:** the batch sizes come from the measured speed (about 27 chunks a second on the
+  development machine, so a batch is two to three seconds). Three failures in a row means the
+  model itself is broken (a load failure fails every content), and one warning says so better
+  than one per file.
+- **Impact:** F03, F05; `Indexer`, `FindAnythingService`, `CliApp.createService()`,
+  `SearchIndex.put()`. New test double `ScriptedEmbeddingModel`. Checked with the real model on
+  `testdata/corpus` in a scratch data folder: `findany folders add` indexed and embedded the 23
+  files in 16 seconds. Search doesn't use the vectors yet. Diagrams updated: not yet (cd03, SD01
+  at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

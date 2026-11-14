@@ -89,6 +89,7 @@ class CliAppTest {
                 new ConversationStore(appData.resolve("conversations"), store),
                 new ScriptedExtractor(),
                 new Chunker(300),
+                new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel(),
                 new ChangeQueue(Duration.ZERO),
                 appData.resolve("index"),
                 Executors.newFixedThreadPool(2),

@@ -31,6 +31,8 @@ class IndexerTest {
     ChangeQueue queue;
     SearchIndex index;
     Indexer indexer;
+    io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel model =
+            new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel();
     List<IndexStatus> notifications = new CopyOnWriteArrayList<>();
 
     @BeforeEach
@@ -49,7 +51,8 @@ class IndexerTest {
         config.addFolder(docs);
         queue = new ChangeQueue(Duration.ZERO);
         index = SearchIndex.open(home.resolve("app/index"));
-        indexer = new Indexer(config, queue, new ScriptedExtractor(), new Chunker(200), index);
+        indexer =
+                new Indexer(config, queue, new ScriptedExtractor(), new Chunker(200), index, model);
         indexer.addStatusListener(notifications::add);
         indexer.start();
     }
@@ -180,6 +183,88 @@ class IndexerTest {
         assertThat(index.getFile(stale)).isEmpty();
         assertThat(index.keywordSearch("lease", SearchFilters.NONE, 5)).isNotEmpty();
         assertThat(index.countFiles()).isEqualTo(4);
+    }
+
+    // ------------------------------------------------------------------ phase 2: embedding (F05)
+
+    @Test
+    void chunksGetTheirVectorsOnceTheFilesAreIndexed() throws Exception {
+        rescanAndWait();
+        assertThat(index.countChunksWithoutEmbeddings()).isZero();
+        assertThat(indexer.getStatus().chunksWithoutEmbeddings()).isZero();
+        // The lease has two chunks and the notes one; files without text have nothing to embed.
+        assertThat(model.timesEmbedded("Rent is $1,850.")).isEqualTo(1);
+        assertThat(model.timesEmbedded("The lease ends on August 31, 2026.")).isEqualTo(1);
+        assertThat(model.timesEmbedded("Dentist appointment on March 4.")).isEqualTo(1);
+        assertThat(model.calls()).hasSize(2);
+
+        float[] query = model.embed(List.of("Dentist appointment on March 4.")).get(0);
+        assertThat(index.vectorSearch(query, SearchFilters.NONE, 1))
+                .extracting(hit -> hit.file().path())
+                .containsExactly(docs.resolve("sub/notes.txt"));
+
+        // Embedding comes after indexing, and the listeners hear about both and then the end.
+        List<IndexerState> states = notifications.stream().map(IndexStatus::state).toList();
+        assertThat(states).contains(IndexerState.EMBEDDING);
+        assertThat(states.lastIndexOf(IndexerState.INDEXING))
+                .isLessThan(states.indexOf(IndexerState.EMBEDDING));
+        IndexStatus last = notifications.get(notifications.size() - 1);
+        assertThat(last.isUpToDate()).isTrue();
+        assertThat(last.chunksWithoutEmbeddings()).isZero();
+    }
+
+    @Test
+    void copiesOfAFileAreEmbeddedOnceAndAChangedFileAgain() throws Exception {
+        Files.writeString(docs.resolve("sub/notes-copy.txt"), "Dentist appointment on March 4.");
+        rescanAndWait();
+        assertThat(model.timesEmbedded("Dentist appointment on March 4.")).isEqualTo(1);
+        assertThat(index.countChunksWithoutEmbeddings()).isZero();
+
+        Path notes = docs.resolve("sub/notes.txt");
+        Instant before = index.getFile(notes).orElseThrow().modifiedTime();
+        Files.writeString(notes, "Dentist moved to March 11.");
+        Files.setLastModifiedTime(notes, FileTime.from(before.plusSeconds(90)));
+        rescanAndWait();
+        assertThat(model.timesEmbedded("Dentist moved to March 11.")).isEqualTo(1);
+        assertThat(index.countChunksWithoutEmbeddings()).isZero();
+        // The unchanged files were not embedded again.
+        assertThat(model.timesEmbedded("Rent is $1,850.")).isEqualTo(1);
+        assertThat(model.timesEmbedded("Dentist appointment on March 4.")).isEqualTo(1);
+    }
+
+    @Test
+    void aContentThatCannotBeEmbeddedIsSkippedAndTheRestIsEmbedded() throws Exception {
+        model.failOnTextContaining("Dentist");
+        rescanAndWait();
+        // The notes stay without a vector and are still found by keywords.
+        assertThat(index.countChunksWithoutEmbeddings()).isEqualTo(1);
+        assertThat(indexer.getStatus().isUpToDate()).isTrue();
+        assertThat(indexer.getStatus().chunksWithoutEmbeddings()).isEqualTo(1);
+        assertThat(index.keywordSearch("dentist", SearchFilters.NONE, 5)).hasSize(1);
+        assertThat(index.findContentWithoutEmbeddings(10)).hasSize(1);
+
+        // It isn't tried again in this run, even when other work comes in.
+        long tries = model.timesEmbedded("Dentist appointment on March 4.");
+        Files.writeString(docs.resolve("new.txt"), "A new file.");
+        rescanAndWait();
+        assertThat(model.timesEmbedded("A new file.")).isEqualTo(1);
+        assertThat(model.timesEmbedded("Dentist appointment on March 4.")).isEqualTo(tries);
+    }
+
+    @Test
+    void aModelThatCannotBeLoadedLeavesKeywordSearchWorking() throws Exception {
+        model.failWith("The embedding model could not be loaded: no native library");
+        for (int i = 0; i < 5; i++) {
+            Files.writeString(docs.resolve("extra-" + i + ".txt"), "Extra file number " + i + ".");
+        }
+        rescanAndWait();
+        assertThat(indexer.getStatus().isUpToDate()).isTrue();
+        assertThat(indexer.getStatus().state()).isEqualTo(IndexerState.IDLE);
+        assertThat(indexer.getStatus().chunksWithoutEmbeddings()).isEqualTo(8);
+        assertThat(index.keywordSearch("lease", SearchFilters.NONE, 5)).isNotEmpty();
+        assertThat(index.keywordSearch("extra", SearchFilters.NONE, 10)).hasSize(5);
+        // After three contents in a row failed, the model is left alone for the rest of the run.
+        assertThat(model.calls()).hasSize(Indexer.MAX_EMBEDDING_FAILURES);
     }
 
     @Test

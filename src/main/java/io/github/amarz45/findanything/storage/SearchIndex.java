@@ -171,16 +171,16 @@ public final class SearchIndex implements AutoCloseable {
         Objects.requireNonNull(chunks, "chunks");
         requireWriter();
         String path = key(file.path());
-        writer.deleteDocuments(new Term(PATH, path));
+        List<Document> entries = new ArrayList<>();
         if (chunks.isEmpty()) {
-            writer.addDocument(document(file, path, null, true));
-            return;
+            entries.add(document(file, path, null, true));
         }
-        boolean first = true;
         for (Chunk chunk : chunks) {
-            writer.addDocument(document(file, path, chunk, first));
-            first = false;
+            entries.add(document(file, path, chunk, entries.isEmpty()));
         }
+        // One step: if the new entries can't be stored (a vector of another length than the
+        // index's, say), the file keeps its old ones instead of losing them.
+        writer.updateDocuments(new Term(PATH, path), entries);
     }
 
     /** Removes a file, or every file under a folder, from the index. */

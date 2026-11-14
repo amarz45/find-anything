@@ -18,6 +18,7 @@ import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.config.SettingsStore;
 import io.github.amarz45.findanything.core.FindAnythingService;
 import io.github.amarz45.findanything.core.Preview;
+import io.github.amarz45.findanything.embedding.LocalEmbeddingModel;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.IndexStatus;
@@ -230,6 +231,8 @@ public final class CliApp implements Callable<Integer> {
                 new ConversationStore(home.resolve("conversations"), settingsStore),
                 textExtractor,
                 new Chunker(1_500),
+                // Loaded on first use, so a command that embeds nothing doesn't pay for it.
+                new LocalEmbeddingModel(home.resolve("embedding")),
                 changeQueue,
                 home.resolve("index"),
                 backgroundExecutor,

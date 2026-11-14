@@ -18,6 +18,7 @@ import io.github.amarz45.findanything.config.InvalidPatternException;
 import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.config.SettingsStore;
+import io.github.amarz45.findanything.embedding.EmbeddingModel;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
 import io.github.amarz45.findanything.indexing.IndexStatus;
@@ -128,6 +129,7 @@ public final class FindAnythingService implements AutoCloseable {
     private final ConversationStore conversationStore;
     private final TextExtractor textExtractor;
     private final Chunker chunker;
+    private final EmbeddingModel embeddingModel;
     private final ChangeQueue changeQueue;
     private final Path indexDirectory;
     private final ExecutorService backgroundExecutor;
@@ -152,6 +154,7 @@ public final class FindAnythingService implements AutoCloseable {
             ConversationStore conversationStore,
             TextExtractor textExtractor,
             Chunker chunker,
+            EmbeddingModel embeddingModel,
             ChangeQueue changeQueue,
             Path indexDirectory,
             ExecutorService backgroundExecutor,
@@ -165,6 +168,7 @@ public final class FindAnythingService implements AutoCloseable {
         this.conversationStore = Objects.requireNonNull(conversationStore, "conversationStore");
         this.textExtractor = Objects.requireNonNull(textExtractor, "textExtractor");
         this.chunker = Objects.requireNonNull(chunker, "chunker");
+        this.embeddingModel = Objects.requireNonNull(embeddingModel, "embeddingModel");
         this.changeQueue = Objects.requireNonNull(changeQueue, "changeQueue");
         this.indexDirectory = Objects.requireNonNull(indexDirectory, "indexDirectory");
         this.backgroundExecutor = Objects.requireNonNull(backgroundExecutor, "backgroundExecutor");
@@ -203,7 +207,14 @@ public final class FindAnythingService implements AutoCloseable {
                         MAX_CONVERSATION_CHARS,
                         clock);
         if (indexMode == IndexMode.WRITER) {
-            indexer = new Indexer(indexConfig, changeQueue, textExtractor, chunker, searchIndex);
+            indexer =
+                    new Indexer(
+                            indexConfig,
+                            changeQueue,
+                            textExtractor,
+                            chunker,
+                            searchIndex,
+                            embeddingModel);
             statusListeners.forEach(indexer::addStatusListener);
             indexer.start();
             for (SearchFolder folder : indexConfig.getSearchFolders()) {
@@ -642,7 +653,17 @@ public final class FindAnythingService implements AutoCloseable {
         if (worker != null) {
             return worker.getStatus();
         }
-        return new IndexStatus(IndexerState.READ_ONLY, 0, countFailed(index), 0);
+        return new IndexStatus(
+                IndexerState.READ_ONLY, 0, countFailed(index), countWithoutEmbeddings(index));
+    }
+
+    private static int countWithoutEmbeddings(SearchIndex index) {
+        try {
+            return index.countChunksWithoutEmbeddings();
+        } catch (IOException e) {
+            log.error("Could not count the chunks without embeddings: {}", e.getMessage());
+            return 0;
+        }
     }
 
     private static int countFailed(SearchIndex index) {
