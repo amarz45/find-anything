@@ -506,8 +506,8 @@ surprising.)*
     `AGENTS.md` now says to wait after each commit and to work on a feature branch.
 - **2026-11-09 to 2026-11-10 (Session 6: privacy, Claude Code):**
   - Done, on branch `privacy` (from `gui`'s tip, so it carries one `TODO.md` commit PR #7 missed;
-    7 code commits, **not pushed yet**): the `privacy` package (`SensitivePattern` with four
-    implementations, `Redactor`, `FolderPolicy`, `PrivacyLog`, `PrivacyLogEntry`), the
+    7 code commits at the time; merged into `master` as PR #8 on Nov 10): the `privacy` package
+    (`SensitivePattern` with four implementations, `Redactor`, `FolderPolicy`, `PrivacyLog`, `PrivacyLogEntry`), the
     decorators (`LlmClientDecorator`, `RedactingLlmClient`, `LoggingLlmClient`) and the factory's
     cloud chain, the facade's `setLocalOnly()`, `setRedaction()`, `getPrivacyLog()` and the
     "sources withheld" notice, `findany privacy|policy|privacy-log`, "Local model only" on the
@@ -521,8 +521,7 @@ surprising.)*
     saved in `settings.json`; the chain is built in `createClient()` so scripted test clients are
     decorated too; a number glued to a letter, underscore or hyphen isn't a card number or SIN.
   - The deadline moved to **November 15**; the freeze is Nov 14–15.
-  - Next: push `privacy` and open its PR into `master` (merge without squashing). Then
-    `TODO.md` items and Tier 2 in order (F05, F04, live watcher, F10) until the freeze. Still
+  - Next (the pull request is done: PR #8): `TODO.md` items and Tier 2 in order (F05, F04, live watcher, F10) until the freeze. Still
     owed: the Ollama check; the test for the duplicated citation entries; a decision on the
     sensitive-file leak; finer withholding (only the local-only entries of a search result).
 - **2026-11-12 (Session 7: smaller search results, Claude Code):**
@@ -562,7 +561,7 @@ surprising.)*
     and Tier 2 until the freeze on Nov 14.
 - **2026-11-13 (Session 7, continued: the 14B local model):**
   - `optimization` is merged into `master` as PR #9. This entry and the collaboration log's were
-    committed on local `master` at Amar's request; they still need to reach GitHub.
+    committed on local `master` at Amar's request, and have since reached GitHub.
   - `qwen3:14b` is installed and works with the app. Amar's verdict on "What's my cumulative
     GPA?": much better than `qwen3:8b` (it searched and answered with two sources), not as good
     as the cloud model, and slower than he likes. One of its two citations was unverified (the
@@ -689,3 +688,29 @@ surprising.)*
     preview).
   - Next: the freeze, as listed in Session 9's entry. For the F03 video: with a search showing, edit, create, delete and rename a file.
     cd03 owes `watchedFolders`' type and `FileWatcher`'s two methods.
+- **2026-11-14 (Session 11: three GUI fixes before the freeze, Claude Code):**
+  - Amar asked which items in `TODO.md` were easy and worth doing before the freeze. Three were
+    picked, all visible in the videos; they are done, on branch `gui-polish` (3 code commits and
+    one for the documents; PR #14), and removed from `TODO.md`.
+    1. `3ea0d20`: the settings dialog's privacy log is hidden until "Show privacy log" is
+       clicked. While it is shown, "Refresh" loads it again and the button reads "Hide privacy
+       log"; hiding it, or closing the dialog, drops its text.
+    2. `0d6d5c6`: the "Test connection" result has its own row and wraps at 480 pixels, so a
+       long result no longer squeezes the dialog's controls. The window grows to fit it.
+    3. `47a9433`: `DetailPane.clearPreview()`; `GuiController.showResults()` empties the preview
+       when the selected file is no longer among the results (deleted, or a new query doesn't
+       match it; Amar chose both cases). Noted in `docs/logs/design-changes.md` beside
+       `DetailPane`'s other added methods, and in the F11 row of `docs/traceability.md`.
+  - Checked: all three by Amar in the GUI, and by `GuiControllerTest` and `DetailPaneTest` on
+    the headless toolkit.
+  - Worth knowing:
+    - The dialog is sized again to fit whenever the log is shown or hidden, and after a
+      connection test while the log is hidden, so a window resized by hand loses its size then.
+    - A preview opened from a citation is emptied too when a row was selected and a later search
+      drops that row: the controller doesn't know which file the pane shows.
+  - Considered and left in `TODO.md`: turning off PDF link annotations in Tika ("Extraction").
+    It is probably one line of configuration (the option's name in Tika 4.1's JSON format wasn't
+    checked), but it changes what every PDF extracts and needs the index rebuilt, too much to
+    check on the last day.
+  - Next: the freeze, as listed in Session 9's entry. No diagram owes anything for this session
+    except cd01, which gains `DetailPane.clearPreview()`.
