@@ -23,7 +23,7 @@ class LocalEmbeddingModelTest {
      * The one folder every test that loads the real model must use: the native library is loaded
      * once per process, so the first model to load decides where it is unpacked.
      */
-    static final Path NATIVE_LIBRARY_FOLDER = Path.of(System.getenv("FINDANY_HOME"), "embedding");
+    static final Path NATIVE_LIBRARY_FOLDER = RealEmbeddingModel.NATIVE_LIBRARY_FOLDER;
 
     static final String RESUME =
             "Résumé of Jordan Rivera. Work experience: software developer intern. Education:"

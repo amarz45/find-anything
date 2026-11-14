@@ -886,6 +886,45 @@ Diagrams updated:
   files in 16 seconds. Search doesn't use the vectors yet. Diagrams updated: not yet (cd03, SD01
   at the freeze).
 
+### Hybrid search: a similarity floor, and who turns semantic search off (2026-11-14, Tier 2)
+- **Original design:** `SearchEngine.search()` embeds the query, calls `vectorSearch()` and merges
+  the semantic hits with the keyword hits in `fuseRankings()`. If the model fails to load at
+  startup, or the CLI gets `--keyword-only`, the facade calls
+  `SearchEngine.setSemanticSearchEnabled(false)`. F05's example: "CV" finds a file that only says
+  "résumé". No similarity floor is mentioned, and the facade has no method for the switch.
+- **Implemented change:**
+  - `SearchEngine` takes the `EmbeddingModel` and does what the design says. The facade turns
+    semantic search on in `open()`, so the agent's `SearchTool` gets hybrid results too.
+  - **A floor.** A chunk is a semantic match only at a cosine similarity of 0.62 or more
+    (`SearchEngine.MIN_SIMILARITY`).
+  - **The engine turns itself off.** The model loads on first use (see "The embedding model"),
+    so a failure shows up inside a search. `SearchEngine` then logs one warning, turns semantic
+    search off and returns the keyword results; later searches don't ask the model again. The
+    same happens when the index's vectors have another length than the model's.
+  - **The facade** gets `setSemanticSearchEnabled(enabled)` and `isSemanticSearchEnabled()`.
+    `findany search --keyword-only` calls the first for that one search.
+  - **No query prefix.** The model's authors recommend putting "Represent this sentence for
+    searching relevant passages: " before a query. It isn't used.
+- **Reason:** vector search always returns the nearest chunks, however far, so without a floor
+  every query lists unrelated files and "No results" never appears. Measured with the real model
+  on `testdata/corpus` (56 queries, the nearest chunk's similarity):
+  - 25 queries about things the corpus doesn't hold: 0.49 to 0.61, except the one-letter query
+    "a" (0.64).
+  - 31 queries about things it holds: 25 scored 0.63 to 0.90 ("tooth doctor" finds
+    `dentist.txt` at 0.71, "spending plan" the budget at 0.70, "groceries" the grocery list at
+    0.73).
+  - The other 6 scored 0.56 to 0.60, no higher than nonsense, and for most of them the right
+    file wasn't the nearest either. **F05's own example is one of them:** "CV" and "my CV"
+    reach the résumé at 0.56 to 0.57, and "curriculum vitae" doesn't have it in the nearest
+    four. With this model, "CV" does not find the résumé.
+  - With the prefix (tried on 25 of the queries), most scores in both groups were a few
+    hundredths lower and the groups overlapped as much; "CV" stayed at 0.57.
+- **Impact:** F05, F06, F07; `SearchEngine`, `FindAnythingService`, `CliApp`. A search that
+  embeds its query takes about a second longer in the CLI (the model's load): 2.1 seconds
+  against 1.1 with `--keyword-only`, on `testdata/corpus`. Not checked: the agent's answers with
+  hybrid results, on the corpus or on Amar's documents. Diagrams updated: not yet (cd01, cd04,
+  SD02 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

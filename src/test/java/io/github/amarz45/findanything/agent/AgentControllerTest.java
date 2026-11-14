@@ -121,7 +121,14 @@ class AgentControllerTest {
         SearchFolder searchFolder = new SearchFolder(files, false, true, List.of());
         IndexConfig indexConfig = new IndexConfig(indexFolder, List.of(searchFolder), List.of());
         toolRegistry = new ToolRegistry();
-        toolRegistry.register(new SearchTool(new SearchEngine(index, indexConfig)));
+        // Semantic search stays off here: these tests are about the agent's loop.
+        toolRegistry.register(
+                new SearchTool(
+                        new SearchEngine(
+                                index,
+                                indexConfig,
+                                new io.github.amarz45.findanything.embedding
+                                        .ScriptedEmbeddingModel())));
     }
 
     AgentController controller(int maxSteps, int maxConversationChars) {

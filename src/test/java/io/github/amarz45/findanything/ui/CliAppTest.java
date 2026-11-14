@@ -89,7 +89,10 @@ class CliAppTest {
                 new ConversationStore(appData.resolve("conversations"), store),
                 new ScriptedExtractor(),
                 new Chunker(300),
-                new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel(),
+                // The dentist note and this query are close in meaning and share no word.
+                new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel()
+                        .with("Dentist appointment on March 4, 2026.", 1, 0)
+                        .with("teeth checkup", 0.9f, 0.1f),
                 new ChangeQueue(Duration.ZERO),
                 appData.resolve("index"),
                 Executors.newFixedThreadPool(2),
@@ -317,6 +320,21 @@ class CliAppTest {
                 .contains("corrupt.txt");
 
         assertThat(run("search", "nothing-matches-this").out()).contains("No results.");
+    }
+
+    @Test
+    void searchAlsoMatchesByMeaningUnlessKeywordOnly() {
+        run("folders", "add", docs.toString());
+
+        Run byMeaning = run("search", "teeth", "checkup");
+        assertThat(byMeaning.exitCode()).isZero();
+        assertThat(byMeaning.out()).contains("1. " + docs.resolve("dentist.txt"));
+        assertThat(byMeaning.err()).isEmpty();
+
+        assertThat(run("search", "teeth", "checkup", "--keyword-only").out())
+                .contains("No results.");
+        // The option holds for that one search only.
+        assertThat(run("search", "teeth", "checkup").out()).contains("dentist.txt");
     }
 
     @Test

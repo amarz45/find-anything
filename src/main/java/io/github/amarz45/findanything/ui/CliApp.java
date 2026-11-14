@@ -986,8 +986,9 @@ public final class CliApp implements Callable<Integer> {
     @Command(
             name = "search",
             description =
-                    "Find files by keywords; with no query, list every indexed file, newest first."
-                            + " The filters narrow either by type, date, size and folder.")
+                    "Find files by keywords and by meaning; with no query, list every indexed file,"
+                            + " newest first. The filters narrow either by type, date, size and"
+                            + " folder.")
     static final class Search implements Callable<Integer> {
         @ParentCommand CliApp app;
         @Spec CommandSpec spec;
@@ -1041,11 +1042,17 @@ public final class CliApp implements Callable<Integer> {
                 description = "Only files under this folder, which must be in a search folder.")
         Path location;
 
+        @Option(
+                names = "--keyword-only",
+                description = "Match the query's words only, not also its meaning.")
+        boolean keywordOnly;
+
         @Override
         public Integer call() throws Exception {
             PrintWriter out = spec.commandLine().getOut();
             SearchFilters searchFilters = searchFilters();
             app.openIndex(spec.commandLine().getErr());
+            app.findAnythingService.setSemanticSearchEnabled(!keywordOnly);
             app.catchUp(spec.commandLine().getErr());
             String query = String.join(" ", words);
             List<SearchResult> results =

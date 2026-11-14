@@ -143,6 +143,7 @@ public final class FindAnythingService implements AutoCloseable {
     private AgentController agentController;
     private ScheduledExecutorService refresher; // only in READ_ONLY mode
     private ModelSettings modelSettings; // loaded on first use; the model for new conversations
+    private boolean semanticSearchWanted = true; // false after the CLI's --keyword-only
 
     public FindAnythingService(
             IndexConfig indexConfig,
@@ -191,7 +192,8 @@ public final class FindAnythingService implements AutoCloseable {
         }
         searchIndex = SearchIndex.open(indexDirectory);
         indexMode = searchIndex.getMode();
-        searchEngine = new SearchEngine(searchIndex, indexConfig);
+        searchEngine = new SearchEngine(searchIndex, indexConfig, embeddingModel);
+        searchEngine.setSemanticSearchEnabled(semanticSearchWanted);
         ToolRegistry toolRegistry = new ToolRegistry();
         toolRegistry.register(new SearchTool(searchEngine));
         toolRegistry.register(new ReadExcerptTool(searchIndex, indexConfig, MAX_EXCERPT_CHARS));
@@ -410,6 +412,26 @@ public final class FindAnythingService implements AutoCloseable {
 
     // ------------------------------------------------------------------ search and preview (F06,
     // F11)
+
+    /**
+     * Turns semantic search (F05) on or off for every later search, the agent's included. It is on
+     * unless this turns it off, as the CLI's {@code --keyword-only} does. May be called before or
+     * after {@link #open}.
+     */
+    public synchronized void setSemanticSearchEnabled(boolean enabled) {
+        semanticSearchWanted = enabled;
+        if (searchEngine != null) {
+            searchEngine.setSemanticSearchEnabled(enabled);
+        }
+    }
+
+    /**
+     * Whether searches also match by meaning. False once it was turned off, and also once the
+     * embedding model has failed: the search engine then goes on with keywords only.
+     */
+    public synchronized boolean isSemanticSearchEnabled() {
+        return searchEngine != null ? searchEngine.isSemanticSearchEnabled() : semanticSearchWanted;
+    }
 
     /** Searches with the default result limit. */
     public CompletableFuture<List<SearchResult>> search(String query, SearchFilters searchFilters) {

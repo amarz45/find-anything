@@ -56,7 +56,14 @@ class SearchToolTest {
         registry = new ToolRegistry();
         searchFolder = new SearchFolder(ROOT, false, true, List.of());
         IndexConfig indexConfig = new IndexConfig(folder, List.of(searchFolder), List.of());
-        registry.register(new SearchTool(new SearchEngine(index, indexConfig)));
+        // Semantic search stays off here: these tests are about what the tool does with results.
+        registry.register(
+                new SearchTool(
+                        new SearchEngine(
+                                index,
+                                indexConfig,
+                                new io.github.amarz45.findanything.embedding
+                                        .ScriptedEmbeddingModel())));
     }
 
     @Test
