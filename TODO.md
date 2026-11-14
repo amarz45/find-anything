@@ -202,13 +202,6 @@ Amar may change these later; undecided.
   `WebView`, which needs the `javafx-web` module and loses the citation links unless they are
   rebuilt as HTML. The first keeps the design (one `TextFlow` per answer) and is the likely choice.
   The CLI prints the same text, so a plain-text rendering there is unaffected.
-
-- **Let the settings dialog's long texts wrap instead of squeezing the controls.** Seen by Amar on
-  2026-11-10: after "Test connection", the result ("Connected. New conversations use the cloud
-  model …") was cut with "…" and shrank the Backend, Model and Test connection controls to "…"
-  too, until the window was widened. The result label sits in the same row as the button, inside
-  a grid column that has no width of its own. A better version puts the result on its own row with
-  a maximum width so it wraps, or gives the grid's columns fixed widths.
 - **The GUI runs on XWayland, not Wayland.** On a Wayland desktop the window is an X11 client
   (Amar, 2026-11-10). This can't be changed from the app: JavaFX's Linux backend is GTK on X11,
   and the OpenJFX maintainers say JavaFX is supported on Wayland through XWayland, as AWT is;

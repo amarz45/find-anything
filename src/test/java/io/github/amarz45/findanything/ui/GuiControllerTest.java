@@ -31,6 +31,7 @@ import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.DialogEvent;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
@@ -760,6 +761,39 @@ class GuiControllerTest {
         assertThat(testResult()).isEqualTo("OpenRouter rejected the API key.");
         assertThat(service.getModelSettings().modelName()).isEqualTo("vendor/model");
         assertThat(onFxThread(() -> resultLabel.getStyleClass().contains("unverified"))).isTrue();
+    }
+
+    @Test
+    void aLongTestResultWrapsAndLeavesTheControlsTheirWidth() throws Exception {
+        Button testConnection = inDialog(".test-connection");
+        ChoiceBox<BackendType> backend = inDialog(".backend-choice");
+        Label resultLabel = inDialog(".test-result");
+        String message =
+                "Connected. New conversations use the cloud model vendor/a-model-with-a-long-name."
+                        + " Conversations that are already open keep the model they started with.";
+        onFxThread(
+                () -> {
+                    DialogPane pane = window.getSettingsDialog().getDialogPane();
+                    window.getSettingsDialog().showTestResult(true, "Connected.");
+                    pane.applyCss();
+                    pane.resize(pane.prefWidth(-1), pane.prefHeight(-1));
+                    pane.layout();
+                });
+        double lineHeight = onFxThread(resultLabel::getHeight);
+        onFxThread(
+                () -> {
+                    DialogPane pane = window.getSettingsDialog().getDialogPane();
+                    window.getSettingsDialog().showTestResult(true, message);
+                    pane.applyCss();
+                    pane.resize(pane.prefWidth(-1), pane.prefHeight(-1));
+                    pane.layout();
+                });
+
+        assertThat(onFxThread(testConnection::getWidth))
+                .isGreaterThanOrEqualTo(onFxThread(() -> testConnection.prefWidth(-1)) - 0.5);
+        assertThat(onFxThread(backend::getWidth))
+                .isGreaterThanOrEqualTo(onFxThread(() -> backend.prefWidth(-1)) - 0.5);
+        assertThat(onFxThread(resultLabel::getHeight)).isGreaterThan(lineHeight * 1.5);
     }
 
     @Test

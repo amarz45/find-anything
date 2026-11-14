@@ -21,6 +21,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.util.StringConverter;
@@ -45,6 +46,9 @@ public final class SettingsDialog extends Dialog<Void> {
     static final String NOTHING_SENT = "Nothing has been sent to a cloud model.";
     static final String SHOW_LOG = "Show privacy log";
     static final String HIDE_LOG = "Hide privacy log";
+
+    /** The widest a connection test's result gets before it wraps onto another line. */
+    private static final double TEST_RESULT_WIDTH = 480;
 
     private final ChoiceBox<BackendType> backend = new ChoiceBox<>();
     private final TextField modelName = new TextField();
@@ -99,8 +103,12 @@ public final class SettingsDialog extends Dialog<Void> {
                     testConnection.setDisable(true);
                     onTestBackend.accept(backend.getValue(), modelName.getText());
                 });
+        // The result gets a row to itself and a width at which it wraps. Beside the button, a
+        // long result asked for one long line and squeezed every control in the grid.
         testResult.getStyleClass().add("test-result");
         testResult.setWrapText(true);
+        testResult.setMaxWidth(TEST_RESULT_WIDTH);
+        testResult.setMinHeight(Region.USE_PREF_SIZE);
 
         GridPane model = new GridPane();
         model.setHgap(8);
@@ -110,7 +118,8 @@ public final class SettingsDialog extends Dialog<Void> {
         model.add(new Label("Model"), 0, 1);
         model.add(modelName, 1, 1);
         model.add(keyLine, 1, 2);
-        model.add(new HBox(8, testConnection, testResult), 1, 3);
+        model.add(testConnection, 1, 3);
+        model.add(testResult, 1, 4);
         GridPane.setHgrow(modelName, Priority.ALWAYS);
 
         Label limitation = new Label(LIMITATION);
@@ -176,6 +185,11 @@ public final class SettingsDialog extends Dialog<Void> {
         refreshLog.setVisible(shown);
         refreshLog.setManaged(shown);
         showLog.setText(shown ? HIDE_LOG : SHOW_LOG);
+        fitWindow();
+    }
+
+    /** Sizes the window again to fit its content, after the content's height has changed. */
+    private void fitWindow() {
         Scene scene = getDialogPane().getScene();
         if (scene != null && scene.getWindow() != null) {
             scene.getWindow().sizeToScene();
@@ -203,12 +217,18 @@ public final class SettingsDialog extends Dialog<Void> {
         keyLine.setManaged(cloud);
     }
 
-    /** Shows the connection test's outcome (SD08). */
+    /**
+     * Shows the connection test's outcome (SD08). A long one wraps onto more lines, so the window
+     * grows to fit it, unless the privacy log is shown: its text area gives up the height instead.
+     */
     public void showTestResult(boolean succeeded, String message) {
         testConnection.setDisable(false);
         testResult.getStyleClass().removeAll("citation-verified", "unverified");
         testResult.getStyleClass().add(succeeded ? "citation-verified" : "unverified");
         testResult.setText(Objects.requireNonNull(message, "message"));
+        if (!privacyLog.isVisible()) {
+            fitWindow();
+        }
     }
 
     /** Shows each redaction category with whether it is on, as a toggle. */
