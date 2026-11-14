@@ -520,3 +520,48 @@ The first entries were drafted from the planning conversation in the claude.ai a
   F10 is Not implemented, with an entry in `docs/logs/design-changes.md`. Not done: the diagrams
   that still draw it.
 
+### 2026-11-14: Live index updates (F03's `FileWatcher`)
+- **Tool / model:** Claude Code, Claude Fable 5.2
+- **Task:** decide whether the live file watcher, a Tier 2 item, could still be built before the
+  freeze, and then build it.
+- **Input / instruction:** first asked only for the relative complexity and the requirements,
+  with no plan and no recommendation: "then I'll decide." Later asked for a plan that prefers
+  simplicity and is easy to improve afterwards.
+- **AI contribution:**
+  - Read the indexing code and the design and judged the work small to medium: `ChangeQueue` and
+    `Indexer` already handle any offered path, so only the event source and its wiring were
+    missing.
+  - Listed three library behaviours from memory, marked as unverified. When told to check them,
+    it read the library's 0.19.1 sources and the JDK's in the local caches. Two held (file
+    hashing is on by default and reads every file; links aren't followed with hashing off) and
+    one was wrong: excluded folders can be skipped, with a custom tree visitor. One point
+    (junctions on Windows) is documented nowhere it looked, and it said so.
+  - Wrote the plan, then `FileWatcher` (one library watcher per search folder), the wiring in
+    `FindAnythingService` and `CliApp`, the tests and the documents.
+  - Checked real events with a throwaway script against the built jars on Linux, since no
+    committed test waits for one.
+  - Diagnosed the stale preview the user found: the table re-selects a file without announcing
+    it, so nothing reloaded the preview. Fixed it in `GuiController` with a test.
+  - Mistakes the user caught: its first test list included tests on real file-system events,
+    which could be flaky; and it wrote "folders are fixed at build time", meaning the library's
+    `build()` call, which read as if search folders couldn't be added while the app runs.
+- **Human contribution:**
+  - Ruled out any test that could be flaky, since most testing belongs to Stage 3, and required
+    documentation in place of guesses for the library's behaviour.
+  - Questioned the "fixed at build time" statement, and asked what happens when a folder is
+    added inside, then around, an existing search folder (the second is refused).
+  - Approved the plan, and reviewed and approved each commit.
+  - Tested everything in the GUI and found the one defect: the table updated live, but the
+    selected file's preview kept its old text.
+- **Outcome:**
+  [a7ca3f5](https://github.com/amarz45/find-anything/commit/a7ca3f5c0dff048881b209f2fa61a623cf06deb5)
+  (`FileWatcher`),
+  [1f06018](https://github.com/amarz45/find-anything/commit/1f0601896d179f641f6b4a865b5f20b2b3bedc5e)
+  (the GUI watches the search folders),
+  [4bdc432](https://github.com/amarz45/find-anything/commit/4bdc43278ffe073bc6f986e8cb2b77ccbae78fd7)
+  (the preview is reloaded); and
+  [eac8eb9](https://github.com/amarz45/find-anything/commit/eac8eb97440bf15fe5b689ef86601395cc4850e9)
+  (the documents). F03 is implemented: with the GUI open, a changed file is indexed about two
+  seconds later. Not done: a check on Windows, the diagrams, and the items in `TODO.md` under
+  "Live index updates".
+
