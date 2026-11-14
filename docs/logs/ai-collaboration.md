@@ -492,3 +492,31 @@ The first entries were drafted from the planning conversation in the claude.ai a
   résumé, "tooth doctor" the dentist note, and a nonsense query nothing. Not done: the diagrams,
   and the borderline matches listed in `TODO.md`.
 
+### 2026-11-14: Deciding not to implement document comparison (F10)
+- **Tool / model:** Claude Code, Claude Fable 5.2
+- **Task:** decide whether F10, the last Tier 2 feature, is worth building.
+- **Input / instruction:** asked whether document comparison is a good feature at all, since the
+  agent can already be asked about two files and cites both: "What does document comparison add
+  on top of that?"
+- **AI contribution:**
+  - Read the design and answered both sides. What the diff adds: every changed line, a
+    comparison without a model, only the diff sent to a cloud model, and the side-by-side view.
+    Where it's weak: it suits only two versions of one document, and a line diff of extracted
+    PDF text is probably noisy (not tested). It recommended leaving F10 out.
+  - Wrote the design-changes entry and updated the traceability rows, the README and the
+    handoff.
+  - Mistakes the user caught: it left a code comment that still called Compare a Tier 2
+    feature, on the grounds that only documents were asked for; and it split the change into
+    two commits.
+- **Human contribution:**
+  - Raised the question himself, and decided to mark F10 not implemented: not enough benefit
+    for the complexity, the problems listed, and the agent already compares documents, only
+    without a diff.
+  - Had the code comment fixed ("Code is documentation"), rejected the AI's rewording of it and
+    had the F10 note removed instead.
+  - Had the two commits made into one.
+- **Outcome:**
+  [ec02050](https://github.com/amarz45/find-anything/commit/ec020508ad9d1379950b62dcd0b2aff2896a13e0).
+  F10 is Not implemented, with an entry in `docs/logs/design-changes.md`. Not done: the diagrams
+  that still draw it.
+
