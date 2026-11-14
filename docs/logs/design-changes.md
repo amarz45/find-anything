@@ -783,6 +783,42 @@ Diagrams updated:
   Not checked with the cloud model. Not solved: a model that declines when it should search.
   Diagrams updated: not yet (SD03 at the freeze).
 
+### The embedding model: which one, when it loads, and how it fails (2026-11-14, Tier 2)
+- **Original design:** `LocalEmbeddingModel` adapts "an in-process ONNX model" to
+  `EmbeddingModel` and has one field, `modelFile: Path`. The model was to be chosen by
+  benchmarking. A model that fails to load is found at startup, and the facade turns semantic
+  search off. `EmbeddingModel` has `embed()` and `getDimension()` and names no exception.
+- **Implemented change:**
+  - **The model** is BAAI's bge-small-en-v1.5 (384 numbers per vector, English), from
+    LangChain4j's `langchain4j-embeddings-bge-small-en-v15`. It is inside that jar, so there is no
+    `modelFile`. `LocalEmbeddingModel` takes `nativeLibraryFolder: Path` instead: where the
+    tokenizer library unpacks its native code, a folder under the app's data folder.
+  - **Loading** happens on the first `embed()` call, not at startup. A failed load is remembered
+    and every later call fails at once.
+  - **Failure** is the new unchecked `EmbeddingException`, for a model that can't be loaded and
+    for a text that can't be embedded (a blank one).
+  - **Two process-wide properties** are set before the load, because the tokenizer library
+    (DJL) has no other configuration: `DJL_CACHE_DIR`, and `ai.djl.offline`.
+  - **No thread pool.** A call's texts are embedded one after another on the calling thread.
+- **Reason:**
+  - The model was chosen without a benchmark of candidates: of the four small models the
+    library offers, it is the one whose input limit (510 tokens) holds a whole 1,500-character
+    chunk, so `Chunker` stays as it is.
+  - Loading takes about 0.9 seconds (measured), which a command such as `findany show` would pay
+    for nothing. `embed()` can fail on any call anyway, so its callers need a fallback either
+    way, and a failed load is one more case of it.
+  - Left alone, the tokenizer library unpacks into `~/.djl.ai`, and on a computer with CUDA it
+    downloads a different build of itself.
+  - ONNX Runtime already spreads one text's computation over the processor's cores. Measured on
+    a Ryzen 9 5900XT (16 cores) with 256 chunks of 1,500 characters: 27 chunks a second one text
+    at a time, 29 with 4 texts at once, 20 with 32 (the library's default). With ONNX Runtime
+    held to one thread per text, 16 callers gave 26. No setting was meaningfully faster, so the
+    one without a number of ours was kept.
+- **Impact:** F05; `EmbeddingModel`, `LocalEmbeddingModel`, the new `EmbeddingException`. The
+  run-time class path grows by about 180 MB (the model, ONNX Runtime, the tokenizer). An Intel
+  Mac has no native tokenizer library in the jar, so it will get keyword search with the warning.
+  Nothing uses the model yet. Diagrams updated: not yet (cd02 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
