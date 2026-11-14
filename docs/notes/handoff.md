@@ -601,3 +601,25 @@ surprising.)*
   - The filters are hidden in Ask mode because they never reach the agent
     (`FindAnythingService.ask()` takes no filters). Amar asked why; no change was agreed.
   - Next: the freeze: videos, diagrams (cd01 now also owes the Filters members), the report.
+- **2026-11-13 (Session 8, continued: the agent answers without searching):**
+  - Seen by Amar in the GUI with `qwen3:14b`: "What's my current GPA?" was answered without a
+    search, and the follow-up "It should be in my transcript" searched for "transcript" and got
+    page 2 of `transcript.pdf` (help links), not page 1 with the GPA table. The index was fine.
+    Reproduced from the CLI on a scratch copy of the two transcript files.
+  - Done, on branch `agent-search` (2 code commits, PR #11), each with a design-changes entry:
+    1. `94d474d`: one sentence in `PromptBuilder` ("A search gives each file with the one passage
+       that best matches your query, so include the words you expect to find next to the
+       answer"). Alone it did not fix the follow-up (3 runs).
+    2. `d063b8c`: `AgentController.askToSearchFirst()` sends a first reply without a tool call
+       back once; the model searches, or replies `NO SEARCH NEEDED` and its first reply is the
+       answer. With it, the GPA question was answered after a search in 3 runs of 3, and "hi" and
+       "thanks" kept their first reply without a search (about 14 seconds each).
+  - Not checked: the cloud model with either change; how much time the extra call adds to a
+    greeting.
+  - Seen in those runs, not acted on: the model read "current GPA" as 8.10 in two runs and as
+    7.85 cumulative in one (the table's columns are sessional and cumulative); two citations
+    were unverified because the model joined several lines into one quote.
+  - Discussed, not done: writing on a result's label line how much of the file the passage is
+    (`page 2 of 2, passage 3 of 4`), and choosing each file's passage with the user's request's
+    words as well as the model's query. Amar's concern with the first: a weak model might read
+    whole files. Try the label only if the follow-up still fails.
