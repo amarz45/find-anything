@@ -25,6 +25,8 @@ tika-pipes-fork-parser = { module = "org.apache.tika:tika-pipes-fork-parser", ve
 langchain4j-bom = { module = "dev.langchain4j:langchain4j-bom", version.ref = "langchain4j" }
 langchain4j-open-ai = { module = "dev.langchain4j:langchain4j-open-ai" }   # OpenRouter (OpenAI-compatible)
 langchain4j-ollama = { module = "dev.langchain4j:langchain4j-ollama" }
+# The local embedding model (F05): the ONNX model is inside the jar, so nothing is fetched at run time.
+langchain4j-embeddings-bge-small-en-v15 = { module = "dev.langchain4j:langchain4j-embeddings-bge-small-en-v15" }
 
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }

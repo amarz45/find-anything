@@ -40,6 +40,7 @@ dependencies {
     implementation(platform(libs.langchain4j.bom))
     implementation(libs.langchain4j.open.ai)
     implementation(libs.langchain4j.ollama)
+    implementation(libs.langchain4j.embeddings.bge.small.en.v15)
 
     implementation(libs.jackson.databind)
     implementation(libs.jackson.jsr310)
