@@ -60,6 +60,12 @@ public final class GuiController implements IndexStatusListener {
 
     private boolean statusShown;
 
+    /** Shown once when the embedding model can't be used (F05's fallback to keyword search). */
+    static final String SEMANTIC_SEARCH_UNAVAILABLE =
+            "The embedding model could not be loaded, so search matches words only, not meaning.";
+
+    private boolean semanticWarningShown;
+
     public GuiController(FindAnythingService findAnythingService, MainWindow mainWindow) {
         this.findAnythingService =
                 Objects.requireNonNull(findAnythingService, "findAnythingService");
@@ -98,6 +104,25 @@ public final class GuiController implements IndexStatusListener {
         // A read-only process is never told again, so show the status it has now.
         onStatusChanged(findAnythingService.getIndexStatus());
         onQueryChanged("");
+        // Load the embedding model now, in the background, so the first search doesn't wait for
+        // it; if it can't be loaded, say so once.
+        try {
+            findAnythingService
+                    .loadEmbeddingModel()
+                    .whenComplete(
+                            (available, failure) ->
+                                    Platform.runLater(this::warnIfSemanticSearchIsOff));
+        } catch (RuntimeException e) {
+            mainWindow.showError(describe(e));
+        }
+    }
+
+    /** Says once, in the error bar, that search has fallen back to keywords only. */
+    private void warnIfSemanticSearchIsOff() {
+        if (!semanticWarningShown && !findAnythingService.isSemanticSearchEnabled()) {
+            semanticWarningShown = true;
+            mainWindow.showError(SEMANTIC_SEARCH_UNAVAILABLE);
+        }
     }
 
     // ------------------------------------------------------------------ search (F04, F06)
@@ -128,6 +153,8 @@ public final class GuiController implements IndexStatusListener {
                                                 } else {
                                                     resultsView.setFiltersActive(filtered);
                                                     resultsView.setResults(results);
+                                                    // The model can also fail during a search.
+                                                    warnIfSemanticSearchIsOff();
                                                 }
                                             }));
         } catch (RuntimeException e) {

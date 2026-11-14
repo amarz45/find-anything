@@ -71,6 +71,21 @@ class CliAppTest {
     /** A service whose model is scripted; the facade shares the factory's privacy objects. */
     static FindAnythingService service(Path appData, ScriptedLlmClientFactory factory)
             throws Exception {
+        // The dentist note and this query are close in meaning and share no word.
+        return service(
+                appData,
+                factory,
+                new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel()
+                        .with("Dentist appointment on March 4, 2026.", 1, 0)
+                        .with("teeth checkup", 0.9f, 0.1f));
+    }
+
+    /** The same, with the embedding model a test wants (a failing one, say). */
+    static FindAnythingService service(
+            Path appData,
+            ScriptedLlmClientFactory factory,
+            io.github.amarz45.findanything.embedding.EmbeddingModel embeddingModel)
+            throws Exception {
         SettingsStore store = new SettingsStore(appData.resolve("settings.json"), ENV);
         IndexConfig config = store.loadIndexConfig();
         // What the composition root does: the saved policy and toggles apply from the start.
@@ -89,10 +104,7 @@ class CliAppTest {
                 new ConversationStore(appData.resolve("conversations"), store),
                 new ScriptedExtractor(),
                 new Chunker(300),
-                // The dentist note and this query are close in meaning and share no word.
-                new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel()
-                        .with("Dentist appointment on March 4, 2026.", 1, 0)
-                        .with("teeth checkup", 0.9f, 0.1f),
+                embeddingModel,
                 new ChangeQueue(Duration.ZERO),
                 appData.resolve("index"),
                 Executors.newFixedThreadPool(2),
@@ -317,6 +329,7 @@ class CliAppTest {
         assertThat(status.out())
                 .contains("Mode: writer")
                 .contains("Files: 4 indexed, 1 failed, 0 pending")
+                .contains("Embeddings: every passage has one")
                 .contains("corrupt.txt");
 
         assertThat(run("search", "nothing-matches-this").out()).contains("No results.");
@@ -335,6 +348,30 @@ class CliAppTest {
                 .contains("No results.");
         // The option holds for that one search only.
         assertThat(run("search", "teeth", "checkup").out()).contains("dentist.txt");
+    }
+
+    @Test
+    void aModelThatCannotBeLoadedLeavesKeywordSearchAndSaysWhatIsMissing() throws Exception {
+        io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel broken =
+                new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel();
+        broken.failWith("The embedding model could not be loaded: no native library");
+        service.close();
+        service =
+                service(
+                        home.resolve("broken"),
+                        new ScriptedLlmClientFactory(
+                                new ScriptedLlmClient(new LlmResponse("OK", List.of()))),
+                        broken);
+        app = new CliApp(service);
+
+        // The command still finishes: the files are indexed and found by their words.
+        assertThat(run("folders", "add", docs.toString()).exitCode()).isZero();
+        Run search = run("search", "merge", "sort");
+        assertThat(search.exitCode()).isZero();
+        assertThat(search.out()).contains("1. " + docs.resolve("lecture.pdf"));
+        assertThat(run("index", "status").out())
+                .contains("State: idle")
+                .contains("Embeddings: 3 passages without one (found by keywords only)");
     }
 
     @Test

@@ -958,6 +958,34 @@ Diagrams updated:
   being related ("my CV" also lists `dentist.txt`, second). Diagrams updated: not yet (cd02,
   cd03, SD01, SD02 at the freeze).
 
+### Embedding in the status, the warning, and loading the model at GUI startup (2026-11-14, Tier 2)
+- **Original design:** the status indicator shows that embedding is in progress. When the model
+  fails to load, search falls back to keywords "with a warning". The facade has no method for
+  loading the model, and the design doesn't word the status or the warning.
+- **Implemented change:**
+  - **GUI status** (`MainWindow.statusText()`): "Embedding… 120 passages left" while the indexer
+    embeds, and "Embedding…" while only file names are left. Once the index is up to date,
+    passages that still have no embedding are named: "Up to date · 8 passages not embedded"
+    (also in a read-only window). That is what a failed model leaves behind.
+  - **GUI warning**: `GuiController` shows one message in the error bar when semantic search is
+    off, "The embedding model could not be loaded, so search matches words only, not meaning."
+    It checks after the model's load at startup and after each search.
+  - **Loading at GUI startup**: new `FindAnythingService.loadEmbeddingModel()`, which loads the
+    model on the background thread and, if that fails, turns semantic search off. `GuiController`
+    calls it when the window opens. The CLI doesn't: a command loads the model only if it embeds
+    something.
+  - **CLI**: the progress line reads "Embedding... 637 passages left", then "Embedding the file
+    names...". `findany index status` gets a line, "Embeddings: every passage has one" or
+    "Embeddings: 3 passages without one (found by keywords only)". The CLI's warning is the log's
+    line on stderr ("Semantic search is unavailable, so search uses keywords only: …").
+- **Reason:** the model takes about a second to load (measured), which the first search in the
+  window would otherwise wait for. Loading it at startup is also where the design looks for a
+  failed load. "Up to date" alone would hide that some passages can't be found by meaning.
+- **Impact:** F03, F05; `MainWindow`, `GuiController`, `FindAnythingService`, `CliApp`. Checked
+  from the CLI on `testdata/corpus` with the real model. **Not looked at on a real display:**
+  the status texts and the warning in the window; the GUI tests cover them on the headless
+  toolkit only. Diagrams updated: not yet (cd01 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.

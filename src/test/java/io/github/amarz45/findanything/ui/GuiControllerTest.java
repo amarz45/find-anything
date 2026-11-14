@@ -80,6 +80,44 @@ class GuiControllerTest {
         service.close();
     }
 
+    @Test
+    void aModelThatCannotBeLoadedIsReportedOnceAndSearchGoesOnByKeywords() throws Exception {
+        io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel broken =
+                new io.github.amarz45.findanything.embedding.ScriptedEmbeddingModel();
+        broken.failWith("The embedding model could not be loaded: no native library");
+        onFxThread(() -> stage.hide());
+        service.close();
+        service =
+                CliAppTest.service(
+                        home.resolve("broken"),
+                        new ScriptedLlmClientFactory(
+                                new ScriptedLlmClient(new LlmResponse("OK", List.of()))),
+                        broken);
+        assertThat(service.open(false)).isEqualTo(IndexMode.WRITER);
+        onFxThread(
+                () -> {
+                    window = new MainWindow();
+                    controller = new GuiController(service, window);
+                    stage = new Stage();
+                    window.show(stage);
+                });
+
+        // The model is loaded at startup, in the background; its failure is shown in the bar.
+        awaitFx(
+                () -> GuiController.SEMANTIC_SEARCH_UNAVAILABLE.equals(errorNow(window)),
+                () -> "the warning, shown " + errorNow(window));
+
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        onFxThread(() -> input().setText("merge"));
+        awaitFiles("lecture.pdf");
+        // The index is up to date, and the status says what search by meaning lacks.
+        awaitFx(
+                () -> statusNow(window).startsWith("Up to date"),
+                () -> "status " + statusNow(window));
+        assertThat(status(window)).contains("3 passages not embedded");
+    }
+
     FindAnythingService newService() throws Exception {
         return CliAppTest.service(
                 home.resolve("app"),

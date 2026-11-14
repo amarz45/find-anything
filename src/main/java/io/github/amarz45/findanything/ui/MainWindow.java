@@ -571,13 +571,19 @@ public final class MainWindow extends BorderPane {
                             + (status.failedFiles() == 1 ? " file" : " files")
                             + " could not be read";
         }
+        // Passages that still have no embedding are found by keywords only (F05). While the
+        // indexer is embedding, the number counts down; afterwards it says what was left out.
+        int left = status.chunksWithoutEmbeddings();
+        String passages = left + (left == 1 ? " passage" : " passages");
+        String notEmbedded = left > 0 ? " · " + passages + " not embedded" : "";
         return switch (status.state()) {
-            case READ_ONLY -> READ_ONLY_STATUS + failed;
+            case READ_ONLY -> READ_ONLY_STATUS + failed + notEmbedded;
             case OPENING -> "Opening the index…";
             case STOPPING, STOPPED -> "Stopping…";
-            case IDLE, RECONCILING, INDEXING, EMBEDDING -> {
+            case EMBEDDING -> "Embedding…" + (left > 0 ? " " + passages + " left" : "") + failed;
+            case IDLE, RECONCILING, INDEXING -> {
                 if (status.isUpToDate()) {
-                    yield "Up to date" + failed;
+                    yield "Up to date" + failed + notEmbedded;
                 }
                 String pending =
                         status.pendingFiles() > 1 ? " " + status.pendingFiles() + " pending" : "";

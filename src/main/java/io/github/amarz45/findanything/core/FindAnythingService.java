@@ -18,6 +18,7 @@ import io.github.amarz45.findanything.config.InvalidPatternException;
 import io.github.amarz45.findanything.config.ModelSettings;
 import io.github.amarz45.findanything.config.SearchFolder;
 import io.github.amarz45.findanything.config.SettingsStore;
+import io.github.amarz45.findanything.embedding.EmbeddingException;
 import io.github.amarz45.findanything.embedding.EmbeddingModel;
 import io.github.amarz45.findanything.indexing.ChangeQueue;
 import io.github.amarz45.findanything.indexing.Chunker;
@@ -431,6 +432,33 @@ public final class FindAnythingService implements AutoCloseable {
      */
     public synchronized boolean isSemanticSearchEnabled() {
         return searchEngine != null ? searchEngine.isSemanticSearchEnabled() : semanticSearchWanted;
+    }
+
+    /**
+     * Loads the embedding model on a background thread, so the first search by meaning doesn't wait
+     * for it (about a second). The GUI calls this at startup; a CLI command loads the model only
+     * when it needs it. If the model can't be loaded, semantic search is turned off with a warning
+     * in the log, and search goes on with keywords only.
+     *
+     * @return whether searches match by meaning afterwards
+     */
+    public CompletableFuture<Boolean> loadEmbeddingModel() {
+        requireOpen();
+        return supply(
+                () -> {
+                    if (!isSemanticSearchEnabled()) {
+                        return false;
+                    }
+                    try {
+                        embeddingModel.embed(List.of("load the model"));
+                    } catch (EmbeddingException e) {
+                        log.warn(
+                                "Semantic search is unavailable, so search uses keywords only: {}",
+                                e.getMessage());
+                        setSemanticSearchEnabled(false);
+                    }
+                    return isSemanticSearchEnabled();
+                });
     }
 
     /** Searches with the default result limit. */
