@@ -667,8 +667,8 @@ surprising.)*
     (F05 owes cd01, cd02, cd03, cd04, SD01 and SD02, on top of what earlier entries list); the
     report; the token and cost totals; the README check from a fresh clone.
 - **2026-11-14 (Session 10: the live watcher, Claude Code):**
-  - Done, on branch `live-watcher` (3 code commits and one for the documents; **not pushed, no
-    pull request yet**): F03 is Implemented. The entry is in `docs/logs/design-changes.md`
+  - Done, on branch `live-watcher` (3 code commits, the rest documents; PR #13, CI green on
+    Ubuntu and Windows): F03 is Implemented. The entry is in `docs/logs/design-changes.md`
     ("`FileWatcher`: one watcher per folder, and what the design left open").
     1. `a7ca3f5`: `indexing/FileWatcher` over directory-watcher 0.19.1, one library watcher and
        thread per search folder, hashing off, excluded folders never registered.
@@ -687,6 +687,5 @@ surprising.)*
     before it returns; with hashing off a deleted folder gives one event, for the folder.
   - Left for later, in `TODO.md` ("Live index updates", and "GUI" for the deleted file's
     preview).
-  - Next: push `live-watcher` and open its pull request (merge without squashing); then the
-    freeze. For the F03 video: with a search showing, edit, create, delete and rename a file.
+  - Next: the freeze, as listed in Session 9's entry. For the F03 video: with a search showing, edit, create, delete and rename a file.
     cd03 owes `watchedFolders`' type and `FileWatcher`'s two methods.
