@@ -43,9 +43,9 @@ public final class SearchTool implements Tool {
 
     /**
      * The file types the model can filter on: the formats whose text is indexed. Other files are
-     * found by name, without a type filter.
+     * found by name, without a type filter. The GUI's type filter offers the same list (F04).
      */
-    static final List<String> FILE_TYPES = List.of("pdf", "docx", "pptx", "txt", "md");
+    public static final List<String> FILE_TYPES = List.of("pdf", "docx", "pptx", "txt", "md");
 
     static final int DEFAULT_LIMIT = 5;
     static final int MAX_LIMIT = 20;

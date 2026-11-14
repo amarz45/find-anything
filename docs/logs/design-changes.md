@@ -600,7 +600,8 @@ Diagrams updated:
   - `DetailPane`: `clearConversation()`, `showConversation()`, `showRequest()`,
     `showPastExchange()`, `setOnCitationClicked()`; the Back button is view state.
   - `GuiController`: `onRemoveFolder()` (the diagram has no remove handler). Not declared, since
-    not built: `onFiltersChanged()` (F04), `onCompareRequested()` (F10), `onAddExclusion()`.
+    not built: `onCompareRequested()` (F10), `onAddExclusion()`. (`onFiltersChanged()` came with
+    F04 on 2026-11-13; see "F04's filters" below.)
   - The `gui` command starts JavaFX with `Platform.startup()` rather than `Application.launch()`,
     which creates the application object itself and would force a static handoff of the service.
 - **Reason:** time, and the handoff's one-window simplification. The callback setters are the
@@ -687,8 +688,52 @@ Diagrams updated:
   the part shown, the model has to read an excerpt of that file (the prompt already tells it to).
   No pattern changes and no diagram changes.
 
+### F04's filters: a row opened by a button, and what the design left open (2026-11-13, Tier 2)
+- **Original design:** "A Filters menu beside the search folder chips offers a type dropdown, a
+  date range picker, a size range, and a location." The CLI has `--type pdf,docx`, `--after`,
+  `--before`, `--min-size 1MB`, `--max-size 50MB` and `--in <folder>`. Invalid filters fail the
+  search, and `MainWindow.showError()` shows them inline. With no results, "a message suggests
+  loosening the filters". The report doesn't say how sizes are written, which types the dropdown
+  offers, or whether the filters apply in Ask mode.
+- **Implemented change:**
+  - **The GUI.** A "Filters" toggle button after the folder chips opens a row under them, not a
+    popup menu: a type menu with a checkbox per type, two date pickers, two size fields, a
+    location menu (anywhere, each search folder, or "Choose a folder…") and "Clear filters". The
+    button's text counts the kinds of filter that are on ("Filters (2)"). Every change goes to
+    `GuiController.onFiltersChanged()`, the design's method, which stores the filters and runs
+    the current search again.
+  - **The type list.** The GUI offers the formats whose text is indexed (`SearchTool.FILE_TYPES`,
+    now `public`: pdf, docx, pptx, txt, md). The CLI's `--type` takes any extension, with or
+    without a dot, in any letter case.
+  - **Sizes.** `CliApp.parseSize()` reads a number with an optional unit (B, KB, MB, GB, TB; any
+    letter case; decimals allowed), 1024-based like the sizes the app prints. A size or a date
+    that can't be read is a usage error in the CLI (exit code 2) and an error-bar message in the
+    GUI, and no search runs with it. Filters that can be read but don't make sense together are
+    still the search's check (`SearchFilters.validate()`), with exit code 1 in the CLI.
+  - **The filters' error message.** The error bar keeps a message until it is dismissed, which
+    would leave "the start date is after the end date" on screen after the dates were fixed. So
+    `MainWindow` has `showFilterError()` and `clearFilterError()` beside `showError()`: a filters
+    message is removed when the filters change, and any other error stays as before.
+  - **Ask mode.** The button and the row are hidden in Ask mode and the filters keep their
+    values for the next instant search. They never reach the agent: `FindAnythingService.ask()`
+    takes no filters, and `SearchTool` sets its own from the model's arguments.
+  - **A removed folder.** A location filter inside a search folder that is then removed goes back
+    to "Anywhere".
+  - Members added beyond the diagram: `MainWindow.setOnFiltersChanged()`, `showFilterError()`,
+    `clearFilterError()`; `ResultsView.setFiltersActive()`.
+- **Reason:** a date picker and text fields inside a JavaFX popup menu are expected to close the
+  menu or lose focus on a click (not tested; the row avoids the question). A fixed type list
+  can't be mistyped, and it is the list the agent already uses. Showing the filters in Ask mode
+  would offer controls that do nothing.
+- **Impact:** F04, F06; `CliApp`, `MainWindow`, `GuiController`, `ResultsView`, `SearchTool` (one
+  constant made `public`). Nothing changed below the facade: `SearchFilters`, the index's filter
+  clauses and the validation in `FindAnythingService.search()` were already there. Not built:
+  the agent's size and location filters (see "The agent's search filters by type and date only"),
+  and the GUI's filters applying to the agent's searches.
+  Diagrams updated: not yet (cd01 at the freeze).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
-- F04, F05, F10: Tier 2 features that may end up *Not implemented* in Stage 2.
+- F05, F10: Tier 2 features that may end up *Not implemented* in Stage 2.
 - GUI: side-by-side comparison (F10), editing exclusions and pausing from the GUI (CLI-only).

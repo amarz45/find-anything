@@ -45,8 +45,10 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -58,6 +60,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javafx.application.Platform;
 import javafx.stage.Stage;
 import org.slf4j.bridge.SLF4JBridgeHandler;
@@ -323,6 +327,27 @@ public final class CliApp implements Callable<Integer> {
             unit++;
         }
         return String.format(Locale.ROOT, value < 10 ? "%.1f %s" : "%.0f %s", value, units[unit]);
+    }
+
+    /** A size as the user writes it: a number, then B, KB, MB, GB or TB (bytes when left out). */
+    private static final Pattern SIZE =
+            Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*([KMGT]?B)?", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Reads a size filter such as "500KB", "1.5 mb" or "2GB" (F04) as bytes, with the units {@link
+     * #formatSize} writes (1 KB is 1024 bytes).
+     *
+     * @throws IllegalArgumentException with the message to show when the text isn't a size
+     */
+    static long parseSize(String text) {
+        Matcher matcher = SIZE.matcher(text.strip());
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException(
+                    "The size \"" + text + "\" isn't understood. Write it like 500KB, 1MB or 2GB.");
+        }
+        String unit = matcher.group(2) == null ? "B" : matcher.group(2).toUpperCase(Locale.ROOT);
+        long bytesPerUnit = 1L << (10 * "BKMGT".indexOf(unit.charAt(0)));
+        return Math.round(Double.parseDouble(matcher.group(1)) * bytesPerUnit);
     }
 
     static String formatDate(Instant instant) {
@@ -954,11 +979,12 @@ public final class CliApp implements Callable<Integer> {
 
     // ------------------------------------------------------------------ findany search
 
-    /** {@code findany search <query> [--limit N]} (F06). */
+    /** {@code findany search <query> [filters] [--limit N]} (F06, with the filters of F04). */
     @Command(
             name = "search",
             description =
-                    "Find files by keywords; with no query, list every indexed file, newest first.")
+                    "Find files by keywords; with no query, list every indexed file, newest first."
+                            + " The filters narrow either by type, date, size and folder.")
     static final class Search implements Callable<Integer> {
         @ParentCommand CliApp app;
         @Spec CommandSpec spec;
@@ -975,23 +1001,109 @@ public final class CliApp implements Callable<Integer> {
                 description = "At most this many results (default ${DEFAULT-VALUE}).")
         int limit = 20;
 
+        @Option(
+                names = "--type",
+                split = ",",
+                paramLabel = "<type>",
+                description = "Only files of these types, such as pdf,docx.")
+        List<String> types = List.of();
+
+        @Option(
+                names = "--after",
+                paramLabel = "<date>",
+                description = "Only files modified on or after this day, such as 2025-01-01.")
+        String after;
+
+        @Option(
+                names = "--before",
+                paramLabel = "<date>",
+                description = "Only files modified on or before this day, such as 2025-12-31.")
+        String before;
+
+        @Option(
+                names = "--min-size",
+                paramLabel = "<size>",
+                description = "Only files at least this big, such as 1MB.")
+        String minSize;
+
+        @Option(
+                names = "--max-size",
+                paramLabel = "<size>",
+                description = "Only files at most this big, such as 50MB.")
+        String maxSize;
+
+        @Option(
+                names = "--in",
+                paramLabel = "<folder>",
+                description = "Only files under this folder, which must be in a search folder.")
+        Path location;
+
         @Override
         public Integer call() throws Exception {
             PrintWriter out = spec.commandLine().getOut();
+            SearchFilters searchFilters = searchFilters();
             app.openIndex(spec.commandLine().getErr());
             app.catchUp(spec.commandLine().getErr());
             String query = String.join(" ", words);
             List<SearchResult> results =
-                    app.findAnythingService.search(query, SearchFilters.NONE, limit).join();
+                    app.findAnythingService.search(query, searchFilters, limit).join();
             if (results.isEmpty()) {
-                out.println(
-                        query.isBlank()
-                                ? "The index is empty. Add a folder with: findany folders add <folder>"
-                                : "No results.");
+                if (!searchFilters.isEmpty()) {
+                    out.println("No results. Try loosening the filters.");
+                } else if (query.isBlank()) {
+                    out.println(
+                            "The index is empty. Add a folder with: findany folders add <folder>");
+                } else {
+                    out.println("No results.");
+                }
                 return 0;
             }
             printResults(out, results);
             return 0;
+        }
+
+        /**
+         * The filters the options give (F04). Whether they make sense together is checked by the
+         * search itself; a date or size that can't be read is a usage error here.
+         */
+        private SearchFilters searchFilters() {
+            List<String> fileTypes =
+                    types.stream()
+                            .map(type -> type.strip().toLowerCase(Locale.ROOT))
+                            .map(type -> type.startsWith(".") ? type.substring(1) : type)
+                            .filter(type -> !type.isEmpty())
+                            .toList();
+            return new SearchFilters(
+                    Set.copyOf(fileTypes),
+                    date(after),
+                    date(before),
+                    size(minSize),
+                    size(maxSize),
+                    location);
+        }
+
+        private LocalDate date(String text) {
+            if (text == null) {
+                return null;
+            }
+            try {
+                return LocalDate.parse(text.strip());
+            } catch (DateTimeParseException e) {
+                throw new CommandLine.ParameterException(
+                        spec.commandLine(),
+                        "The date \"" + text + "\" isn't understood. Write it like 2025-01-31.");
+            }
+        }
+
+        private long size(String text) {
+            if (text == null) {
+                return -1;
+            }
+            try {
+                return parseSize(text);
+            } catch (IllegalArgumentException e) {
+                throw new CommandLine.ParameterException(spec.commandLine(), e.getMessage());
+            }
         }
 
         /** Prints a numbered list of files, each with its details and its best passage, if any. */

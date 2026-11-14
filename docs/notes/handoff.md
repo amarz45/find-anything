@@ -585,3 +585,20 @@ surprising.)*
     times (M4 Max, 546 GB/s).
   - Next: `TODO.md` items and Tier 2 until the freeze on Nov 14; the Ollama check the slice owes
     (the lease question on `testdata/corpus` with the local model) can now use `qwen3:14b`.
+- **2026-11-13 (Session 8: F04 filters, Claude Code):**
+  - Done, on branch `filters` (from `master`; 2 code commits, **not pushed yet**): F04 is
+    Implemented, ahead of F05 in the Tier 2 order at Amar's request. Nothing changed below the
+    facade; `SearchFilters`, the index's filter clauses and the validation were already there.
+    1. `ca5b70b`: `findany search` takes `--type`, `--after`, `--before`, `--min-size`,
+       `--max-size` and `--in`; `CliApp.parseSize()`; "No results. Try loosening the filters."
+    2. `aeaccb0`: the GUI's "Filters" button and row, `GuiController.onFiltersChanged()`,
+       `MainWindow.showFilterError()`/`clearFilterError()`, `ResultsView.setFiltersActive()`.
+    `docs/traceability.md` and `docs/logs/design-changes.md` ("F04's filters") are updated.
+  - Checked: the CLI options by hand on `testdata/corpus` with a scratch `FINDANY_HOME`; the GUI
+    only through `GuiControllerTest` on the headless toolkit. **Not yet looked at on a real
+    display:** the row's layout, the date pickers and the "Choose a folder…" dialog. Look before
+    recording the F04 video.
+  - The filters are hidden in Ask mode because they never reach the agent
+    (`FindAnythingService.ask()` takes no filters). Amar asked why; no change was agreed.
+  - Next: push `filters` and open its pull request (no squash). Then the freeze: videos,
+    diagrams (cd01 now also owes the Filters members), the report.
