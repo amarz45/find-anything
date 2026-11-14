@@ -456,6 +456,46 @@ class GuiControllerTest {
     }
 
     @Test
+    void thePreviewIsEmptiedWhenTheSelectedFileLeavesTheResults() throws Exception {
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        onFxThread(() -> input().setText("merge"));
+        awaitFiles("lecture.pdf");
+        onFxThread(() -> window.getResultsView().getSelectionModel().select(0));
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").size() == 1,
+                () -> "the preview of lecture.pdf with one match");
+
+        // Deleted: the rescan removes it from the index, the table and the preview.
+        Files.delete(docs.resolve("lecture.pdf"));
+        service.addExclusion("*.nothing", null);
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").isEmpty(),
+                () -> "the preview emptied after lecture.pdf was deleted");
+        assertThat(previewMessage()).isEqualTo(DetailPane.SELECT_A_RESULT);
+        assertThat(error(window)).isNull();
+
+        // A new query that doesn't match the selected file empties its preview too.
+        onFxThread(() -> input().setText("dentist"));
+        awaitFiles("dentist.txt");
+        onFxThread(() -> window.getResultsView().getSelectionModel().select(0));
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").size() == 1,
+                () -> "the preview of dentist.txt with one match");
+        onFxThread(() -> input().setText("photo"));
+        awaitFiles("photo.bin");
+        awaitFx(
+                () -> window.getDetailPane().lookupAll(".highlight").isEmpty(),
+                () -> "the preview emptied after dentist.txt left the results");
+        assertThat(previewMessage()).isEqualTo(DetailPane.SELECT_A_RESULT);
+    }
+
+    String previewMessage() throws Exception {
+        return onFxThread(
+                () -> ((Label) window.getDetailPane().lookup(".preview-message")).getText());
+    }
+
+    @Test
     void folderProblemsAppearInTheErrorBar() throws Exception {
         onFxThread(() -> controller.onAddFolder(docs));
         Path inside = docs.resolve("inside");

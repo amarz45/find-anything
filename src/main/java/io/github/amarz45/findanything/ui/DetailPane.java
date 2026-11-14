@@ -137,6 +137,22 @@ public final class DetailPane extends StackPane {
         }
     }
 
+    /**
+     * Empties the preview, back to how it is before any file is selected. For when the file it
+     * shows is no longer among the results. A conversation in front of the preview stays there.
+     */
+    public void clearPreview() {
+        shownFile = null;
+        fileName.setText("");
+        fileDetails.setText("");
+        previewMessage.setText(SELECT_A_RESULT);
+        setVisible(previewMessage, true);
+        previewText.getChildren().clear();
+        setFileButtonsVisible(false);
+        scrollPending = false;
+        previewScroll.setVvalue(0);
+    }
+
     static String describe(IndexedFile file) {
         StringBuilder text = new StringBuilder();
         text.append(file.path());

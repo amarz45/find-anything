@@ -187,11 +187,6 @@ Amar may change these later; undecided.
 
 ## GUI
 
-- **Clear the preview when the selected file is deleted.** With live watching, a deleted file
-  leaves the table a moment later, but its preview stays on the right until another file is
-  selected (noticed on 2026-11-14 while fixing the preview of an edited file). A better version
-  empties the detail pane when the selected file is no longer in the results after an index
-  update. No design-changes entry: the design doesn't describe this case.
 - **Render the answer's Markdown.** Models write their answers in Markdown (headings, `**bold**`,
   bullet lists, numbered lists, code spans), and `DetailPane.showAnswer()` shows that text as it
   is, so the marks appear literally in the pane (seen by Amar on 2026-11-07 with a tax question
