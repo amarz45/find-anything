@@ -6,15 +6,16 @@ This is the EECS3311 (Fall 2026) course project.
 
 ## Stage 2: implementation (in progress)
 
-The application is being built in Stage 2 (due November 15, 2026). Indexing, keyword search, the
-agent (`ask`), the GUI and the privacy features work; semantic search, filters, the live file
-watcher and document comparison are the remaining Tier 2 items.
+The application is being built in Stage 2 (due November 15, 2026). Indexing, search by keywords and
+by meaning, filters, the agent (`ask`), the GUI and the privacy features work; the live file watcher
+and document comparison are the Tier 2 items left out.
 
 ### Prerequisites
 
 - Git.
 - Nothing else for building: the Gradle wrapper downloads Gradle, and Gradle downloads JDK 25 if it
-  isn't installed.
+  isn't installed. The first build also downloads the libraries, about 180 MB of which are the
+  embedding model for search by meaning and what runs it.
 - An [OpenRouter](https://openrouter.ai) API key for the cloud model, or [Ollama](https://ollama.com)
   for a local model.
 
@@ -66,7 +67,10 @@ JavaFX toolkit without a display.
 
 ```
 findany folders add ~/Documents          # add a folder; it is indexed right away
-findany search lease ends                # keyword search; accents are ignored
+findany search lease ends                # by keywords and by meaning; accents are ignored
+findany search cv                        # finds resume.pdf: names are matched by meaning too
+findany search cv --keyword-only         # the query's words only
+findany search --type pdf --after 2026-01-01   # filters: type, date, size (--max-size), folder (--in)
 findany show ~/Documents/lease.pdf --highlight "August 31"
 findany index status --failed            # what is indexed, and which files couldn't be read
 findany exclude add "*.tmp"              # keep files out (globally, or with --folder)
@@ -86,6 +90,14 @@ and card numbers, SINs, private keys and API keys are replaced with placeholders
 text is not detected: exclude such a file, or mark its folder local model only. Every cloud request
 is recorded in `privacy-log.jsonl` in the data folder. A local model gets the text as it is, since
 nothing leaves the computer.
+
+Search by meaning uses a small embedding model (bge-small-en-v1.5, for English) that runs inside
+the app on the processor. It comes with the build, so nothing is downloaded when the app runs and
+no file text leaves the computer for it. After a file is indexed, its passages and its name are
+embedded in the background; until then it is found by keywords. A command shows the progress and
+waits for it ("Embedding... 120 passages left"), and the window's status shows the same while you
+keep searching. If the model can't be loaded on a computer, search goes on with keywords only and
+says so.
 
 Every command first catches up on files that changed since the last run. If another Find Anything
 process is updating the index, the command runs read-only and says so. The index and settings

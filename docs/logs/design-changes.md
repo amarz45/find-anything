@@ -921,9 +921,9 @@ Diagrams updated:
     hundredths lower and the groups overlapped as much; "CV" stayed at 0.57.
 - **Impact:** F05, F06, F07; `SearchEngine`, `FindAnythingService`, `CliApp`. A search that
   embeds its query takes about a second longer in the CLI (the model's load): 2.1 seconds
-  against 1.1 with `--keyword-only`, on `testdata/corpus`. Not checked: the agent's answers with
-  hybrid results, on the corpus or on Amar's documents. Diagrams updated: not yet (cd01, cd04,
-  SD02 at the freeze).
+  against 1.1 with `--keyword-only`, on `testdata/corpus`. Checked by Amar the same day: the
+  agent with hybrid results, on his own documents and with the "tooth doctor" question; he
+  reported no problem. Diagrams updated: not yet (cd01, cd04, SD02 at the freeze).
 
 ### File names are embedded too, so "CV" finds `resume.pdf` (2026-11-14, Tier 2)
 - **Original design:** only chunk text is embedded. A file's name is matched by keywords.
@@ -989,5 +989,5 @@ Diagrams updated:
 ## Pending (decide during implementation; write the entry if it happens)
 
 - F03: live file watching replaced by rescans at startup, on demand, and on a timer.
-- F05, F10: Tier 2 features that may end up *Not implemented* in Stage 2.
+- F10: a Tier 2 feature that may end up *Not implemented* in Stage 2.
 - GUI: side-by-side comparison (F10), editing exclusions and pausing from the GUI (CLI-only).

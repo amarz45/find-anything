@@ -623,3 +623,40 @@ surprising.)*
     (`page 2 of 2, passage 3 of 4`), and choosing each file's passage with the user's request's
     words as well as the model's query. Amar's concern with the first: a weak model might read
     whole files. Try the label only if the follow-up still fails.
+- **2026-11-14 (Session 9: F05 semantic search, Claude Code):**
+  - Amar allowed changes on Nov 14; **Nov 15 is the freeze**, with no code changes.
+  - Done, on branch `embeddings` (6 code commits and one for the documents; PR #12): F05 is
+    Implemented and F06 is hybrid. Each code commit has an entry in
+    `docs/logs/design-changes.md`.
+    1. `3047ef5`: `EmbeddingModel`, `LocalEmbeddingModel` (bge-small-en-v1.5 through LangChain4j,
+       loaded on first use, no thread pool), `EmbeddingException`.
+    2. `11c209a`: vectors in `SearchIndex` (`addEmbeddings()`, `findContentWithoutEmbeddings()`,
+       `getChunksOfContent()`, `countChunksWithoutEmbeddings()`, `vectorSearch()`).
+    3. `dca7718`: `Indexer.embedNextBatch()`; `put()` made one step.
+    4. `6a60eb1`: hybrid ranking in `SearchEngine` with a similarity floor of 0.62;
+       `findany search --keyword-only`.
+    5. `f82ee54`: file names embedded too (`addNameEmbedding()`,
+       `findFilesWithoutNameEmbeddings()`), so "cv" finds `resume.pdf`.
+    6. `0d3f499`: the embedding status and the warning in the GUI and the CLI;
+       `FindAnythingService.loadEmbeddingModel()` at GUI startup.
+  - Measured on the desktop (Ryzen 9 5900XT): the model loads in about a second; one query takes
+    3 ms; bulk embedding runs at about 27 passages of 1,500 characters a second, whatever the
+    thread settings. `testdata/corpus` (23 files, about 640 passages) is indexed and embedded in
+    about 16 seconds.
+  - Checked by Amar on his own documents, in the CLI and the GUI: "CV" and "resume" list his
+    résumé files, and the warning appears when the model is made to fail. "marks" didn't list
+    his transcript; he left that as it is (see `TODO.md`, "Semantic search").
+  - To show the fallback in a video: `RUST_LIBRARY_PATH=/nonexistent findany search lease ends`
+    (or `gui`). The variable makes the model fail to load for that run only.
+  - Queries that work on `testdata/corpus` with no shared words, for the F05 video: "cv" (the
+    résumé, by its name), "tooth doctor" (`dentist.txt`), "spending plan" (the budget),
+    "groceries", "picture" (`photo.png`, a file with no text). Nonsense queries give "No
+    results."
+  - Also checked by Amar: the agent with hybrid search results (its `SearchTool` uses the same
+    engine), on his own documents and with the "tooth doctor" question. He reported no problem.
+  - An index made before this session is embedded on the next start, with no rebuild. A command
+    that opens the index waits for it and shows the progress.
+  - Next, at the freeze: merge PR #12 (no squash) once CI is green; record the videos (F05 too;
+    the F04 filter row still hasn't been looked at closely on a display); update the diagrams
+    (F05 owes cd01, cd02, cd03, cd04, SD01 and SD02, on top of what earlier entries list); the
+    report; the token and cost totals; the README check from a fresh clone.
