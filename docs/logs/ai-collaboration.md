@@ -335,3 +335,75 @@ The first entries were drafted from the planning conversation in the claude.ai a
   (handoff and `TODO.md`), merged as pull request #9. `qwen3:14b` is installed and works with
   the app. Not done: turning the local model's thinking off, a character budget, embeddings.
 
+### 2026-11-13: F04 filters, and a local model that answered without searching
+- **Tool / model:** Claude Code, Claude Fable 5.2
+- **Task:** implement F04 (filters) in the CLI and the GUI, then find out why `qwen3:14b` said
+  Amar's transcript holds no GPA when it is on the first page, and fix it.
+- **Input / instruction:** "Create a plan for feature 4", then one commit at a time. Later: a
+  screenshot of the failed GPA question and "Is this an index issue or an agent issue or
+  something else?"
+- **AI contribution:**
+  - **Filters.** Found that the lower half of F04 already existed (`SearchFilters`, the index's
+    filter clauses, the facade's validation), so planned it as `ui` work only: the six options
+    of `findany search` with a size parser, then a "Filters" button and row in the GUI with
+    `GuiController.onFiltersChanged()`, each with tests. Checked the CLI on the test corpus in a
+    scratch `FINDANY_HOME`.
+  - **Diagnosis.** Copied the two transcript files to a scratch folder and reproduced the
+    failure with the same model: the first question was answered with no tool call, and the
+    follow-up ran `search(query="transcript")`, whose best passage is page 2 (help links that
+    repeat the word), so the model never saw page 1. Showed that the index was fine: searching
+    "GPA" returns page 1.
+  - **Fixes.** Proposed three: send a first reply without a search back to the model, describe
+    in the prompt what a search returns, and say on a result how much of the file a passage is.
+    Implemented the first two and measured each with three runs of the same questions.
+  - Weak points:
+    - Its prompt sentence did not fix the failure it was written for: in two runs of three the
+      model still searched for "transcript" alone. It reported this and left the decision to
+      Amar. Only the second fix changed the outcome (3 runs of 3).
+    - Its first descriptions of the fixes ("say so in the result", "add the user's question
+      words to the ranking") were too vague to judge; Amar had to ask what they meant.
+    - Its first prompt wording carried a specific example and told the model what not to search
+      for. Its first label wording told the model to read the rest of the file. It had tested
+      neither and said so only when asked.
+    - It tried to add the GPA finding to `TODO.md` after Amar had said he would come back to it;
+      the edit was rejected.
+    - The pull request description for the agent changes listed a commit that wasn't in it, and
+      the handoff merged with the filters said the branch was "not pushed yet". It corrected
+      both, the second at Amar's request.
+    - The GUI's filter row was checked only through headless tests, never on a real display.
+- **Human contribution:**
+  - Chose F04 ahead of F05 in the Tier 2 order, approved the plan with the row-not-menu design
+    point, and had each piece committed before the next was started.
+  - Asked why Ask mode removes the filters. The answer was that they never reach the agent; he
+    left it as built.
+  - Noticed the failure himself in the GUI, pointed out that the GPA is on the transcript's
+    first page, and noted that the question had worked with this model before.
+  - Questioned each proposed fix before agreeing to any:
+    - Asked how the AI knew a "use read_excerpt to read the rest" hint wouldn't make a weak
+      model read whole files. It didn't know; the wording was reduced to the fact alone, and the
+      label was put off.
+    - Pointed out that the model already has the whole conversation, which showed that
+      "use the request's words for ranking" only works around a model that writes poor queries.
+    - Rejected a specific example in the general prompt, and asked whether "not only where you
+      expect it" would stop a weak model searching by a file's name when that is right. The
+      sentence was rewritten to describe what a search returns and to forbid nothing.
+    - Raised the "hi" case against forcing a search: a user may greet the model just to see
+      that it works. This led to the fixed reply `NO SEARCH NEEDED`, with which the model
+      declines and its first reply is kept.
+  - Decided the order (the prompt sentence first, then the search-first step), kept the sentence
+    after seeing that it hadn't helped on its own, and put the label off.
+  - Rejected the `TODO.md` edit, had the out-of-date documentation corrected in its own commit,
+    and merged the filters pull request himself.
+- **Outcome:** [ca5b70b](https://github.com/amarz45/find-anything/commit/ca5b70b7365eb19bd456166350b0e2d5f9e6e6bb)
+  (the filter options of `findany search`),
+  [aeaccb0](https://github.com/amarz45/find-anything/commit/aeaccb0b7c6bfac68b6037c889c09c6251b99e09)
+  (the GUI's Filters controls), merged as pull request #10;
+  [94d474d](https://github.com/amarz45/find-anything/commit/94d474d162387bdf215203a9d324c0193caab83c)
+  (the prompt says a search gives one passage per file),
+  [d063b8c](https://github.com/amarz45/find-anything/commit/d063b8c30d819885d9b09f37c5435a558f9ef90b)
+  (a first reply without a search is sent back once), merged as pull request #11. With
+  `qwen3:14b` the GPA question is now answered after a search, and "hi" gets its greeting
+  without one. Not
+  done: the label on a search result, checking either agent change with the cloud model, and
+  looking at the filter row on a real display.
+
