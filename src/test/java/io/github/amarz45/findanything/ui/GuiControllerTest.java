@@ -12,23 +12,31 @@ import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.llm.ScriptedLlmClient;
 import io.github.amarz45.findanything.llm.ScriptedLlmClientFactory;
 import io.github.amarz45.findanything.storage.IndexMode;
+import io.github.amarz45.findanything.storage.SearchFilters;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javafx.event.ActionEvent;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.AfterEach;
@@ -200,6 +208,166 @@ class GuiControllerTest {
         awaitFiles();
         onFxThread(() -> input().clear());
         awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+    }
+
+    // ------------------------------------------------------------------ filters (F04)
+
+    /** For conditions on the JavaFX thread: the error bar's message, or null when it is hidden. */
+    private static String errorNow(MainWindow window) {
+        Node bar = window.lookup(".error-bar");
+        return bar.isVisible() ? ((Label) bar.lookup(".label")).getText() : null;
+    }
+
+    ToggleButton filtersToggle() {
+        return (ToggleButton) window.lookup(".filters-toggle");
+    }
+
+    CheckMenuItem typeItem(String type) {
+        return ((MenuButton) window.lookup(".type-filter"))
+                .getItems().stream()
+                        .filter(item -> item.getText().equals(type))
+                        .map(CheckMenuItem.class::cast)
+                        .findFirst()
+                        .orElseThrow();
+    }
+
+    /** Types into a size field and presses Enter. */
+    void enterSize(String selector, String text) {
+        TextField field = (TextField) window.lookup(selector);
+        field.setText(text);
+        field.getOnAction().handle(new ActionEvent());
+    }
+
+    String noResultsText() throws Exception {
+        return onFxThread(
+                () -> {
+                    VBox placeholder = (VBox) window.getResultsView().getPlaceholder();
+                    return ((Label) placeholder.getChildren().get(0)).getText();
+                });
+    }
+
+    @Test
+    void filtersNarrowTheResultsAndClearingThemBringsEveryFileBack() throws Exception {
+        Path school = Files.createDirectories(docs.resolve("school"));
+        Files.writeString(school.resolve("essay.txt"), "An essay on merge sort. ".repeat(100));
+        Files.setLastModifiedTime(
+                docs.resolve("dentist.txt"),
+                FileTime.from(
+                        LocalDate.of(2024, 6, 15)
+                                .atTime(12, 0)
+                                .atZone(ZoneId.systemDefault())
+                                .toInstant()));
+        String[] everyFile = {
+            "dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt", "essay.txt"
+        };
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles(everyFile);
+
+        // The row opens from the button beside the chips.
+        Node row = window.lookup(".filter-row");
+        assertThat(onFxThread(row::isVisible)).isFalse();
+        onFxThread(() -> filtersToggle().fire());
+        assertThat(onFxThread(row::isVisible)).isTrue();
+
+        onFxThread(() -> typeItem("pdf").setSelected(true));
+        awaitFiles("lecture.pdf");
+        assertThat(onFxThread(() -> filtersToggle().getText())).isEqualTo("Filters (1)");
+        assertThat(onFxThread(() -> ((MenuButton) window.lookup(".type-filter")).getText()))
+                .isEqualTo("pdf");
+
+        // The filters apply to a typed query too, and an empty table suggests loosening them.
+        onFxThread(() -> input().setText("dentist"));
+        awaitFiles();
+        awaitFx(
+                () ->
+                        ResultsView.NO_RESULTS_WITH_FILTERS.equals(
+                                ((Label) window.getResultsView().getPlaceholder().lookup(".label"))
+                                        .getText()),
+                () -> "the suggestion to loosen the filters");
+        onFxThread(() -> input().clear());
+        awaitFiles("lecture.pdf");
+
+        onFxThread(() -> ((Button) window.lookup(".clear-filters")).fire());
+        awaitFiles(everyFile);
+        assertThat(onFxThread(() -> filtersToggle().getText())).isEqualTo("Filters");
+        assertThat(noResultsText()).isEqualTo(ResultsView.NO_RESULTS);
+
+        onFxThread(
+                () ->
+                        ((DatePicker) window.lookup(".modified-to"))
+                                .setValue(LocalDate.of(2024, 12, 31)));
+        awaitFiles("dentist.txt");
+        onFxThread(() -> ((Button) window.lookup(".clear-filters")).fire());
+        awaitFiles(everyFile);
+
+        onFxThread(() -> enterSize(".min-size", "1KB"));
+        awaitFiles("essay.txt");
+        onFxThread(() -> enterSize(".min-size", ""));
+        onFxThread(() -> enterSize(".max-size", "10"));
+        awaitFiles("photo.bin", "corrupt.txt");
+        onFxThread(() -> ((Button) window.lookup(".clear-filters")).fire());
+        awaitFiles(everyFile);
+
+        // The location menu lists the search folders; a folder inside one is chosen with a dialog,
+        // so that filter is set the way the window reports it.
+        MenuButton location = (MenuButton) window.lookup(".location-filter");
+        assertThat(onFxThread(() -> location.getItems().stream().map(MenuItem::getText).toList()))
+                .containsExactly(MainWindow.ANYWHERE, docs.toString(), "Choose a folder…");
+        onFxThread(
+                () ->
+                        controller.onFiltersChanged(
+                                new SearchFilters(Set.of(), null, null, -1, -1, school)));
+        awaitFiles("essay.txt");
+        onFxThread(() -> controller.onFiltersChanged(SearchFilters.NONE));
+        awaitFiles(everyFile);
+
+        // Ask mode has no filters: the agent sets its own.
+        onFxThread(() -> window.setMode(SearchMode.ASK));
+        assertThat(onFxThread(row::isVisible)).isFalse();
+        assertThat(onFxThread(() -> filtersToggle().isVisible())).isFalse();
+        onFxThread(() -> window.setMode(SearchMode.SEARCH));
+        assertThat(onFxThread(row::isVisible)).isTrue();
+    }
+
+    @Test
+    void filtersThatMakeNoSenseShowAMessageThatGoesAwayWhenFixed() throws Exception {
+        onFxThread(() -> controller.onAddFolder(docs));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        DatePicker from = (DatePicker) window.lookup(".modified-from");
+        DatePicker to = (DatePicker) window.lookup(".modified-to");
+
+        onFxThread(() -> from.setValue(LocalDate.of(2026, 12, 1)));
+        onFxThread(() -> to.setValue(LocalDate.of(2026, 1, 1)));
+        awaitFx(
+                () -> String.valueOf(errorNow(window)).startsWith("The start date (2026-12-01)"),
+                () -> "the start date message, shown " + errorNow(window));
+        onFxThread(() -> to.setValue(null));
+        onFxThread(() -> from.setValue(null));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        assertThat(error(window)).isNull();
+
+        // A size that can't be read is reported at once, and no search runs with it.
+        onFxThread(() -> enterSize(".min-size", "1XB"));
+        assertThat(error(window)).contains("The size \"1XB\" isn't understood");
+        assertThat(shownFiles(window)).hasSize(4);
+        onFxThread(() -> enterSize(".min-size", "40"));
+        assertThat(error(window)).isNull();
+        awaitFiles("lecture.pdf");
+
+        // A location outside the search folders is rejected.
+        onFxThread(
+                () ->
+                        controller.onFiltersChanged(
+                                new SearchFilters(Set.of(), null, null, -1, -1, home)));
+        awaitFx(
+                () -> String.valueOf(errorNow(window)).contains("is outside the search folders"),
+                () -> "the location message, shown " + errorNow(window));
+
+        // Other errors stay until they are dismissed.
+        onFxThread(() -> controller.onAddFolder(home.resolve("missing")));
+        onFxThread(() -> controller.onFiltersChanged(SearchFilters.NONE));
+        awaitFiles("dentist.txt", "lecture.pdf", "photo.bin", "corrupt.txt");
+        assertThat(error(window)).startsWith("No such file or folder");
     }
 
     @Test

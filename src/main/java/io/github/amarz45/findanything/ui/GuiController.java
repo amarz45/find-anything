@@ -13,6 +13,7 @@ import io.github.amarz45.findanything.indexing.IndexStatusListener;
 import io.github.amarz45.findanything.llm.LlmResponse;
 import io.github.amarz45.findanything.llm.Message;
 import io.github.amarz45.findanything.search.SearchResult;
+import io.github.amarz45.findanything.storage.InvalidFiltersException;
 import io.github.amarz45.findanything.storage.SearchFilters;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -68,6 +69,7 @@ public final class GuiController implements IndexStatusListener {
         this.settingsDialog = mainWindow.getSettingsDialog();
 
         mainWindow.setOnQueryChanged(this::onQueryChanged);
+        mainWindow.setOnFiltersChanged(this::onFiltersChanged);
         mainWindow.setOnAskSubmitted(this::onAskSubmitted);
         mainWindow.setOnNewConversation(this::onNewConversation);
         mainWindow.setOnOpenConversation(this::onOpenConversation);
@@ -98,12 +100,16 @@ public final class GuiController implements IndexStatusListener {
         onQueryChanged("");
     }
 
-    // ------------------------------------------------------------------ search (F06)
+    // ------------------------------------------------------------------ search (F04, F06)
 
-    /** Runs an instant search; only the newest query's results reach the table. */
+    /**
+     * Runs an instant search with the current filters; only the newest query's results reach the
+     * table. Filters that don't make sense are reported by the search and shown in the error bar.
+     */
     public void onQueryChanged(String query) {
         latestQuery = Objects.requireNonNull(query, "query");
         long queryId = ++latestQueryId;
+        boolean filtered = !searchFilters.isEmpty();
         try {
             findAnythingService
                     .search(query, searchFilters)
@@ -114,15 +120,35 @@ public final class GuiController implements IndexStatusListener {
                                                 if (queryId != latestQueryId) {
                                                     return;
                                                 }
-                                                if (failure != null) {
+                                                if (cause(failure)
+                                                        instanceof InvalidFiltersException) {
+                                                    mainWindow.showFilterError(describe(failure));
+                                                } else if (failure != null) {
                                                     mainWindow.showError(describe(failure));
                                                 } else {
+                                                    resultsView.setFiltersActive(filtered);
                                                     resultsView.setResults(results);
                                                 }
                                             }));
         } catch (RuntimeException e) {
             mainWindow.showError(describe(e));
         }
+    }
+
+    /**
+     * Stores the new filters and runs the current search again with them (F04). An earlier message
+     * about the filters is removed; if the new ones don't make sense either, the search says so.
+     */
+    public void onFiltersChanged(SearchFilters searchFilters) {
+        this.searchFilters = Objects.requireNonNull(searchFilters, "searchFilters");
+        mainWindow.clearFilterError();
+        onQueryChanged(latestQuery);
+    }
+
+    /** Fills the table with an answer's files, which no filter narrowed. */
+    private void showAnswerFiles(List<SearchResult> files) {
+        resultsView.setFiltersActive(false);
+        resultsView.setResults(files);
     }
 
     // ------------------------------------------------------------------ preview (F11)
@@ -214,7 +240,7 @@ public final class GuiController implements IndexStatusListener {
         }
         detailPane.showAnswer(answer);
         if (mainWindow.getMode() == SearchMode.ASK) {
-            resultsView.setResults(answer.sourceFiles());
+            showAnswerFiles(answer.sourceFiles());
         }
         refreshConversations(); // the conversation was saved with this answer
     }
@@ -246,7 +272,7 @@ public final class GuiController implements IndexStatusListener {
                 request = null;
             }
         }
-        resultsView.setResults(opened.getLastResults());
+        showAnswerFiles(opened.getLastResults());
         mainWindow.setMode(SearchMode.ASK);
     }
 
@@ -274,7 +300,7 @@ public final class GuiController implements IndexStatusListener {
         }
         detailPane.clearConversation();
         mainWindow.setMode(SearchMode.ASK);
-        resultsView.setResults(List.of());
+        showAnswerFiles(List.of());
     }
 
     private boolean startConversation() {

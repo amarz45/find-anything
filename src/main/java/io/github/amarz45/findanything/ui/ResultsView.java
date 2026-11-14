@@ -24,13 +24,17 @@ import javafx.scene.layout.VBox;
  * The results table (F06): name, folder, modification date, size and the best-matching passage of
  * each file. A file whose text couldn't be extracted (F02) is marked with a warning sign. Selecting
  * a row tells the controller, which shows the file's preview (F11). With no results, the table
- * suggests Ask mode.
+ * suggests Ask mode and, when filters are set, loosening them (F04).
  */
 public final class ResultsView extends TableView<SearchResult> {
+
+    static final String NO_RESULTS = "No results.";
+    static final String NO_RESULTS_WITH_FILTERS = "No results. Try loosening the filters.";
 
     private static final String WARNING_SIGN = "⚠ ";
     private static final int SNIPPET_CHARS = 160;
 
+    private final Label noResults = new Label(NO_RESULTS);
     private final Hyperlink tryAsk = new Hyperlink("Try Ask mode");
     private Consumer<SearchResult> onResultSelected = result -> {};
     private Runnable onTryAsk = () -> {};
@@ -63,9 +67,18 @@ public final class ResultsView extends TableView<SearchResult> {
                         });
 
         tryAsk.setOnAction(event -> onTryAsk.run());
-        VBox placeholder = new VBox(4, new Label("No results."), tryAsk);
+        noResults.getStyleClass().add("no-results");
+        VBox placeholder = new VBox(4, noResults, tryAsk);
         placeholder.setAlignment(Pos.CENTER);
         setPlaceholder(placeholder);
+    }
+
+    /**
+     * Says whether the rows come from a search with filters (F04): if so, an empty table also
+     * suggests loosening them.
+     */
+    public void setFiltersActive(boolean filtersActive) {
+        noResults.setText(filtersActive ? NO_RESULTS_WITH_FILTERS : NO_RESULTS);
     }
 
     /**
