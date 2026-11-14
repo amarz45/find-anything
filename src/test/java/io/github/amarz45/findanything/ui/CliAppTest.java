@@ -1,6 +1,7 @@
 package io.github.amarz45.findanything.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,8 +22,11 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -312,6 +316,105 @@ class CliAppTest {
                 .contains("corrupt.txt");
 
         assertThat(run("search", "nothing-matches-this").out()).contains("No results.");
+    }
+
+    @Test
+    void searchNarrowsByTypeDateSizeAndLocation() throws Exception {
+        Path school = Files.createDirectories(docs.resolve("school"));
+        Files.writeString(school.resolve("essay.txt"), "An essay on merge sort. ".repeat(100));
+        Files.setLastModifiedTime(
+                docs.resolve("dentist.txt"),
+                FileTime.from(
+                        LocalDate.of(2024, 6, 15)
+                                .atTime(12, 0)
+                                .atZone(ZoneId.systemDefault())
+                                .toInstant()));
+        run("folders", "add", docs.toString());
+
+        Run byType = run("search", "--type", "PDF,.txt");
+        assertThat(byType.exitCode()).isZero();
+        assertThat(byType.out())
+                .contains("lecture.pdf", "dentist.txt", "corrupt.txt", "essay.txt")
+                .doesNotContain("photo.bin");
+        assertThat(run("search", "merge", "sort", "--type", "pdf").out())
+                .contains("lecture.pdf")
+                .doesNotContain("essay.txt");
+
+        assertThat(run("search", "--before", "2024-12-31").out())
+                .contains("1. " + docs.resolve("dentist.txt"))
+                .doesNotContain("2. ");
+        assertThat(run("search", "--after", "2025-01-01").out())
+                .contains("lecture.pdf", "essay.txt")
+                .doesNotContain("dentist.txt");
+        assertThat(run("search", "--after", "2024-06-15", "--before", "2024-06-15").out())
+                .contains("dentist.txt")
+                .doesNotContain("lecture.pdf");
+
+        assertThat(run("search", "--min-size", "1KB").out())
+                .contains("1. " + school.resolve("essay.txt"))
+                .doesNotContain("2. ");
+        assertThat(run("search", "--max-size", "10").out())
+                .contains("photo.bin", "corrupt.txt")
+                .doesNotContain("dentist.txt", "essay.txt");
+
+        assertThat(run("search", "--in", school.toString()).out())
+                .contains("1. " + school.resolve("essay.txt"))
+                .doesNotContain("2. ");
+        assertThat(run("search", "merge", "--in", school.toString()).out())
+                .contains("essay.txt")
+                .doesNotContain("lecture.pdf");
+    }
+
+    @Test
+    void searchRejectsFiltersThatMakeNoSense() {
+        run("folders", "add", docs.toString());
+
+        Run dates = run("search", "--after", "2026-12-01", "--before", "2026-01-01");
+        assertThat(dates.exitCode()).isEqualTo(1);
+        assertThat(dates.err())
+                .contains("findany: The start date (2026-12-01) is after the end date");
+        assertThat(dates.out()).isEmpty();
+
+        Run sizes = run("search", "--min-size", "2MB", "--max-size", "1MB");
+        assertThat(sizes.exitCode()).isEqualTo(1);
+        assertThat(sizes.err()).contains("The minimum size (2097152 bytes) is larger");
+
+        Run outside = run("search", "--in", home.toString());
+        assertThat(outside.exitCode()).isEqualTo(1);
+        assertThat(outside.err()).contains("is outside the search folders");
+
+        Run badSize = run("search", "--min-size", "1XB");
+        assertThat(badSize.exitCode()).isEqualTo(2);
+        assertThat(badSize.err()).contains("The size \"1XB\" isn't understood");
+
+        Run badDate = run("search", "--after", "yesterday");
+        assertThat(badDate.exitCode()).isEqualTo(2);
+        assertThat(badDate.err()).contains("The date \"yesterday\" isn't understood");
+    }
+
+    @Test
+    void searchSuggestsLooseningTheFiltersWhenNothingMatches() {
+        run("folders", "add", docs.toString());
+
+        assertThat(run("search", "merge", "sort", "--type", "txt").out())
+                .isEqualToIgnoringNewLines("No results. Try loosening the filters.");
+        assertThat(run("search", "--type", "docx").out())
+                .isEqualToIgnoringNewLines("No results. Try loosening the filters.");
+    }
+
+    @Test
+    void parsesSizes() {
+        assertThat(CliApp.parseSize("500")).isEqualTo(500);
+        assertThat(CliApp.parseSize("10B")).isEqualTo(10);
+        assertThat(CliApp.parseSize("1KB")).isEqualTo(1024);
+        assertThat(CliApp.parseSize(" 1.5 mb ")).isEqualTo(1_572_864);
+        assertThat(CliApp.parseSize("2GB")).isEqualTo(2L * 1024 * 1024 * 1024);
+        assertThat(CliApp.parseSize("1tb")).isEqualTo(1L << 40);
+        for (String bad : List.of("abc", "-1MB", "1XB", "MB", "")) {
+            assertThatThrownBy(() -> CliApp.parseSize(bad))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("isn't understood");
+        }
     }
 
     @Test
