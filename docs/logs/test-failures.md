@@ -73,6 +73,21 @@ Template:
 - **Fix:** the worker checks the rebuild flag right after taking a path, so the drop always
   happens before the rescan it triggers.
 
+### 2026-11-14: the preview kept a file's old text after the file was indexed again
+- **Found by:** Amar's manual check of live watching in the GUI: he edited the selected file, the
+  table updated, and the preview on the right still showed the old text until he selected another
+  file and came back.
+- **Symptom:** after the index caught up with a change to the selected file, `DetailPane` showed
+  the preview loaded before the change. It was the same after a rescan; live watching made it
+  easy to see.
+- **Cause:** when the index is up to date, `GuiController` runs the search again and
+  `ResultsView.setResults()` keeps the selected file selected without calling the selection
+  callback, so nothing asked for the preview again.
+- **Fix:** `GuiController.showResults()` compares the selected file's `IndexedFile` before and
+  after the table is refilled and loads the preview again when they differ
+  ([4bdc432](https://github.com/amarz45/find-anything/commit/4bdc43278ffe073bc6f986e8cb2b77ccbae78fd7));
+  `GuiControllerTest.theSelectedFilesPreviewIsLoadedAgainWhenTheFileIsIndexedAgain()` guards it.
+
 ### 2026-10-26: corpus test timed out on the Windows CI runner
 - **Found by:** CI on the Slice 1 pull request (`build (windows-latest)`):
   `FindAnythingServiceTest.indexesTheCorpusAndAnswersSearchesAndPreviews()` gave up after 60 s,

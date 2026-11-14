@@ -1029,7 +1029,53 @@ Diagrams updated:
    commands, `SearchTool` and `ReadExcerptTool`; Facade has one operation fewer.
    Diagrams updated: not yet (at the freeze: cd01, cd04, cd05, the use-case diagram, SD05).
 
+### `FileWatcher`: one watcher per folder, and what the design left open (2026-11-14, Tier 2)
+- **Original design:** `FileWatcher` "runs on its own thread", with `indexConfig`, `changeQueue`,
+  `watchedFolders: Set<Path>`, `start()`, `stop()`, `watch()` and `unwatch()`. For each event it
+  checks `IndexConfig.isIncluded()` and calls `ChangeQueue.offer()`; when events are lost it
+  offers the whole search folder. A path is processed after a quiet period of about two seconds.
+  The design doesn't say which processes watch, what happens to folder events, or how a folder
+  that can't be watched is reported.
+- **Implemented change:**
+  - **One library watcher per search folder.** `watchedFolders` is a
+    `Map<Path, DirectoryWatcher>`, and each watched folder has its own thread (named
+    `findany-watcher`), not one thread for all. `watch()` returns at once: walking the folder and
+    registering it run on a watcher thread.
+  - **Only the GUI watches.** `findany gui` opens the index with `open(true)`; every other
+    command runs once and exits, so it only rescans. As designed, only the process with the
+    write lock watches.
+  - **The quiet period** is two seconds in the GUI (`CliApp.GUI_QUIET_PERIOD`) and zero for the
+    other commands. `CliApp.main()` chooses it from the first argument, because the service is
+    built before the command line is parsed; `createService()` takes it as a parameter. In the
+    GUI it applies to every path in the queue, so a rescan's files also wait two seconds.
+  - **Two package-private methods hold the decisions:** `onChange(path, directory, deleted)` and
+    `onOverflow(folder)`. A created or changed folder is ignored (its files arrive as their own
+    events); a deleted folder is offered once and `SearchIndex.remove()` drops everything under
+    it.
+  - **A folder is offered once it is registered**, so a change made between the facade's rescan
+    and the watch taking effect is found by a second rescan.
+  - **Excluded folders are never registered** (`.git`, `node_modules`, the app's own data
+    folder), links are not followed, and the library's file hashing is off: it would read every
+    file at startup.
+  - **Paused folders stay watched**, as they are still rescanned. A folder that can't be watched,
+    or whose watcher ends because the folder is gone, is logged with a warning; its changes are
+    then picked up at startup and on request, and it isn't watched again until the next start.
+  - **GUI:** `GuiController.showResults()` loads the selected file's preview again when that file
+    was indexed again (found by Amar's check; see `test-failures.md`).
+- **Reason:** a library watcher's folders can't change after it is built (read in its 0.19.1
+  sources), and search folders never overlap, so one watcher per folder is the simplest form that
+  supports adding and removing folders. The two methods are in the design's own types, so they
+  are tested without waiting for the operating system, and a later improvement has one place to
+  go.
+- **Impact:** F01, F03, F11; `FileWatcher`, `FindAnythingService` (`open()`, `close()`,
+  `addSearchFolder()`, `removeSearchFolder()`), `CliApp`, `GuiController`. Checked on Linux: a
+  script against the built jars (create, modify, rename, delete, excluded files, a symbolic
+  link's target, new and deleted folders, `unwatch()`, `stop()`), and Amar's check in the GUI.
+  **Not checked:** Windows, where it isn't documented whether changes inside a junction's target
+  are reported (see `TODO.md`, "Live index updates"). A rename is still extracted again (see
+  "`ContentStore` postponed"). Diagrams updated: not yet (cd03 at the freeze: `watchedFolders`'
+  type and the two methods).
+
 ## Pending (decide during implementation; write the entry if it happens)
 
-- F03: live file watching replaced by rescans at startup, on demand, and on a timer.
 - GUI: editing exclusions and pausing from the GUI (CLI-only).
