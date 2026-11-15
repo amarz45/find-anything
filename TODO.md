@@ -48,8 +48,7 @@ report describes.
   better version would store the model's name in the index and embed everything again when it
   differs. No design change.
 - **Embed faster.** The model runs on the processor at about 27 passages a second (16 cores), and
-  neither more calling threads nor one ONNX Runtime thread per text made it faster (see the
-  design changes). What could: the quantized build of the model (`…-bge-small-en-v15-q`, slightly
+  neither more calling threads nor one ONNX Runtime thread per text made it faster. What could: the quantized build of the model (`…-bge-small-en-v15-q`, slightly
   less accurate), or a graphics card. ONNX Runtime's Java library is published for the processor
   and for CUDA only, and LangChain4j's model class doesn't let the session be configured, so a
   graphics card means building the session ourselves, and an AMD card a custom ONNX Runtime
@@ -74,7 +73,7 @@ report describes.
   Earlier exchanges no longer carry their tool results (see the design changes), so this is now
   only about the exchange in progress. Search results are smaller since 2026-11-12 (whole
   passages for the first three entries only, a passage given once per request, identical files
-  as one entry; see the design changes), which makes this rarer but doesn't bound it.
+  as one entry), which makes this rarer but doesn't bound it.
 - **Trim what is sent, not what is kept.** `trimToFit()` changes the conversation itself (as SD03
   draws it), so dropped exchanges also disappear from the saved conversation and from the GUI's
   view of it. A better version would keep the full history and trim only the copy that
@@ -146,7 +145,7 @@ report describes.
     reply that only forgot the `CITATIONS:` line parse without a reformat request. Reword the
     format instructions in `PromptBuilder`. Set a low temperature. The model does this on its own
     and only sometimes, so wording alone can't rule it out. A parser change alters the answer
-    format rules in the design changes, so log it there and in `docs/logs/test-failures.md`.
+    format, so log it in `docs/logs/test-failures.md`.
 
 ## Citation verification
 

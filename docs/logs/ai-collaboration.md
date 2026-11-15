@@ -234,7 +234,7 @@ The first entries were drafted from the planning conversation in the claude.ai a
   [800a3ce](https://github.com/amarz45/find-anything/commit/800a3ce8122b09264dce038b4765972be4cb0cc7),
   [c19cf29](https://github.com/amarz45/find-anything/commit/c19cf29767f08817575c510102509ca6e7e32283);
   pull request #8, CI green on both runners. F13 and F14 Implemented; Decorator, Factory and MVC
-  evident in the code. Four design-change entries for what the design left open.
+  evident in the code. Four design-change entries for the details settled in the code.
 
 ### 2026-11-12: Setting up Ollama, a local model that didn't search, and an agent that wasted time
 - **Tool / model:** Claude Code (Claude Opus 5.5 for the setup and the debugging, then Claude

@@ -1,24 +1,22 @@
 # Design changes
 
-Source for sections 3 and 4 of the Stage 2 report. Every difference between the Stage 1 design
-and the code needs an entry here, written when the change is made. The Stage 2 instructions say
-unexplained differences aren't acceptable.
-
-Each change also needs the class, use-case or sequence diagrams updated where it makes them wrong
-(UMLet only). Keep changes few: each one costs diagram work.
+Source for sections 3 and 4 of the Stage 2 report. An entry belongs here when the Stage 1
+design would describe the code incorrectly: the code does something differently, leaves out
+something the design has, or changes a class the design draws. Members and values added within
+the design (constructors, getters, helpers, limits, message texts) are not design changes and
+aren't listed.
 
 ## Templates
 
 **Feature change** (added, replaced, removed, or substantially modified):
 
 ```
-### Fxx: short title (status: Modified / Replaced / Removed / New / Not implemented)
+### Fxx: short title
 1. Original Stage 1 feature and ID (or "New"):
 2. Implemented feature and its behavior:
 3. What changed and why:
 4. How the user need is still met, or how the scope changed:
 5. Affected use cases, classes, methods, and design patterns:
-Diagrams updated:
 ```
 
 **Design-pattern change:**
@@ -44,15 +42,18 @@ Diagrams updated:
   OpenRouter model ID. Ollama keeps LangChain4j's Ollama module.
 - **Reason:** payment for Anthropic Console credits couldn't be completed.
 - **Impact:** F13, F14. Requests now pass through a second company (OpenRouter) before the model
-  provider; redaction and the privacy log still apply to everything sent. OpenRouter is set to
-  not log prompts and to avoid providers that train on data. The Adapter pattern is unchanged.
+  provider; redaction and the privacy log still apply to everything sent. Every request tells
+  OpenRouter not to route to providers that train on prompts. The Adapter pattern is unchanged.
+  Diagrams: cd06 (its note), SD08.
 
 ### API key in a local `.env` file
 - **Original design:** F13 has the user enter the API key in Settings.
 - **Implemented change:** the key is read from `.env` (git-ignored) or the environment;
-  `.env.example` is committed with placeholders.
+  `.env.example` is committed with placeholders. The settings dialog shows whether a key is
+  configured and never asks for one.
 - **Reason:** the Stage 2 instructions require keys in a local configuration file.
-- **Impact:** F13, `SettingsDialog`, `ModelSettings`.
+- **Impact:** F13, UC08; `SettingsDialog`, `ModelSettings`, `SettingsStore`; the new
+  `config/EnvFile` reads the file. Diagrams: SD08.
 
 ### Files without pages: DOCX, TXT, MD
 - **Original design:** each chunk keeps its page or slide number.
@@ -62,330 +63,106 @@ Diagrams updated:
 - **Reason:** these formats store no page boundaries (verified with Tika 4.1.0).
 - **Impact:** F02, F09, F11; `Chunk`, `Citation`, `CitationVerifier`.
 
-### PowerPoint slide order corrected in the extractor
-- **Original design:** not covered.
-- **Implemented change:** `IsolatedTextExtractor` reorders slides using the deck's own slide list.
-- **Reason:** Tika 4.1.0 returns slides sorted by internal ID, not deck order (verified), which
-  would make slide-number citations wrong.
-- **Impact:** F02, F09; `IsolatedTextExtractor` gains a small helper.
-
 ## Made during implementation
 
-### `ContentStore` postponed (2026-10-25, Slice 1)
+### `ContentStore` postponed (2026-10-25)
 - **Original design:** `Indexer.indexFile()` looks the content hash up in `ContentStore` and
   reuses stored chunks and embeddings for renamed, moved or copied files; `pruneUnreferenced()`
   cleans it up.
-- **Implemented change:** Stage 2 has no `ContentStore`. `Indexer` takes no `contentStore` (nor
-  `embeddingModel`, until F05) and extracts every new path again; `IndexedFile.contentHash` is
-  still computed and stored, so adding the store later changes nothing in the index.
-- **Reason:** time. Extraction of a renamed file costs tens of milliseconds, and the store only
-  matters once embeddings (F05) make re-processing expensive.
-- **Impact:** F02, F03; `Indexer`, `FindAnythingService`. SD01's `ContentStore` lifeline is not
-  exercised. Diagrams to update at the freeze if the store stays out.
+- **Implemented change:** Stage 2 has no `ContentStore`. `Indexer` takes no `contentStore` and
+  extracts every new path again; `IndexedFile.contentHash` is still computed and stored, so
+  adding the store later changes nothing in the index. `SearchIndex.isReferenced(contentHash)`,
+  which only served the store, isn't built.
+- **Reason:** time. Without the store, a renamed file costs one more extraction (tens of
+  milliseconds) and one more embedding (about 27 passages a second).
+- **Impact:** F02, F03, F05; `Indexer`, `FindAnythingService`, `SearchIndex` (see "Vectors in
+  `SearchIndex`" below). A renamed or copied file is extracted again. It is embedded again too,
+  unless a file with the same content is waiting to be embedded at the same time: those share
+  one embedding. Diagrams: cd02, cd03, SD01, SM01, AD01.
 
-### Bounded retry for locked files (2026-10-25, Slice 1)
+### Bounded retry for locked files (2026-10-25)
 - **Original design:** F03: "A file is locked while it's being written: it's retried after another
   quiet period."
 - **Implemented change:** `Indexer.indexFile()` retries a file that can't be read up to three
   times (`MAX_READ_RETRIES`), then marks it `FAILED` so `index status --failed` shows it.
 - **Reason:** without a bound, a permanently locked file would be retried forever and keep the
   status from ever reaching "up to date".
-- **Impact:** F03, `Indexer`. The next rescan (startup, `index rebuild`) tries the file again.
+- **Impact:** F03, `Indexer`. A failed file is tried again when it changes or after
+  `index rebuild`. Diagrams: SD01.
 
-### Supported formats checked before parsing (2026-10-25, Slice 1)
-- **Original design:** F02 lists "supported formats such as plain text, PDF, Word, and
-  PowerPoint"; unsupported formats are indexed by name only.
-- **Implemented change:** `IsolatedTextExtractor` detects the type in-process from the file's
-  contents (Tika's detector, no parsing) and only forks the parser for plain text, Markdown, PDF,
-  Word (.docx) and PowerPoint (.pptx). Everything else is `METADATA_ONLY` without being parsed.
-- **Reason:** parsing arbitrary formats (archives, video, spreadsheets) in the child process
-  costs time and memory for text nobody searches; detection takes about a millisecond.
-- **Impact:** F02, `IsolatedTextExtractor`. CSV and images are indexed by name only (as
-  `testdata/FACTS.md` expects).
-
-### Small members added for the CLI and tests (2026-10-25, Slice 1)
-- **Original design:** the class diagrams leave out constructors, most getters and small
-  helpers.
-- **Implemented change:** members not drawn in the diagrams: `SearchFolder.removeRule()`,
-  `IndexConfig.removeGlobalRule()`, `findFolderContaining()` and the `appDataFolder` constructor
-  argument (so the app's own folder is excluded); `FindAnythingService.removeExclusion()`,
-  `listFailedFiles()`, `countIndexedFiles()`, `getIndexConfig()`, a `search()` overload with a
-  limit; `SearchIndex.listFiles(ExtractionStatus)`, `countFiles()`; `Indexer.removeStatusListener()`;
-  `SearchFilters.NONE` and `isEmpty()`; `ExtractedDocument.numberedPages`; `ChunkHit.chunk` is
-  null for a file found by name only; `IndexConfig.findFolder()` and `SearchIndex.getFile()`
-  return `Optional`. `IndexerState` has `STOPPED` after `STOPPING`.
-- **Reason:** `findany exclude remove` and `index status --failed` (F01, F02) need them, and the
-  facade must know which folder a path belongs to.
-- **Impact:** none on the patterns. The class diagram gets these at the freeze.
-
-### `testConnection()` says why it failed (2026-10-29, Slice 2)
-- **Original design:** `LlmClient.testConnection()` returns a boolean (cd06, SD04), while F13 and
-  UC08 (3a) want the user told that the key is invalid, or that the local runtime isn't running,
-  with setup instructions.
-- **Implemented change:** `testConnection()` still returns a boolean, but throws `LlmException`
+### `testConnection()` says why it failed (2026-10-29)
+- **Original design:** `LlmClient.testConnection()` returns a boolean (cd06, SD08), and F13 and
+  UC08 (3a) tell the user that the key is invalid, or that the local runtime isn't running, with
+  setup instructions.
+- **Implemented change:** `testConnection()` still returns a boolean, and throws `LlmException`
   when the backend can't be used. `true` means the backend answered, `false` that it was reached
   but replied with nothing; the exception's message says what to fix (wrong key, unknown model,
-  unreachable server, timeout, rate limit, no credits). `LangChain4jClient` maps the library's
-  exceptions to those messages, with cloud and local wording.
-- **Reason:** a bare `false` would be a silent error.
+  unreachable server, timeout, rate limit, no credits).
+- **Reason:** the message F13 asks for needs the cause, which a bare `false` can't carry.
 - **Impact:** F13; `LlmClient`, `LangChain4jClient`, `FindAnythingService.testBackend()` (the
-  future fails with the exception), `findany model set|test`, `SettingsDialog` in Slice 3.
+  future fails with the exception). Diagrams: cd06, SD08.
 
-### `LlmException` is checked (2026-10-29, Slice 2)
-- **Original design:** SD03 names `LlmException` without saying whether it's checked.
-- **Implemented change:** a checked exception, like `ExtractionException`, thrown by
-  `LlmClient.complete()` and `testConnection()`, by the `LangChain4jClient` constructor (no key,
-  no model name) and so by `LlmClientFactory.createClient()`.
-- **Reason:** the agent loop must handle it explicitly, since SD03's fallback to instant search
-  depends on catching it.
-- **Impact:** F07, F13; `AgentController`, `FindAnythingService`.
-
-### `Message` carries the system prompt and tool calls (2026-10-29, Slice 2)
-- **Original design:** the cd06 note gives `Message` a role (user, assistant or tool), the content
-  and the source files.
-- **Implemented change:** `Message.Role` also has `SYSTEM`; an assistant message carries its
-  `toolCalls`, and a tool result carries the `toolCallId` and `toolName` it answers. Two records
-  describe tools in the design's own terms: `ToolCall` (id, name, arguments; the id is null when
-  the backend gives none) and `ToolSpec` with nested `Parameter` and `Type` (string, integer,
-  boolean, or one of listed values). All three live in `llm` with `LlmRequest`, so `llm` never
-  depends on `agent` (`ToolResult` stays in `agent`).
-- **Reason:** OpenAI-style APIs (OpenRouter) require the assistant's tool calls to be replayed and
-  each tool result matched to a call by id; Ollama returns no ids. The system prompt has its own
-  role in both APIs.
-- **Impact:** F07, F08, F12; `LlmRequest`, `LangChain4jClient`, and later `PromptBuilder`,
-  `AgentController` and `ToolRegistry`, which build these records.
-
-### OpenRouter requests opt out of provider data collection (2026-10-29, Slice 2)
-- **Original design:** the "Cloud model reached through OpenRouter" entry above relies on the
-  OpenRouter account settings (no prompt logging, no training providers).
-- **Implemented change:** `LangChain4jClient` also sends `provider.data_collection = deny` with
-  every OpenRouter request, so a provider that trains on prompts is never routed to, whatever the
-  account says. Prompt logging has no per-request switch and stays an account setting (the README
-  says so). The client sends no referer or title headers.
-- **Reason:** the code enforces the privacy claim instead of trusting a dashboard setting.
-- **Impact:** F13, F14; `LangChain4jClient`.
-
-### Small members added for the model settings (2026-10-29 to 2026-11-02, Slice 2)
-- **Original design:** cd06 and cd07 draw `ModelSettings` (backend type, model name, base URL, API
-  key), `LlmClientFactory.createClient()`, `SettingsStore.saveModelSettings()` and
-  `FindAnythingService.testBackend()` and `setBackend()`; the `.env` entry above moves the key out
-  of the settings file.
-- **Implemented change:** `config/EnvFile` reads `.env`; `BackendType` is the enum the cd07 note
-  names; `SettingsStore` gains a constructor taking the environment, `loadModelSettings()` and
-  `defaultModelSettings()`; `ModelSettings` gains `hasApiKey()`, the two base-URL constants and a
-  `toString()` that hides the key; `LlmRequest.withMessages()`, `LlmResponse.hasToolCalls()`;
-  `LangChain4jClient` has a package-private constructor taking the library's chat model, for tests;
-  `LlmClientFactory.build()` is the protected hook that Slice 3 wraps in the decorator chain and
-  tests override; `FindAnythingService.getModelSettings()` and `resolveModelSettings()` give the
-  CLI the settings to test. Precedence: saved settings (backend, model, URL) win; `.env` in
-  `FINDANY_HOME`, then `.env` in the working directory, then environment variables fill the rest
-  and always supply the key; with nothing saved the backend is cloud when a key is configured,
-  else local. The key is never written to the settings file.
-- **Reason:** `findany model set|test` (pulled forward from Slice 2, item 5) and the tests need
-  them, and the design didn't say where the defaults come from once the key left Settings.
-- **Impact:** none on the patterns. The class diagram gets these at the freeze.
-
-### `ToolRegistry` checks every call against the tool's spec first (2026-11-04, Slice 2)
-- **Original design:** `ToolRegistry.execute()` calls `Tool.validate()` and then `Tool.execute()`
-  (SD03); an invalid call returns `ToolResult.failure()` with the errors.
-- **Implemented change:** before `Tool.validate()`, the registry checks the arguments against the
-  tool's `ToolSpec`: every required parameter is present, no parameter is unknown, and each value
-  has its parameter's type and, for a choice, one of its allowed values. `Tool.validate()` then
-  covers only what the spec can't express (a malformed date, a limit out of range) and is skipped
-  when the spec check already failed. A tool name that isn't registered also returns a failure,
-  naming the tools that exist. A tool that throws a runtime exception is logged and returned as a
-  failure, so one broken call can't end the request. Every call is logged, including the rejected
-  ones.
-- **Reason:** the Command pattern's point is that every tool gets the same validation and error
-  handling; without the shared check, each tool would repeat the type checks.
-- **Impact:** F07, F08; `ToolRegistry`, `Tool` (its `validate()` contract). SD03's order
-  (validate, then execute) is unchanged.
-
-### The agent's search filters by type and date only (2026-11-04, Slice 2)
+### The agent's search filters by type and date only (2026-11-04)
 - **Original design:** F04: "The agent can apply the same filters through its search tool": type,
   modification date, size and location.
 - **Implemented change:** `SearchTool` takes `query`, `file_type`, `modified_after`,
-  `modified_before` and `limit` (1 to 20, default 5). `file_type` is one of the formats whose text
-  is indexed (pdf, docx, pptx, txt, md); other files are found by name without a type filter.
-  There are no size or location parameters. An empty query lists the newest files.
+  `modified_before` and `limit`. `file_type` is one of the formats whose text is indexed (pdf,
+  docx, pptx, txt, md). There are no size or location parameters.
 - **Reason:** a fixed type list makes "unknown file type" a rejectable error (F07) instead of a
   search that silently finds nothing. A location has to be checked against `IndexConfig`, which
   the class diagram doesn't give `SearchTool`, and size is rarely part of a request.
-- **Impact:** F04, F07; `SearchTool`. The CLI and GUI filters (F04, Tier 2) are unaffected.
+- **Impact:** F04, F07; `SearchTool`. The CLI's and the GUI's filters are complete.
 
-### `ReadExcerptTool` reads a long file in parts (2026-11-04, Slice 2)
-- **Original design:** `ReadExcerptTool` reads a file's chunks from `SearchIndex`, limited to
-  `maxExcerptChars`; the parameters aren't specified.
-- **Implemented change:** the parameters are `file` (the full path from the search results),
-  `page` (start at this page or slide) and `position` (start at this chunk; not together with
-  `page`). An excerpt is whole chunks in order while they fit in `maxExcerptChars`, with a
-  `[page N]` or `[slide N]` line before each numbered page, and ends by giving the position to
-  continue from or by saying the text has ended. A file that isn't indexed or has no text, and a
-  page or position the file doesn't have, are failures with the reason.
-- **Reason:** Word, text and Markdown files have no pages, so a long one needs another way to be
-  read past the first excerpt.
-- **Impact:** F08; `ReadExcerptTool`.
-
-### Small members added for the tools (2026-11-04, Slice 2)
-- **Original design:** cd05 draws `ToolResult` with `failure()` and `ToolRegistry` with its
-  `callLog` field.
-- **Implemented change:** `ToolResult` is a record with a `success()` factory beside `failure()`;
-  `ToolRegistry.getCallLog()` returns a copy of the log; `SearchTool.NAME` and
-  `ReadExcerptTool.NAME` are the tools' names.
-- **Reason:** the call log has to be readable (for `ask --json` and Stage 3's traces), and tools
-  need a way to build a successful result.
-- **Impact:** none on the patterns. The class diagram gets these at the freeze.
-
-### The answer format, and `AnswerFormatException` (2026-11-04, Slice 2)
-- **Original design:** the model "writes an answer with citations in a structured format, which
-  is parsed" (F08); the format isn't specified. SD03: if parsing fails, the model is asked once to
-  reformat.
-- **Implemented change:** the final reply is the answer's text with `[n]` markers, then a
-  `CITATIONS:` line and one entry per marker with `file:`, `page:` and `quote:` on their own
-  lines. `ResponseParser.parseAnswer()` forgives layout (Markdown decoration, code fences,
-  "Sources", a quote in quotation marks or over several lines) and renumbers markers to the
-  citations' order. It throws the new checked `AnswerFormatException`, listing every problem, when
-  the reply is empty, a marker has no entry, an entry is listed twice, or an entry has no file, a
-  relative path, or a page that isn't a number. A reply with no markers and no entries is an
-  answer without citations (a clarifying question). A citation without a quote is kept and left
-  for the verifier to mark unverified. The parser leaves `Answer.sourceFiles` empty, because it
-  has no index to build `SearchResult`s from; `AgentController` fills it.
-- **Reason:** plain lines need no escaping, and escaping Windows paths and quotation marks is
-  where models break JSON. The exception's message tells the model what to fix.
-- **Impact:** F08, F09; `ResponseParser`, `PromptBuilder` (describes the format),
-  `AgentController` (catches the exception).
-
-### `PromptBuilder`: file text marked as data, and a wider `buildReformatRequest()` (2026-11-04, Slice 2)
-- **Original design:** `buildRequest(conversation, toolSpecs, today)`,
-  `buildReformatRequest(conversation)` and `buildDiffSummaryRequest(diffResult)` (cd05).
-- **Implemented change:** `buildRequest()` sends a system message (the role, today's date with
-  the weekday, how to work, the answer format) and then the conversation. A tool result that
-  carries file text is wrapped between `[FILE CONTENT START]` and `[FILE CONTENT END]`, the
-  system message says that text is data and never instructions, and an end marker inside file
-  text is altered so a file can't close the block. A failed call's error stays outside the
-  markers. `buildReformatRequest(conversation, toolSpecs, today, problems)` is the same request
-  plus a closing user message with the parser's problems and the format; that message isn't added
-  to the conversation. `buildDiffSummaryRequest()` isn't implemented (F10, Tier 2).
-- **Reason:** the test corpus has a prompt-injection note, and files are untrusted input. The
-  reformat request needs the tools because the history holds tool calls, which some providers
-  reject when no tools are defined, and the problems tell the model what to correct.
-- **Impact:** F07, F08, F09, F12; `PromptBuilder`, `AgentController`.
-
-### Citation verification rules made exact (2026-11-04, Slice 2)
-- **Original design:** F09: the quote is searched on the cited page, ignoring whitespace, and
-  each citation is `VERIFIED`, `UNVERIFIED` or `SOURCE_CHANGED`; `Answer.isVerified()` is false
-  when the citations couldn't be parsed.
-- **Implemented change:** `SOURCE_CHANGED` when the file is gone, or its size or modification
-  time (to the millisecond) differs from the index, which is the rescan's own test; it wins over
-  the other statuses. Whitespace includes non-breaking spaces. A quote may run across chunks of
-  one page. A citation with page 0 is searched in the whole file (see "Files without pages"); a
-  page number on a file without pages, a file that isn't indexed and an empty quote are
-  `UNVERIFIED`. `Answer.isVerified()` is true only when there is at least one citation and all
-  are `VERIFIED`. `verify()` and `verifyCitation()` throw `IOException` when the index can't be
-  read.
-- **Reason:** the report leaves these cases open, and an unreadable index must not look like an
-  unverified quote.
-- **Impact:** F09; `CitationVerifier`, `Answer`. `TODO.md` lists two of these rules to reconsider.
-
-### Conversations: trimming by exchange, and saving without the key (2026-11-04, Slice 2)
-- **Original design:** `Conversation.trimToFit(maxChars)` drops the oldest exchanges (F12);
-  `ConversationStore` has only its `conversationsDirectory`.
-- **Implemented change:** an exchange is a request and everything up to the next request, and is
-  dropped whole, so a tool result never loses the call it answers; the latest exchange is always
-  kept. A failed tool call is stored as `Error: <reason>`. `ConversationStore` writes one JSON
-  file per conversation (model, messages, tool calls, latest results), never the API key, and
-  takes a `SettingsStore` to supply the key when loading. `listAll()` is ordered by the files'
-  modification times and skips a file it can't read, with a warning in the log. An id must be a
-  safe file name.
-- **Reason:** providers reject a tool result without its call; the key lives only in `.env`.
-- **Impact:** F12; `Conversation`, `ConversationStore`. `TODO.md` lists two weaknesses of the
-  trimming.
-
-### Small members added for conversations and answers (2026-11-04, Slice 2)
-- **Original design:** cd05 draws `Conversation`, `Answer` and `Citation` with their fields, and
-  names the three statuses in a note.
-- **Implemented change:** `Conversation.getId()`, `getLastResults()`, `setLastResults()` and a
-  constructor that restores a saved conversation; `VerificationStatus` is the enum for the note's
-  statuses; `Answer` and `Citation` are records, with `Answer.withCitations()`,
-  `Citation.withStatus()` and a `Citation` constructor that starts unverified;
-  `ConversationStore.getConversationsDirectory()`; `ResponseParser.CITATIONS_HEADER`.
-- **Reason:** the store, the verifier and the prompt need them.
-- **Impact:** none on the patterns. The class diagram gets these at the freeze.
-
-### `AgentController`: three more collaborators, and what each ending returns (2026-11-05, Slice 2)
+### New links to `SearchIndex` and `IndexConfig` (2026-11-05)
 - **Original design:** cd05 gives `AgentController` a `ToolRegistry`, `PromptBuilder`,
-  `ResponseParser`, `CitationVerifier` and `maxSteps`. SD03 ends the loop with a verified answer,
-  or with "best results so far, with a notice" at the step limit.
-- **Implemented change:** the constructor also takes the `SearchIndex` (to turn the paths of an
-  answer's files into the `SearchResult`s that `Answer.sourceFiles` and
-  `Conversation.lastResults` hold), `maxConversationChars` (the limit for `trimToFit()`) and a
-  `Clock` (today's date for the prompt). `run()` throws `LlmException` and `IOException`. What it
-  returns:
-  - a parsed answer lists the files it cites, each once, in citation order;
-  - at the step limit, and when the reply can't be parsed even after the one reformat request,
-    it lists every file the tools returned, with a notice; the unparsed reply is returned as it
-    is, with no citations, so `isVerified()` is false;
-  - an empty reply is asked for again once, then reported as "The model gave no answer."
+  `ResponseParser` and `CitationVerifier`, and `ReadExcerptTool` the `SearchIndex`. cd04 gives
+  `SearchEngine` the `SearchIndex` and the `EmbeddingModel`.
+- **Implemented change:**
+  - `AgentController` also takes the `SearchIndex`, to turn the paths of an answer's files into
+    the `SearchResult`s that `Answer.sourceFiles` and `Conversation.lastResults` hold.
+  - `SearchEngine` and `ReadExcerptTool` also take the `IndexConfig` and leave out files that
+    aren't in an active folder (new method `IndexConfig.isInActiveFolder(Path)`).
+- **Reason:** the facade, the instant-search fallback and the agent's tools all search and read
+  through these two classes, so paused and unavailable folders are skipped in one place for
+  every caller.
+- **Impact:** F01, F06, F07, F08; `AgentController`, `SearchEngine`, `ReadExcerptTool`,
+  `IndexConfig`. The `search` package now uses `config`. Diagrams: cd00, cd04, cd05.
 
-  The reformat request doesn't count against `maxSteps`, and a tool call sent in reply to it
-  isn't run. The conversation gets exactly one closing reply per request, the one the answer came
-  from; a rejected reply is shown to the model through a copy of the conversation. At the step
-  limit a fixed sentence is stored as the reply. `summarizeDiff()` waits for F10.
-- **Reason:** the design leaves these cases open. One closing reply per request keeps the history
-  a sequence of complete exchanges, which strict chat formats require.
-- **Impact:** F07, F08, F09, F12; `AgentController`. cd05 and SD03 get these at the freeze.
+### Small changes to designed classes (2026-10-25 to 2026-11-09)
+Each line gives the original design, the implemented change and the reason.
+- cd05 gives `ConversationStore` only `conversationsDirectory`. It also takes a `SettingsStore`,
+  because the API key isn't saved with a conversation and is supplied on loading.
+- cd06 gives `LoggingLlmClient` only `privacyLog`. It also takes the conversation's
+  `ModelSettings` and a `Clock`, so each log entry gives the model's name and the time.
+- cd06 gives a `Message` a role (user, assistant, or tool), its content and its source files.
+  `Message.Role` also has `SYSTEM`, and a message carries `toolCalls`, `toolCallId` and
+  `toolName`, because chat APIs give the system prompt its own role and match each tool result
+  to its call.
+- cd05 has `PromptBuilder.buildReformatRequest(conversation)`. It is
+  `buildReformatRequest(conversation, toolSpecs, today, problems)`, because the request needs
+  the tools its history refers to, and the problems tell the model what to correct.
+- cd07 and cd02 have `IndexConfig.findFolder()` and `SearchIndex.getFile()` return the object.
+  Both return `Optional`, because a folder or file that isn't there is an ordinary case.
+- F13 appends every request to a cloud model to the privacy log. The connection test isn't
+  appended: `LangChain4jClient.testConnection()` sends its own fixed one-line prompt, which holds
+  no user data.
+- SM01 ends the index's life at Stopping. `IndexerState` also has `STOPPED`, so a caller can
+  tell a worker that is stopping from one that has stopped.
 
-### The instant-search fallback, conversation ids, and the agent's limits (2026-11-05, Slice 2)
-- **Original design:** when the client throws `LlmException`, `FindAnythingService.ask()`
-  completes the future with instant search results and a "model unavailable" notice (SD03).
-  `newConversation()` returns a `Conversation`.
-- **Implemented change:** as designed, with these details. The fallback also covers a client that
-  can't be built (for example no API key). Its answer has a fixed text, at most 10 files, and a
-  notice that starts with `FindAnythingService.MODEL_UNAVAILABLE` and gives the model's error.
-  The fallback is recorded in the conversation as the reply, and its files become `lastResults`.
-  A conversation's id is the time and four random hex digits, such as `20261105-143012-3f9a`, and
-  the conversation is first saved with its first answer. The facade's constructor takes a
-  `ConversationStore` and a `Clock`. `open()` builds the `ToolRegistry` (with `SearchTool` and
-  `ReadExcerptTool`) and the `AgentController`, with these limits as constants: 8 steps, 6,000
-  characters per excerpt, 40,000 characters of history.
-- **Reason:** the design names the behaviour but not these values; a missing key is as much
-  "model unavailable" as a refused connection.
-- **Impact:** F07, F12; `FindAnythingService`, `CliApp` (composition root).
+Diagrams: cd02, cd05, cd06, cd07, SM01.
 
-### Paused and unavailable folders are skipped inside `SearchEngine` (2026-11-05, Slice 2)
-- **Original design:** `SearchEngine` holds only the `SearchIndex` (cd04), and `ReadExcerptTool`
-  only the `SearchIndex` and `maxExcerptChars` (cd05). The report doesn't say where a paused
-  folder is left out of searches; Slice 1 did it in `FindAnythingService.search()`.
-- **Implemented change:** `SearchEngine` takes the `IndexConfig` and drops files that aren't in
-  an active folder, so the facade, the fallback and the agent's `SearchTool` all skip them
-  through the one method; the facade's own filter is gone. `ReadExcerptTool` takes the
-  `IndexConfig` too and refuses a file in such a folder with an error for the model. New method:
-  `IndexConfig.isInActiveFolder(Path)`.
-- **Reason:** the agent's tools call `SearchEngine` and `SearchIndex` directly, so with the
-  filter in the facade they returned and read files from paused folders. Found in review while
-  writing `ask()`, before any release.
-- **Impact:** F01, F06, F07, F08; `SearchEngine`, `ReadExcerptTool`, `IndexConfig`,
-  `FindAnythingService`.
+### `findany ask` has no interactive session (2026-11-05)
+- **Original design:** `findany ask` with no arguments starts an interactive session;
+  `--continue` continues the last conversation (F07, F12).
+- **Implemented change:** `ask` needs a request. Follow-ups use `ask --continue "<request>"`,
+  which continues the most recent conversation.
+- **Reason:** time. `--continue` already gives the CLI multi-turn conversations.
+- **Impact:** F07, F12; `CliApp`.
 
-### `findany ask`: no interactive session, and statuses in words (2026-11-05, Slice 2)
-- **Original design:** `findany ask "<request>"` prints the answer with numbered citations
-  marked `[✓]` or `[?]`; `--verbose` prints the agent's steps; `findany ask` with no arguments
-  starts an interactive session; `--continue` continues the last conversation (F07–F09, F12).
-- **Implemented change:** `ask` needs a request; there is no interactive session, and follow-ups
-  use `--continue`. Each source line also gives its status in words ("verified", "unverified: the
-  quote was not found there", "unverified: the file has changed since it was indexed"); a changed
-  source is marked `[?]`. `--verbose` prints the steps on standard error. `--json` (added for
-  Stage 3's behaviour tests) prints the conversation id, model, request, answer, `verified`,
-  `fallback`, citations with statuses, source files, notices and the request's tool calls. A
-  fallback exits with 0.
-- **Reason:** a console that can't show the check mark prints `?` in its place, which would make
-  a verified citation look unverified. The interactive session is left out for time.
-- **Impact:** F07, F08, F09, F12; `CliApp`.
-
-### F12: saved conversations in a menu, reopened without verification marks (2026-11-07, Slice 3)
+### F12: saved conversations in a menu, reopened without verification marks (2026-11-07)
 1. **Original Stage 1 feature and ID:** F12 Conversation follow-ups. The GUI keeps past
-   conversations in a drawer with a "New conversation" button; a reopened conversation shows its
-   exchanges.
+   conversations in a drawer with a "New conversation" button. A saved conversation whose model
+   is no longer configured opens read-only.
 2. **Implemented feature and its behavior:** in Ask mode the toolbar has "New conversation" and a
    "Conversations" menu that lists the saved conversations, most recent first, each as its start
    time and first request. Choosing one shows its requests and answers in the detail pane, puts
@@ -393,18 +170,20 @@ Diagrams updated:
    is still a link that opens the file at the quote, but carries no verified or unverified mark;
    its tooltip says that verification isn't kept for saved conversations. The CLI continues the
    most recent conversation with `ask --continue`.
-3. **What changed and why:** a menu instead of a drawer fits the one-window GUI (status: Modified).
-   The marks are missing because `ConversationStore` saves the messages and the last results, not
-   the verification statuses; verifying again when a conversation is reopened would cost an index
-   lookup per citation and could differ from what the user saw at the time.
+3. **What changed and why:** a menu instead of a drawer fits the one-window GUI. The marks are
+   missing because `ConversationStore` saves the messages and the last results, not the
+   verification statuses; verifying again when a conversation is reopened would cost an index
+   lookup per citation and could differ from what the user saw at the time. A saved conversation
+   always opens ready to continue: when its model can't be used, the next request gets the
+   instant-search fallback with its "model unavailable" notice (F07), so a separate read-only
+   state isn't needed.
 4. **How the user need is still met:** any saved conversation can be reopened, read and continued
    from the GUI or the CLI.
-5. **Affected use cases, classes, methods, and design patterns:** UC for F12;
-   `GuiController.onOpenConversation()` (reads each saved reply again with `ResponseParser`),
-   `MainWindow.showConversations()`, `DetailPane.showPastExchange()`. Patterns unchanged.
-   Diagrams updated: not yet (cd01 at the freeze).
+5. **Affected use cases, classes, methods, and design patterns:** UC04, UC05;
+   `GuiController.onOpenConversation()`, `MainWindow.showConversations()`,
+   `DetailPane.showPastExchange()`. Patterns unchanged. Diagrams: cd01.
 
-### Conversations keep requests and answers, not old tool results (2026-11-08, Slice 3)
+### Conversations keep requests and answers, not old tool results (2026-11-08)
 - **Original design:** F12 keeps everything: "Each request, tool result, and answer is added to
   the conversation, which is saved after every answer. The whole conversation, trimmed to fit, is
   sent with each new request, so the model can refer to earlier results." SD03 draws the same.
@@ -412,585 +191,170 @@ Diagrams updated:
   When the next request starts, `AgentController.run()` calls the new
   `Conversation.dropToolMessages()`, which reduces every earlier exchange to its request and its
   closing reply. `ConversationStore.save()` never writes tool calls or results, so a saved
-  conversation holds only requests and answers (plus the model and the last answer's files). A
-  file saved before this change still loads, and loses its tool messages at its next request.
+  conversation holds only requests and answers (plus the model and the last answer's files).
 - **Reason:** found in real use on 2026-11-08 (see `test-failures.md`). Tool results were 89 to
-  98 percent of three real conversations; one question about taxes stored about 78,000 characters
-  of search results. That is twice the 40,000-character history limit, so the follow-up dropped
-  the whole first exchange and the model no longer knew what it had answered. Old results also go
-  stale when files change, are sent again on every later call, and left copies of file text in
-  the conversation files. The answer already says what was found, and a follow-up that needs more
-  searches or reads again, which uses the files as they are now.
-- **Impact:** F12; `Conversation`, `AgentController`, `ConversationStore`; SD03. A follow-up now
-  sees earlier requests and answers but not earlier search results or excerpts. `findany ask
-  --json` is unchanged: it reads the latest request's tool calls from the conversation in memory,
-  where they stay until the next request. Not solved here: a single exchange can still outgrow a
-  local model's context, and `trimToFit()` still edits the kept history (both in `TODO.md`).
-  Diagrams updated: not yet (SD03 at the freeze).
+  98 percent of three real conversations, and one question's search results were twice the
+  history limit, so the follow-up lost the whole first exchange. Old results also go stale when
+  files change and are sent again on every later call. The answer already says what was found,
+  and a follow-up that needs more searches or reads again, which uses the files as they are now.
+- **Impact:** F12; `Conversation`, `AgentController`, `ConversationStore`. A follow-up sees
+  earlier requests and answers but not earlier search results or excerpts. Diagrams: cd05, SD03.
 
-### Redaction: placeholders, category names, and what a pattern matches (2026-11-09, Slice 3)
-- **Original design:** `Redactor.redact(text): RedactionResult` applies every enabled
-  `SensitivePattern`, with one implementation per category: card numbers and SINs (both checked
-  with the Luhn checksum), private keys, and API keys. Matches "are replaced with placeholders".
-  The design gives no placeholder format, no category names, no `RedactionResult` contents, and
-  no rule for what counts as a match.
-- **Implemented change:** a match becomes `[redacted: <category>]`. The categories are
-  `private-key`, `card-number`, `sin` and `api-key`, applied in that order. `RedactionResult` is
-  a record of the redacted text and the categories that matched. What matches:
-  - `CardNumberPattern`: 13 to 19 digits, together or in groups separated by single spaces or
-    hyphens, passing Luhn.
-  - `SinPattern`: 9 digits written the same way, passing Luhn.
-  - For both, the number must stand on its own: digits that touch a letter, an underscore or a
-    hyphen are part of a name (a file called `IMG_20261108123456.jpg`), not a number. Without
-    this, paths in tool results could be redacted and the model could no longer cite the file.
-  - `PrivateKeyPattern`: a PEM block from `-----BEGIN ... PRIVATE KEY-----` to its END line, or to
-    the end of the text when an excerpt cut the block short.
-  - `ApiKeyPattern`: keys with a well-known prefix (`sk-`, `ghp_` and its family, `github_pat_`,
-    `AKIA`, `xoxb-` and its family, `AIza`).
-  Added members: `SensitivePattern.builtIn()` (the four patterns in order),
-  `Redactor.placeholder()`, `getCategories()` and `isCategoryEnabled()`, and the package-private
-  `Luhn` helper both number patterns use. `setCategoryEnabled()` rejects a category that doesn't
-  exist with a message listing the ones that do.
-- **Reason:** the code needs concrete rules, and the CLI and the settings dialog need names to
-  show and accept. A number is matched over whole digit groups so that a card number followed by
-  another number on the same line is still found.
-- **Impact:** F14; `privacy` package. A key with no recognizable prefix isn't found, and about one
-  in ten random numbers of the right length passes Luhn and is redacted needlessly, which the
-  design accepts ("False positive: harmless, since the text is only redacted"). A quote that
-  contains a placeholder isn't in the file, so such a citation shows as unverified; the model
-  only ever sees the placeholder, so it can't quote the real value.
-
-### The privacy log's entries and file, and saved privacy settings (2026-11-09, Slice 3)
-- **Original design:** `PrivacyLog` has a `logFile` with `append(entry)` and `getEntries(limit)`;
-  a log entry shows "its timestamp, the excerpts sent, and any redactions". `PrivacyLogEntry` has
-  no box in any diagram, and the file's place and format aren't given. `SettingsStore` has
-  `loadFolderPolicy()` and `saveFolderPolicy()`, and nothing for the redaction toggles.
+### Privacy policies: a folder inside a search folder, and only the process that owns the index (2026-11-09)
+- **Original design:** UC10's one precondition is that the folder is a search folder;
+  `FindAnythingService.setLocalOnly(folder, localOnly)` marks it and
+  `setRedaction(category, enabled)` sets a toggle.
 - **Implemented change:**
-  - `PrivacyLogEntry` is a record of the timestamp, the model's name, the request's messages as
-    `Excerpt`s (role, source files, text as sent), and the redacted categories. It has its own
-    `Excerpt` type because `llm` depends on `privacy`, so `privacy` can't use `llm.Message`.
-  - The log is `privacy-log.jsonl` in the app's data folder: one JSON object per line, oldest
-    first, only ever appended to. `getEntries(limit)` returns the newest first and skips a line it
-    can't read, with a warning. `append()` throws `IOException` when the file can't be written.
-    Added `getLogFile()`.
-  - `settings.json` gets a `privacy` section with `localOnlyFolders` and
-    `disabledRedactionCategories`. `SettingsStore` gets
-    `loadDisabledRedactionCategories()` and `saveDisabledRedactionCategories()` beside the two
-    designed methods. `FolderPolicy` gets `getLocalOnlyFolders()` and a constructor from a list.
-- **Reason:** the design leaves these open. The toggles must be saved because every CLI run is a
-  new process: without saving, `findany privacy redact --disable <category>` would do nothing.
-  One line per request keeps the log readable and editable by a person, and appending never
-  rewrites what was recorded.
-- **Impact:** F13, F14; `privacy` package, `SettingsStore`. The log has no size limit or rotation.
+  - `setLocalOnly()` accepts a search folder or a folder inside one. Removing a search folder
+    removes the marks on it and inside it.
+  - `setLocalOnly()` and `setRedaction()` are refused in a read-only process, as folder changes
+    are (UC01).
+- **Reason:** one private subfolder can be protected without keeping the whole search folder
+  away from cloud models. A change made by a second process would be saved without reaching the
+  policy the first process is applying, and the user would believe a folder is protected when it
+  is not.
+- **Impact:** F14, UC10; `FindAnythingService`, `FolderPolicy`.
 
-### The privacy decorators: where the chain is built, and what the design left open (2026-11-09, Slice 3)
-- **Original design:** for a cloud backend `LlmClientFactory` builds `RedactingLlmClient` →
-  `LoggingLlmClient` → `LangChain4jClient`; the factory holds the `redactor`, `folderPolicy` and
-  `privacyLog`. `LoggingLlmClient` has only a `privacyLog` field. SD04 appends the log entry
-  before the request is sent and replaces a local-only message with
-  `"[withheld: local-only source]"`. The design doesn't say what happens when the log can't be
-  written, whether the connection test is logged, or what a logged message's text holds.
-- **Implemented change:**
-  - `LlmClientFactory` takes the three privacy objects and a `Clock` in its constructor.
-    `createClient()` wraps whatever `build()` returns when the backend is CLOUD. An earlier entry
-    said `build()` itself would be wrapped; wrapping in `createClient()` keeps the tests' scripted
-    clients (which replace `build()`) under the decorators, so the whole test suite now runs
-    through the chain.
-  - `LoggingLlmClient` also takes the conversation's `ModelSettings` (for the model's name in
-    each entry) and the `Clock` (for its time). A logged message's text is its content followed
-    by a `[tool call: name {arguments}]` line for each tool call it made, since those are sent too.
-  - If the entry can't be written, the request is **not sent**: `LoggingLlmClient` throws
-    `LlmException` naming the log file, and `ask()` then falls back to instant search with that
-    reason. A cloud request must never go out unrecorded.
-  - The connection test isn't logged or redacted: `LangChain4jClient.testConnection()` sends its
-    own fixed one-line prompt, which holds no user data.
-  - `RedactingLlmClient.WITHHELD` is the marker. A withheld message keeps its source files (they
-    aren't sent; the log shows whose text was withheld) and is not scanned for patterns. A
-    message is withheld whole when any one of its source files is local-only, as SD04 draws it,
-    so a search result that lists one local-only file hides its other files too.
-- **Reason:** the design leaves these open; each choice is the one that can't leak or go
-  unrecorded.
-- **Impact:** F13, F14; `llm` package, `CliApp.createService()`. From this change on, every
-  request to a cloud model is redacted and written to `privacy-log.jsonl`. Dropping only the
-  local-only entries of a search result needs tool results to carry per-file structure; it is in
-  `TODO.md`.
+### The GUI is one window, and some settings stay in the CLI (2026-11-07 to 2026-11-10)
+- **Original design:** the GUI has a conversation drawer (F12) and a comparison view
+  (`DetailPane.showComparison()`). A folder chip's menu has "Edit exclusions", "Pause", "Local
+  model only" and "Remove". Settings has a Model section (backend, API key or model name, Test
+  connection), a Privacy section, a privacy log viewer, Settings > Indexing with the global
+  exclusion rules (`SettingsDialog.showGlobalRules()`), a "Rebuild index" button, and a list of
+  the supported formats (F02).
+- **Implemented change:** one window (search bar with the Search/Ask switch, folder chips, the
+  results table, the detail pane, the status label) and the settings dialog.
+  - The chip menu offers "Local model only" and "Remove". Pausing a folder and editing exclusion
+    rules are done with `findany folders` and `findany exclude`, so
+    `GuiController.onAddExclusion()` and `SettingsDialog.showGlobalRules()` aren't built.
+  - Rebuilding the index is done with `findany index rebuild`.
+  - The settings dialog has no list of the supported formats.
+  - The settings dialog has the Model section, the Privacy section and the privacy log. The API
+    key isn't entered there (see "API key in a local `.env` file").
+  - The conversation drawer is a menu (see F12), and there is no comparison view (see F10).
+  - `GuiController` gains `onRemoveFolder()` for the chip menu's "Remove".
+- **Reason:** time. The CLI covers every part the GUI leaves out, so each feature stays
+  reachable.
+- **Impact:** F01, F02, F03, F13; UC01, UC02, UC08; `MainWindow`, `GuiController`,
+  `SettingsDialog`. Patterns unchanged. Diagrams: cd01, SD07, SD08.
 
-### The facade's privacy methods, and how the answer says sources were withheld (2026-11-09, Slice 3)
-- **Original design:** `FindAnythingService` has `setLocalOnly(folder, localOnly)`,
-  `setRedaction(category, enabled)` and `getPrivacyLog(limit)`, and holds the `folderPolicy`,
-  `redactor` and `privacyLog`. UC10's precondition is that the folder is a search folder. When
-  needed sources are local-only, "the answer notes that some sources were withheld and suggests a
-  conversation with the local model", but no diagram shows how the answer learns of it.
-- **Implemented change:**
-  - The three objects are constructor parameters of the facade, and the composition root gives
-    the same objects to `LlmClientFactory`.
-  - `setLocalOnly()` accepts a search folder **or a folder inside one**, so one private subfolder
-    can be protected without marking the whole search folder. Removing a search folder removes
-    the marks on it and inside it.
-  - `setLocalOnly()` and `setRedaction()` are refused in a read-only process, like the folder
-    changes. A change made by a second process would be saved but would not reach the policy the
-    first process is applying, and the user would believe a folder is protected when it is not.
-  - Added for display: `getLocalOnlyFolders()`, `getRedactionCategories()` (each category with
-    whether it is on) and `getPrivacyLogFile()`.
-  - After `AgentController.run()`, `ask()` adds the notice `SOURCES_WITHHELD` to the answer when
-    the conversation's model is a cloud model and a tool result of the current request came from
-    a local-only folder. `PromptBuilder`'s instructions also tell the model what the withheld
-    marker means, so its own text says the sources were withheld and suggests the local model.
-- **Reason:** the facade is the one place that knows both the conversation's model and the
-  policy, and the conversation still holds the current request's tool results with their source
-  files, so the notice needs no new channel from the decorator back to the agent.
-- **Impact:** F13, F14; UC10 (a folder inside a search folder is allowed); `FindAnythingService`,
-  `PromptBuilder`, SD03. A read-only process keeps the policy it loaded at startup until it is
-  restarted.
-
-### The privacy commands' forms (2026-11-10, Slice 3)
-- **Original design:** `findany privacy-log [--last N]`, `findany policy local-only <folder>` and
-  `findany privacy redact --enable|--disable <category>`. No command removes a local-only mark,
-  and nothing says what the log command prints.
-- **Implemented change:** `policy local-only <folder> --off` removes the mark. `findany privacy`
-  alone shows each category with its state, the limitation sentence, the local-only folders and
-  the log file's path. `privacy-log` shows the newest requests first (10 unless `--last` says
-  otherwise): time, model, message count and size, the redacted categories, the files whose text
-  was withheld, and each message's first 200 characters with its source files; the log file's
-  path follows for the full text. `folders list` marks a local-only search folder, or names the
-  marked folders inside one.
-- **Reason:** the user needs to see the state before changing it, and a mark must be removable.
-  The log's full text can run to hundreds of thousands of characters per question, so the command
-  shows a summary and points at the file.
-- **Impact:** F13, F14; `CliApp`.
-
-### `SettingsDialog`: what it holds and what stays in the CLI (2026-11-10, Slice 3)
-- **Original design:** Settings has a Model section (backend, API key or model name, Test
-  connection), a Privacy section (a toggle per redaction category, the stated limitation), a
-  privacy log viewer, Settings > Indexing with the global exclusion rules, and a "Rebuild index"
-  button. `SettingsDialog` has `showGlobalRules()`, `showTestResult()` and `showPrivacyLog()`.
-- **Implemented change:** a non-modal dialog opened from a "Settings…" button on the toolbar,
-  with the Model section (backend choice, model name, a line saying whether an API key is
-  configured, Test connection and its result), the Privacy section (a check box per category,
-  the limitation sentence) and the privacy log as read-only text with a Refresh button, loaded
-  when the dialog opens. The API key is never entered here: it comes from `.env`, as logged
-  earlier. Left to the CLI: the global exclusion rules (`findany exclude`) and rebuilding the
-  index (`findany index rebuild`), so `showGlobalRules()` isn't implemented. Added members:
-  `showModelSettings()`, `showRedaction()`, `setReadOnly()` and the callback setters;
-  `GuiController.onRedactionToggled()` shows the toggles again as saved, and `onTestBackend()`
-  saves the backend only when the test answered, as SD08 draws it. The log's text is the same as
-  `findany privacy-log` prints (`CliApp.PrivacyLogCommand.describe()`), so the two views agree.
-- **Reason:** time before the freeze; the CLI already covers the two parts left out, and a
-  read-only text area lets the user select and copy log text.
-- **Impact:** F03 (rebuild stays CLI-only), F13, F14; `SettingsDialog`, `GuiController`,
-  `MainWindow`.
-
-### The GUI: one window, and the members the views needed (2026-11-07 to 2026-11-10, Slice 3)
-- **Original design:** cd01 draws `MainWindow`, `ResultsView`, `DetailPane`, `SettingsDialog` and
-  `GuiController` with the methods the design cares about, a conversation drawer, a comparison
-  view, errors shown as messages, and a chip menu with "Edit exclusions", "Pause", "Local model
-  only" and "Remove". `MainWindow.setMode()` takes a `SearchMode` that no diagram defines.
-- **Implemented change:** one window (search bar with the Search/Ask switch, folder chips, an
-  error bar, the results table, the detail pane, the status label) and the settings dialog.
-  `SearchMode` is an enum in `ui`. The chip menu offers "Local model only" and "Remove"; pause and
-  exclusions stay in the CLI. Errors appear in a dismissible bar under the toolbar. There is no
-  comparison view (F10, Tier 2). Members added beyond the diagram, all view wiring or view state:
-  - `MainWindow`: `show(Stage)`, `getMode()`, `setAskBusy()`, `showConversations()`,
-    `showLocalOnlyFolders()`, getters for its views and dialog, and the callback setters
-    (`setOnQueryChanged`, `setOnAskSubmitted`, `setOnNewConversation`, `setOnOpenConversation`,
-    `setOnConversationsRequested`, `setOnAddFolder`, `setOnRemoveFolder`, `setOnSetLocalOnly`),
-    which keep the diagram's arrow direction: the controller registers itself, views never call
-    the model.
-  - `ResultsView`: `setOnResultSelected()`, `setOnTryAsk()`.
-  - `DetailPane`: `clearConversation()`, `showConversation()`, `showRequest()`,
-    `showPastExchange()`, `setOnCitationClicked()`; the Back button is view state.
-    (`clearPreview()` came on 2026-11-14: `GuiController.showResults()` empties the preview when
-    the selected file is no longer among the results, because it was deleted or because a new
-    query doesn't match it. Before, the preview of a deleted file stayed until another file was
-    selected.)
-  - `GuiController`: `onRemoveFolder()` (the diagram has no remove handler). Not declared, since
-    not built: `onCompareRequested()` (F10), `onAddExclusion()`. (`onFiltersChanged()` came with
-    F04 on 2026-11-13; see "F04's filters" below.)
-  - The `gui` command starts JavaFX with `Platform.startup()` rather than `Application.launch()`,
-    which creates the application object itself and would force a static handoff of the service.
-- **Reason:** time, and the handoff's one-window simplification. The callback setters are the
-  JavaFX way to let a view report an action without knowing the model.
-- **Impact:** F01, F06, F07, F08, F11, F12; cd01 (update at the freeze). The `SettingsDialog` and
-  F12 entries above cover the rest of the GUI's changes.
-
-### A search passage is given once per request: `ShownPassages` (2026-11-12, after Slice 3)
+### A search passage is given once per request: `ShownPassages` (2026-11-12)
 - **Original design:** `SearchTool` gives each matching file with its best passage on every
   call. `Tool.execute()` takes the call's arguments and `ToolRegistry.execute()` takes the
-  `ToolCall`, nothing else (cd05, SD03). `AgentController` doesn't know the `FolderPolicy`.
+  `ToolCall` (cd05, SD03). `AgentController` has no `FolderPolicy`.
 - **Implemented change:** within one request, a passage's text is sent once. When a later search
-  finds the same passage as its file's best one, the file is still listed (and stays in the
-  result's `sourceFiles`), and its label line names the earlier search in place of the text:
-  `Best passage (page 1): already given above, in the results for "cumulative GPA".` Another
-  passage of the same file comes in full.
-  - New class `agent/ShownPassages`, one per request: `record(query, results)` records each
-    result's best passage by file and chunk position, keeping the first query, and
-    `queryThatGave(file, chunk)` returns that query.
+  finds the same passage as its file's best one, the file is still listed, and its label line
+  names the earlier search in place of the text:
+  `Best passage (page 1): already given above, in the results for "cumulative GPA".`
+  - New class `agent/ShownPassages`, one per request: `record(query, results)` and
+    `queryThatGave(file, chunk)`.
   - `Tool.execute(arguments, shownPassages)` and `ToolRegistry.execute(toolCall, shownPassages)`
     take the record. `SearchTool` reads and fills it; `ReadExcerptTool` ignores it.
-  - `AgentController` takes the `FolderPolicy` in its constructor (from `FindAnythingService`)
-    and `run()` creates the record. A new request starts with an empty one, because
-    `dropToolMessages()` has just removed the earlier results.
-  - `RedactingLlmClient` withholds a whole search result from a cloud model when any of its files
-    is local-only. So in a cloud conversation such a result records nothing, and a later search
-    gives its passages in full. A local model has nothing withheld.
-- **Reason:** measured on 2026-11-12 with the cloud model and "What's my cumulative GPA?": two
-  searches returned the same ten files, so the request was 34,019 characters, half of it
-  repeated, for an answer that needed under 100. A smaller request leaves a local model's context
-  room for more steps, or for a larger model. The record is passed with each call because the
-  registry and its tools are shared by all requests; kept in the tool, it would mix them. The
-  note sits on the label line, which only the tool writes, and names the search, so a file's own
-  text ("shown above") can't stand in for it by its place.
-- **Impact:** F07, F14; the Command pattern keeps its roles, with one more parameter on
+  - `AgentController` takes the `FolderPolicy` in its constructor and `run()` creates the
+    record. A result that a cloud model has withheld from it (F14) records nothing, so its
+    passages are given in full by a later search.
+- **Reason:** measured on 2026-11-12 with "What's my cumulative GPA?": two searches returned the
+  same ten files, so half of the 34,019-character request was repeated. A smaller request leaves
+  a local model's context room for more steps. The record is passed with each call because the
+  registry and its tools are shared by all requests.
+- **Impact:** F07, F14. The Command pattern keeps its roles, with one more parameter on
   `Tool.execute()` and `ToolRegistry.execute()`; `SearchTool`, `ReadExcerptTool`,
-  `AgentController`, `FindAnythingService`; the `agent` package now uses `privacy`. Not solved
-  here: a file's text can still imitate any line of a result, the note included, because the
-  whole result is one marked block; and a folder marked local-only while a request is running can
-  leave a note that names a result the model is no longer sent.
-  Diagrams updated: not yet (cd05 and SD03 at the freeze).
+  `AgentController`, `FindAnythingService`; the `agent` package now uses `privacy`. Diagrams:
+  cd00, cd05, SD03.
 
-### The agent's search lists identical files as one entry (2026-11-12, after Slice 3)
-- **Original design:** a result list holds each file once, and two copies of a file are two
-  results (`SearchResult`). `SearchTool` gives the model every result as its own entry with its
-  own passage.
-- **Implemented change:** in the text `SearchTool` writes for the model, results whose files have
-  the same `contentHash` share one entry: the best-ranked copy with its details and its passage,
-  and each other copy on a line of its own before the passage, `Same content at: <path>`. The
-  first line still counts every file, and every copy stays in the result's `sourceFiles`.
-  - Only files with a passage and a known hash are joined. A file matched by its name only, or
-    listed for an empty query, keeps its own entry.
-  - A copy is recorded in `ShownPassages` with its entry's passage, so a later search that finds
-    only the copy names the earlier search and doesn't send the text again.
-  - Nothing else changes: `SearchEngine`, `findany search` and the GUI's results table still show
-    copies as separate results.
-- **Reason:** identical files send the same passage (up to 1,500 characters) once per copy. Seen
-  on 2026-11-12 in a search of ten real documents, which held two pairs of identical files.
-  Checked on the test corpus the same day: the syllabus and its copy came to the cloud model as
-  one entry with one passage.
-- **Impact:** F07; `SearchTool` only (a private `groupCopies()`). The limit counts files, so a
-  result with copies has fewer entries than files. No pattern changes and no diagram changes.
-
-### The agent's search gives whole passages for the first three entries only (2026-11-12, after Slice 3)
-- **Original design:** `SearchTool` gives every result its whole best passage, up to the chunk
-  size of 1,500 characters (see "Small members added for the tools" and the entries above).
-- **Implemented change:** the first three entries of a result (`SearchTool.FULL_PASSAGES`) come
-  with their whole passage, as before. A later entry comes with one line of at most 200
-  characters (`PART_CHARS`) under the label `Part of the best passage (page N):`. The part starts
-  a little before the first word of the query that the passage holds, is cut between words, and
-  has an ellipsis at each cut end.
-  - A passage of 200 characters or fewer comes whole at any place in the result.
-  - The query's words are found the way the index matches them: case and accents are ignored. A
-    passage that holds none of them (a file matched by its name) is shown from its start.
-  - Apart from line breaks the part is the file's own text, so a quote from it still verifies.
-  - A part isn't recorded in `ShownPassages`: a later search that ranks the file in the first
-    three gives the whole passage. A passage already given whole is still replaced by its note.
-- **Reason:** both models ask for ten results, and nearly all of a result is passages: the
-  measured result of 2026-11-12 was 15,665 characters for ten files, and an estimate on its
-  logged text puts it near 7,000 with this change. Parts for every entry would be smaller still,
-  but the answer would then need `read_excerpt` more often, which weak local models skip; the
-  best matches keep their whole passages for that reason.
-- **Impact:** F07, F08; `SearchTool` only. When the answer is in a later entry's passage outside
-  the part shown, the model has to read an excerpt of that file (the prompt already tells it to).
-  No pattern changes and no diagram changes.
-
-### F04's filters: a row opened by a button, and what the design left open (2026-11-13, Tier 2)
+### F04's filters open as a row, not a menu (2026-11-13)
 - **Original design:** "A Filters menu beside the search folder chips offers a type dropdown, a
-  date range picker, a size range, and a location." The CLI has `--type pdf,docx`, `--after`,
-  `--before`, `--min-size 1MB`, `--max-size 50MB` and `--in <folder>`. Invalid filters fail the
-  search, and `MainWindow.showError()` shows them inline. With no results, "a message suggests
-  loosening the filters". The report doesn't say how sizes are written, which types the dropdown
-  offers, or whether the filters apply in Ask mode.
-- **Implemented change:**
-  - **The GUI.** A "Filters" toggle button after the folder chips opens a row under them, not a
-    popup menu: a type menu with a checkbox per type, two date pickers, two size fields, a
-    location menu (anywhere, each search folder, or "Choose a folder…") and "Clear filters". The
-    button's text counts the kinds of filter that are on ("Filters (2)"). Every change goes to
-    `GuiController.onFiltersChanged()`, the design's method, which stores the filters and runs
-    the current search again.
-  - **The type list.** The GUI offers the formats whose text is indexed (`SearchTool.FILE_TYPES`,
-    now `public`: pdf, docx, pptx, txt, md). The CLI's `--type` takes any extension, with or
-    without a dot, in any letter case.
-  - **Sizes.** `CliApp.parseSize()` reads a number with an optional unit (B, KB, MB, GB, TB; any
-    letter case; decimals allowed), 1024-based like the sizes the app prints. A size or a date
-    that can't be read is a usage error in the CLI (exit code 2) and an error-bar message in the
-    GUI, and no search runs with it. Filters that can be read but don't make sense together are
-    still the search's check (`SearchFilters.validate()`), with exit code 1 in the CLI.
-  - **The filters' error message.** The error bar keeps a message until it is dismissed, which
-    would leave "the start date is after the end date" on screen after the dates were fixed. So
-    `MainWindow` has `showFilterError()` and `clearFilterError()` beside `showError()`: a filters
-    message is removed when the filters change, and any other error stays as before.
-  - **Ask mode.** The button and the row are hidden in Ask mode and the filters keep their
-    values for the next instant search. They never reach the agent: `FindAnythingService.ask()`
-    takes no filters, and `SearchTool` sets its own from the model's arguments.
-  - **A removed folder.** A location filter inside a search folder that is then removed goes back
-    to "Anywhere".
-  - Members added beyond the diagram: `MainWindow.setOnFiltersChanged()`, `showFilterError()`,
-    `clearFilterError()`; `ResultsView.setFiltersActive()`.
-- **Reason:** a date picker and text fields inside a JavaFX popup menu are expected to close the
-  menu or lose focus on a click (not tested; the row avoids the question). A fixed type list
-  can't be mistyped, and it is the list the agent already uses. Showing the filters in Ask mode
-  would offer controls that do nothing.
-- **Impact:** F04, F06; `CliApp`, `MainWindow`, `GuiController`, `ResultsView`, `SearchTool` (one
-  constant made `public`). Nothing changed below the facade: `SearchFilters`, the index's filter
-  clauses and the validation in `FindAnythingService.search()` were already there. Not built:
-  the agent's size and location filters (see "The agent's search filters by type and date only"),
-  and the GUI's filters applying to the agent's searches.
-  Diagrams updated: not yet (cd01 at the freeze).
+  date range picker, a size range, and a location."
+- **Implemented change:** a "Filters" toggle button after the folder chips opens a row under
+  them: a type menu with a checkbox per type, two date pickers, two size fields, a location menu
+  and "Clear filters". Every change goes to `GuiController.onFiltersChanged()`, the design's
+  method. The CLI options are as designed.
+- **Reason:** a row stays open while dates and sizes are entered, and shows at a glance which
+  filters are on.
+- **Impact:** F04; `MainWindow`, `GuiController`, `ResultsView`. Nothing changed below the
+  facade. Diagrams: cd01.
 
-### The prompt says a search gives one passage per file (2026-11-13, after Slice 3)
-- **Original design:** `PromptBuilder` tells the model to "search with a few specific keywords".
-  Nothing tells it that a search result holds only each file's best passage for the query.
-- **Implemented change:** one sentence after that instruction: "A search gives each file with the
-  one passage that best matches your query, so include the words you expect to find next to the
-  answer." It names no example and forbids nothing, so a file's name stays a good search word.
-- **Reason:** seen on 2026-11-13 with `qwen3:14b` on Amar's documents. After "What's my current
-  GPA?", the follow-up "It should be in my transcript" made the model run
-  `search(query="transcript")`. The best passage for that word is page 2 of `transcript.pdf`
-  (help links that repeat "transcript"); the GPA table is on page 1. The model never read page 1
-  and answered that the transcript lists no GPA. The index was fine: searching "GPA" gives
-  page 1.
-- **Impact:** F07; `PromptBuilder`. Checked the same evening with `qwen3:14b`, the same two
-  requests three times: the sentence alone did not fix it. The first request was answered
-  without a search all three times (a separate problem; see the next entry), and
-  the follow-up searched for "transcript" alone in two runs and tried "GPA transcript" first in
-  the third. Not checked with the cloud model.
-  Diagrams updated: none needed.
-
-### A first reply without a search is sent back once (2026-11-13, after Slice 3)
+### A first reply without a search is sent back once (2026-11-13)
 - **Original design:** the agent loop takes a reply without tool calls as the model's final
-  answer, at any step (SD03). The prompt tells the model to use the tools and never to answer
-  from memory.
+  answer, at any step (SD03).
 - **Implemented change:** when the first reply to a request has text and no tool call,
   `AgentController.run()` asks the model once more, through the new
   `PromptBuilder.buildSearchFirstRequest()`: search now if the request is about the user's files,
   or reply with only `NO SEARCH NEEDED` if it needs nothing from them. Then:
   - the model calls a tool: the loop runs the call as its first step and goes on as before;
-  - the model replies `NO SEARCH NEEDED` (in any letter case, with or without other words), or
-    sends nothing, or can't be reached: its first reply is the answer;
+  - the model replies `NO SEARCH NEEDED`, sends nothing, or can't be reached: its first reply is
+    the answer;
   - the model replies with other text and no tool call: that second reply is the answer. It is
     never asked a third time.
+- **Reason:** local models sometimes answer "your files don't say" without having looked.
+  Requiring a tool call on the first step would force a search for "hi" too; the fixed reply lets
+  the model decline.
+- **Impact:** F07, F12; `AgentController`, `PromptBuilder`. Diagrams: cd05, SD03.
 
-  The first reply and the instruction reach the model through a copy of the conversation and
-  aren't stored, like a reply the parser rejects. The progress listener is told ("The model
-  replied without searching; asking it to search the files first"). An empty first reply still
-  goes to the reformat request as before. This costs one more model call for every request that
-  needs no search, in addition to `maxSteps`.
-- **Reason:** local models answer "your files don't say" without having looked. Seen with
-  `qwen3:8b` on 2026-11-12 and with `qwen3:14b` on 2026-11-13: "What's my current GPA?" was
-  answered at step 1 with no tool call in every run, although searching "GPA" finds the
-  transcript. Requiring a tool call on the first step would force a search for "hi" too, which a
-  user may type just to see that the model works; the fixed reply lets the model decline, and
-  keeps the extra call short because the greeting isn't written again.
-- **Impact:** F07, F12; `AgentController`, `PromptBuilder`. Checked with `qwen3:14b` on a copy
-  of Amar's two transcript files: "What's my current GPA?" searched for "GPA" and answered from
-  page 1 in 3 runs of 3 (it answered without searching in 3 of 3 before); "hi", and "thanks" as a
-  follow-up, kept their first reply without a search in 3 runs of 3, in about 14 seconds each.
-  Not checked with the cloud model. Not solved: a model that declines when it should search.
-  Diagrams updated: not yet (SD03 at the freeze).
-
-### The embedding model: which one, when it loads, and how it fails (2026-11-14, Tier 2)
-- **Original design:** `LocalEmbeddingModel` adapts "an in-process ONNX model" to
-  `EmbeddingModel` and has one field, `modelFile: Path`. The model was to be chosen by
-  benchmarking. A model that fails to load is found at startup, and the facade turns semantic
-  search off. `EmbeddingModel` has `embed()` and `getDimension()` and names no exception.
+### `LocalEmbeddingModel`: no model file, and loaded on first use (2026-11-14)
+- **Original design:** `LocalEmbeddingModel` has one field, `modelFile: Path`. A model that fails
+  to load is found at startup, and the facade turns semantic search off.
 - **Implemented change:**
-  - **The model** is BAAI's bge-small-en-v1.5 (384 numbers per vector, English), from
-    LangChain4j's `langchain4j-embeddings-bge-small-en-v15`. It is inside that jar, so there is no
-    `modelFile`. `LocalEmbeddingModel` takes `nativeLibraryFolder: Path` instead: where the
-    tokenizer library unpacks its native code, a folder under the app's data folder.
-  - **Loading** happens on the first `embed()` call, not at startup. A failed load is remembered
-    and every later call fails at once.
-  - **Failure** is the new unchecked `EmbeddingException`, for a model that can't be loaded and
-    for a text that can't be embedded (a blank one).
-  - **Two process-wide properties** are set before the load, because the tokenizer library
-    (DJL) has no other configuration: `DJL_CACHE_DIR`, and `ai.djl.offline`.
-  - **No thread pool.** A call's texts are embedded one after another on the calling thread.
-- **Reason:**
-  - The model was chosen without a benchmark of candidates: of the four small models the
-    library offers, it is the one whose input limit (510 tokens) holds a whole 1,500-character
-    chunk, so `Chunker` stays as it is.
-  - Loading takes about 0.9 seconds (measured), which a command such as `findany show` would pay
-    for nothing. `embed()` can fail on any call anyway, so its callers need a fallback either
-    way, and a failed load is one more case of it.
-  - Left alone, the tokenizer library unpacks into `~/.djl.ai`, and on a computer with CUDA it
-    downloads a different build of itself.
-  - ONNX Runtime already spreads one text's computation over the processor's cores. Measured on
-    a Ryzen 9 5900XT (16 cores) with 256 chunks of 1,500 characters: 27 chunks a second one text
-    at a time, 29 with 4 texts at once, 20 with 32 (the library's default). With ONNX Runtime
-    held to one thread per text, 16 callers gave 26. No setting was meaningfully faster, so the
-    one without a number of ours was kept.
-- **Impact:** F05; `EmbeddingModel`, `LocalEmbeddingModel`, the new `EmbeddingException`. The
-  run-time class path grows by about 180 MB (the model, ONNX Runtime, the tokenizer). An Intel
-  Mac has no native tokenizer library in the jar, so it will get keyword search with the warning.
-  Nothing uses the model yet. Diagrams updated: not yet (cd02 at the freeze).
+  - **No `modelFile`.** The model is inside LangChain4j's
+    `langchain4j-embeddings-bge-small-en-v15` jar. `LocalEmbeddingModel` takes
+    `nativeLibraryFolder: Path` instead: where the tokenizer library unpacks its native code, a
+    folder under the app's data folder.
+  - **Loading** happens on the first `embed()` call. The facade holds the `EmbeddingModel`, and
+    the GUI makes that call at startup through the new
+    `FindAnythingService.loadEmbeddingModel()`; a CLI command loads the model only if it embeds
+    something.
+  - **Failure** is the new unchecked `EmbeddingException`. When a search meets it,
+    `SearchEngine` turns semantic search off itself, logs one warning and returns the keyword
+    results; the GUI and the CLI show the warning.
+- **Reason:** loading takes about 0.9 seconds (measured), which a command such as `findany show`
+  would pay for nothing. With loading on first use, a failure appears inside a search, so the
+  engine is where it is handled.
+- **Impact:** F05; `LocalEmbeddingModel`, `SearchEngine`, `FindAnythingService`. The `core`
+  package now uses `embedding`. The Adapter pattern is unchanged. Diagrams: cd00, cd01, cd02,
+  cd04, SD02.
 
-### Vectors in `SearchIndex`, with no `ContentStore` (2026-11-14, Tier 2)
-- **Original design:** `SearchIndex` has `addEmbeddings(contentHash, vectors)`,
-  `findContentWithoutEmbeddings(limit)` and `vectorSearch(queryVector, searchFilters, limit)`. The
-  chunks to embed come from `ContentStore.get()`, and `addEmbeddings()` writes to both stores.
-  Nothing says where `IndexStatus.chunksWithoutEmbeddings` is counted.
-- **Implemented change:** the three methods as designed, on the index alone, plus two new ones:
-  - `getChunksOfContent(contentHash)`: the chunks of one indexed file with that hash whose chunks
-    have no vectors. It stands in for `ContentStore.get()`.
-  - `countChunksWithoutEmbeddings()`: the number for the status.
-
-  What the design left open:
-  - A chunk's vector is kept on the chunk's own index entry, and `put()` stores the vector of a
-    chunk that has one. Lucene can't add a vector to an existing entry, so `addEmbeddings()`
-    stores each file with that content again, chunks and vectors together. It works from the
-    last committed snapshot.
-  - Two files can have the same hash and different chunks, when one extraction was cut short.
-    `addEmbeddings()` gives the vectors only to the files with as many chunks as there are
-    vectors; the other file's chunks are handed out by `getChunksOfContent()` next.
-  - "Without embeddings" is worked out from the entries (a chunk, and no vector), not from a
-    mark written at indexing time, so an index made before F05 is embedded with no rebuild.
-  - A vector hit's score is the cosine similarity (1 for the same direction, 0 for unrelated).
-  - Chunks read back from the index carry no vector: vectors are searched, never handed out.
+### Vectors in `SearchIndex`, with no `ContentStore` (2026-11-14)
+- **Original design:** the chunks to embed come from `ContentStore.get()`, and
+  `SearchIndex.addEmbeddings()` writes to both stores.
+- **Implemented change:** `addEmbeddings()`, `findContentWithoutEmbeddings()` and
+  `vectorSearch()` as designed, on the index alone, plus two new methods:
+  - `getChunksOfContent(contentHash)`: the chunks of an indexed file with that hash that have no
+    vectors. It stands in for `ContentStore.get()`, and `Indexer.embedNextBatch()` calls it.
+  - `countChunksWithoutEmbeddings()`: the number for `IndexStatus.chunksWithoutEmbeddings`.
 - **Reason:** `ContentStore` is postponed (see its entry), and the index already holds every
   chunk's text and each file's content hash.
-- **Impact:** F05; `SearchIndex`. A copied or renamed file is embedded again, because the copy's
-  entries start without vectors and vectors can't be read back for reuse. Nothing calls these
-  methods yet. Diagrams updated: not yet (cd02 at the freeze).
+- **Impact:** F05; `SearchIndex`, `Indexer`. Diagrams: cd02, cd03, SD01.
 
-### The indexer's embedding phase: batches, failures, and what the CLI waits for (2026-11-14, Tier 2)
-- **Original design:** when `takeReady()` returns nothing, `Indexer.embedNextBatch()` takes
-  content hashes from `findContentWithoutEmbeddings()`, loads their chunks from `ContentStore`,
-  embeds them and calls `addEmbeddings()`. Files not embedded yet are found by keywords, and the
-  status shows that embedding is in progress. The design gives no batch size and doesn't say what
-  happens when a content can't be embedded.
-- **Implemented change:** `embedNextBatch()` as designed, with the chunks from
-  `SearchIndex.getChunksOfContent()`. `Indexer` and `FindAnythingService` take the
-  `EmbeddingModel` in their constructors. What the design left open:
-  - **Batches.** A pass embeds whole contents until about 64 chunks are done
-    (`EMBED_CHUNKS_PER_BATCH`), commits, tells the listeners, and looks at the queue again, so a
-    file that changed meanwhile is indexed first. The model gets 16 texts per call
-    (`EMBED_TEXTS_PER_CALL`), and a stop request is noticed between calls; a content cut off by a
-    stop is embedded from its start on the next run.
-  - **Failures.** A content that can't be embedded, or whose vectors can't be stored, is logged
-    and left alone for the rest of the run. After three contents in a row
-    (`MAX_EMBEDDING_FAILURES`), embedding is off until the next start, with one warning. Either
-    way the status reaches "up to date" with `chunksWithoutEmbeddings` above zero, and the files
-    are found by keywords.
-  - **The status.** `IndexStatus.chunksWithoutEmbeddings` is now the real number, in the writer
-    and in a read-only process. A request for a file stops counting as pending when the queue is
-    empty, not when embedding ends, so `pendingFiles` is 0 while the state is `EMBEDDING`.
-  - **The CLI waits for embedding.** `IndexStatus.isUpToDate()` is false in the `EMBEDDING`
-    state, so a CLI command that waits for the index also waits for the vectors. A CLI process
-    ends with its command; if it didn't wait, a folder used only from the CLI would never be
-    embedded. The GUI searches meanwhile, as designed.
-  - **`SearchIndex.put()` is one step** (delete and add together), so a file whose new entries
-    can't be stored keeps its old ones. Found while writing the failure handling: a vector of
-    another length than the index's would otherwise have removed the file's entries.
-- **Reason:** the batch sizes come from the measured speed (about 27 chunks a second on the
-  development machine, so a batch is two to three seconds). Three failures in a row means the
-  model itself is broken (a load failure fails every content), and one warning says so better
-  than one per file.
-- **Impact:** F03, F05; `Indexer`, `FindAnythingService`, `CliApp.createService()`,
-  `SearchIndex.put()`. New test double `ScriptedEmbeddingModel`. Checked with the real model on
-  `testdata/corpus` in a scratch data folder: `findany folders add` indexed and embedded the 23
-  files in 16 seconds. Search doesn't use the vectors yet. Diagrams updated: not yet (cd03, SD01
-  at the freeze).
-
-### Hybrid search: a similarity floor, and who turns semantic search off (2026-11-14, Tier 2)
+### Hybrid search has a similarity floor (2026-11-14)
 - **Original design:** `SearchEngine.search()` embeds the query, calls `vectorSearch()` and merges
-  the semantic hits with the keyword hits in `fuseRankings()`. If the model fails to load at
-  startup, or the CLI gets `--keyword-only`, the facade calls
-  `SearchEngine.setSemanticSearchEnabled(false)`. F05's example: "CV" finds a file that only says
-  "résumé". No similarity floor is mentioned, and the facade has no method for the switch.
-- **Implemented change:**
-  - `SearchEngine` takes the `EmbeddingModel` and does what the design says. The facade turns
-    semantic search on in `open()`, so the agent's `SearchTool` gets hybrid results too.
-  - **A floor.** A chunk is a semantic match only at a cosine similarity of 0.62 or more
-    (`SearchEngine.MIN_SIMILARITY`).
-  - **The engine turns itself off.** The model loads on first use (see "The embedding model"),
-    so a failure shows up inside a search. `SearchEngine` then logs one warning, turns semantic
-    search off and returns the keyword results; later searches don't ask the model again. The
-    same happens when the index's vectors have another length than the model's.
-  - **The facade** gets `setSemanticSearchEnabled(enabled)` and `isSemanticSearchEnabled()`.
-    `findany search --keyword-only` calls the first for that one search.
-  - **No query prefix.** The model's authors recommend putting "Represent this sentence for
-    searching relevant passages: " before a query. It isn't used.
+  the semantic hits with the keyword hits in `fuseRankings()`.
+- **Implemented change:** as designed, with one rule added: a chunk is a semantic match only at a
+  cosine similarity of 0.62 or more (`SearchEngine.MIN_SIMILARITY`). The facade gains
+  `setSemanticSearchEnabled(enabled)` and `isSemanticSearchEnabled()`, which
+  `findany search --keyword-only` uses.
 - **Reason:** vector search always returns the nearest chunks, however far, so without a floor
   every query lists unrelated files and "No results" never appears. Measured with the real model
-  on `testdata/corpus` (56 queries, the nearest chunk's similarity):
-  - 25 queries about things the corpus doesn't hold: 0.49 to 0.61, except the one-letter query
-    "a" (0.64).
-  - 31 queries about things it holds: 25 scored 0.63 to 0.90 ("tooth doctor" finds
-    `dentist.txt` at 0.71, "spending plan" the budget at 0.70, "groceries" the grocery list at
-    0.73).
-  - The other 6 scored 0.56 to 0.60, no higher than nonsense, and for most of them the right
-    file wasn't the nearest either. **F05's own example is one of them:** "CV" and "my CV"
-    reach the résumé at 0.56 to 0.57, and "curriculum vitae" doesn't have it in the nearest
-    four. With this model, "CV" does not find the résumé.
-  - With the prefix (tried on 25 of the queries), most scores in both groups were a few
-    hundredths lower and the groups overlapped as much; "CV" stayed at 0.57.
-- **Impact:** F05, F06, F07; `SearchEngine`, `FindAnythingService`, `CliApp`. A search that
-  embeds its query takes about a second longer in the CLI (the model's load): 2.1 seconds
-  against 1.1 with `--keyword-only`, on `testdata/corpus`. Checked by Amar the same day: the
-  agent with hybrid results, on his own documents and with the "tooth doctor" question; he
-  reported no problem. Diagrams updated: not yet (cd01, cd04, SD02 at the freeze).
+  on `testdata/corpus` (56 queries): 24 of the 25 queries about things the corpus doesn't hold
+  scored 0.49 to 0.61, and 25 of the 31 about things it holds scored 0.63 to 0.90.
+- **Impact:** F05, F06, F07; `SearchEngine`, `FindAnythingService`, `CliApp`. Diagrams: cd01,
+  cd04.
 
-### File names are embedded too, so "CV" finds `resume.pdf` (2026-11-14, Tier 2)
-- **Original design:** only chunk text is embedded. A file's name is matched by keywords.
+### File names are embedded too, so "CV" finds `resume.pdf` (2026-11-14)
+- **Original design:** only chunk text is embedded. A file's name is matched by keywords. F05's
+  example: "CV" finds a file that only says "résumé".
 - **Implemented change:** every indexed file also gets a vector for its name, written with its
-  folder's name, as in `Résumé/resume.pdf` (`Indexer.nameText()`).
-  - **`SearchIndex`** keeps it on the file's first entry. Two new methods:
-    `findFilesWithoutNameEmbeddings(limit)` and `addNameEmbedding(file, vector)`.
-    `addEmbeddings()` keeps a file's name vector, and `addNameEmbedding()` keeps the chunks'
-    vectors; for that, the index now reads a file's vectors back when it stores the file again.
-    `put()` stores a file without a name vector, so a changed file's name is embedded again.
-  - **`vectorSearch()`** looks up the nearest chunk texts and the nearest names with the one
-    query vector and the same filters, and returns one list, nearest first. A file found by its
-    name comes with its first chunk (none for a file without text), as a keyword match on the
-    name does. An entry found both ways is one hit with the higher similarity. The names go
-    through the same floor (0.62) in `SearchEngine`, which is unchanged.
-  - **`Indexer.embedNextBatch()`** embeds names once no chunk is left to embed, 64 per pass
-    (`EMBED_NAMES_PER_BATCH`), with the same failure handling as the texts.
-    `IndexStatus.chunksWithoutEmbeddings` still counts chunks only.
-- **Reason:** Amar searched his own documents for "cv" and got one file, not his résumé files;
-  the hybrid-search entry above records the same on the test corpus. A résumé rarely says what
-  it is in its text, but its name does. Measured with the model (cosine similarity to the query
-  "cv"): `Résumé/resume.pdf` 0.68, `Résumé/template.typ` 0.64,
-  `work/resume-jordan-rivera.docx` 0.64, against 0.45 to 0.60 for eleven other names. The
-  name must be embedded on its own: put in front of a résumé's text, the two together scored
-  0.60, under the floor. Written as it is (`folder/name.ext`), a name scored as well as or better
-  than with the punctuation and the extension removed.
-- **Impact:** F05, F06; `SearchIndex`, `Indexer`. Checked on `testdata/corpus` with the real
-  model: "cv", "my CV" and "curriculum vitae" each put `resume-jordan-rivera.docx` first, which
-  makes F05's example work; "picture" finds `photo.png`, a file with no text; nonsense queries
-  still find nothing. An index made before this change got its 23 name vectors on the next
-  start, with no rebuild. Seen and not acted on: a name can pass the floor by a little without
-  being related ("my CV" also lists `dentist.txt`, second). Diagrams updated: not yet (cd02,
-  cd03, SD01, SD02 at the freeze).
+  folder's name, as in `Résumé/resume.pdf` (`Indexer.nameText()`). `SearchIndex` gains
+  `findFilesWithoutNameEmbeddings(limit)` and `addNameEmbedding(file, vector)`, and
+  `vectorSearch()` looks up the nearest chunk texts and the nearest names with the one query
+  vector. `Indexer.embedNextBatch()` embeds names once no chunk is left to embed.
+- **Reason:** a résumé rarely says what it is in its text, but its name does. Measured with the
+  model (cosine similarity to the query "cv"): the résumé's text 0.56 to 0.57, under the floor;
+  `Résumé/resume.pdf` as a name 0.68, against 0.45 to 0.60 for eleven unrelated names.
+- **Impact:** F05, F06; `SearchIndex`, `Indexer`. On `testdata/corpus`, "cv", "my CV" and
+  "curriculum vitae" each put `resume-jordan-rivera.docx` first, which is F05's example;
+  "picture" finds `photo.png`, a file with no text. Diagrams: cd02, cd03, SD01, SD02.
 
-### Embedding in the status, the warning, and loading the model at GUI startup (2026-11-14, Tier 2)
-- **Original design:** the status indicator shows that embedding is in progress. When the model
-  fails to load, search falls back to keywords "with a warning". The facade has no method for
-  loading the model, and the design doesn't word the status or the warning.
-- **Implemented change:**
-  - **GUI status** (`MainWindow.statusText()`): "Embedding… 120 passages left" while the indexer
-    embeds, and "Embedding…" while only file names are left. Once the index is up to date,
-    passages that still have no embedding are named: "Up to date · 8 passages not embedded"
-    (also in a read-only window). That is what a failed model leaves behind.
-  - **GUI warning**: `GuiController` shows one message in the error bar when semantic search is
-    off, "The embedding model could not be loaded, so search matches words only, not meaning."
-    It checks after the model's load at startup and after each search.
-  - **Loading at GUI startup**: new `FindAnythingService.loadEmbeddingModel()`, which loads the
-    model on the background thread and, if that fails, turns semantic search off. `GuiController`
-    calls it when the window opens. The CLI doesn't: a command loads the model only if it embeds
-    something.
-  - **CLI**: the progress line reads "Embedding... 637 passages left", then "Embedding the file
-    names...". `findany index status` gets a line, "Embeddings: every passage has one" or
-    "Embeddings: 3 passages without one (found by keywords only)". The CLI's warning is the log's
-    line on stderr ("Semantic search is unavailable, so search uses keywords only: …").
-- **Reason:** the model takes about a second to load (measured), which the first search in the
-  window would otherwise wait for. Loading it at startup is also where the design looks for a
-  failed load. "Up to date" alone would hide that some passages can't be found by meaning.
-- **Impact:** F03, F05; `MainWindow`, `GuiController`, `FindAnythingService`, `CliApp`. Checked
-  from the CLI on `testdata/corpus` with the real model. **Not looked at on a real display:**
-  the status texts and the warning in the window; the GUI tests cover them on the headless
-  toolkit only. Diagrams updated: not yet (cd01 at the freeze).
-
-### F10: document comparison is not implemented (2026-11-14, Tier 2)
+### F10: document comparison is not implemented (2026-11-14)
 1. **Original Stage 1 feature and ID:** F10 Document comparison. Two files are rebuilt from their
    chunks and diffed line by line; only the diff goes to the model, which summarizes it with
    verified citations. It is reached from "Compare" on two selected results, from
@@ -1001,20 +365,16 @@ Diagrams updated:
    answers with a citation from each, and every citation is verified. On `testdata/corpus` with
    the cloud model (2026-11-05), "And how much is the rent?" gave $1,850 from the 2025–2026 lease
    and $1,925 from the 2026–2027 draft, both verified.
-3. **What changed and why:** F10 was last in the Tier 2 order and is left out (status: Not
-   implemented), decided by Amar on 2026-11-14. The benefit doesn't justify the complexity:
+3. **What changed and why:** F10 was last in the order of work and is left out, decided on
+   2026-11-14. The benefit doesn't justify the complexity:
    - **The agent already compares documents, only without a diff.** A question about what differs
      between two files is answered today with citations from both.
-   - **The cost.** F10 is the largest feature that was left: six classes and records, a third
+   - **The cost.** F10 is the largest feature that was left: five classes and records, a third
      tool, a second model request with its own prompt, a facade method, a CLI command, selecting
      two rows in the table, and a side-by-side view.
    - **A line diff suits only two versions of one document.** For two different documents (two
      job offers, two course outlines) nearly every line differs, and the agent is the better
      tool.
-   - **A line diff of extracted text is likely to be noisy** (expected, not tested): a PDF's line
-     breaks follow its layout, so a paragraph that reflows between two drafts would show as
-     changed throughout. A usable version would need more than the design's line-by-line diff,
-     such as normalizing whitespace or comparing by words.
 4. **How the scope changed:** the user can still ask what differs between two files and gets a
    cited, verified answer. What is lost:
    - **Completeness:** the agent reads the best passage of each file and excerpts of at most
@@ -1030,56 +390,58 @@ Diagrams updated:
    `AgentController.summarizeDiff()`, `PromptBuilder.buildDiffSummaryRequest()`,
    `GuiController.onCompareRequested()`, `DetailPane.showComparison()` and `findany compare`.
    `ResultsView` selects one row at a time. Command keeps its structure with two concrete
-   commands, `SearchTool` and `ReadExcerptTool`; Facade has one operation fewer.
-   Diagrams updated: not yet (at the freeze: cd01, cd04, cd05, the use-case diagram, SD05).
+   commands, `SearchTool` and `ReadExcerptTool`; Facade has one operation fewer. Diagrams: cd01,
+   cd04, cd05, the use-case diagram, SD03 (its note), SD05, AD01.
 
-### `FileWatcher`: one watcher per folder, and what the design left open (2026-11-14, Tier 2)
-- **Original design:** `FileWatcher` "runs on its own thread", with `indexConfig`, `changeQueue`,
-  `watchedFolders: Set<Path>`, `start()`, `stop()`, `watch()` and `unwatch()`. For each event it
-  checks `IndexConfig.isIncluded()` and calls `ChangeQueue.offer()`; when events are lost it
-  offers the whole search folder. A path is processed after a quiet period of about two seconds.
-  The design doesn't say which processes watch, what happens to folder events, or how a folder
-  that can't be watched is reported.
+### `FileWatcher`: one watcher per folder, watching from the GUI (2026-11-14)
+- **Original design:** `FileWatcher` "runs on its own thread", with
+  `watchedFolders: Set<Path>`, `start()`, `stop()`, `watch()` and `unwatch()`. Only the process
+  with the write lock watches, and the facade has `open(watchFiles)`. A changed path is
+  processed after a quiet period of about two seconds.
 - **Implemented change:**
-  - **One library watcher per search folder.** `watchedFolders` is a
-    `Map<Path, DirectoryWatcher>`, and each watched folder has its own thread (named
-    `findany-watcher`), not one thread for all. `watch()` returns at once: walking the folder and
-    registering it run on a watcher thread.
-  - **Only the GUI watches.** `findany gui` opens the index with `open(true)`; every other
-    command runs once and exits, so it only rescans. As designed, only the process with the
-    write lock watches.
   - **The quiet period** is two seconds in the GUI (`CliApp.GUI_QUIET_PERIOD`) and zero for the
-    other commands. `CliApp.main()` chooses it from the first argument, because the service is
-    built before the command line is parsed; `createService()` takes it as a parameter. In the
-    GUI it applies to every path in the queue, so a rescan's files also wait two seconds.
+    other commands, which run once and exit.
+  - **One library watcher per search folder.** `watchedFolders` is a
+    `Map<Path, DirectoryWatcher>`, and each watched folder has its own thread, not one thread for
+    all.
+  - **The GUI watches.** `findany gui` opens the index with `open(true)`; every other command
+    runs once and exits, so it rescans instead. As designed, only the process with the write
+    lock watches.
   - **Two package-private methods hold the decisions:** `onChange(path, directory, deleted)` and
-    `onOverflow(folder)`. A created or changed folder is ignored (its files arrive as their own
-    events); a deleted folder is offered once and `SearchIndex.remove()` drops everything under
-    it.
-  - **A folder is offered once it is registered**, so a change made between the facade's rescan
-    and the watch taking effect is found by a second rescan.
-  - **Excluded folders are never registered** (`.git`, `node_modules`, the app's own data
-    folder), links are not followed, and the library's file hashing is off: it would read every
-    file at startup.
-  - **Paused folders stay watched**, as they are still rescanned. A folder that can't be watched,
-    or whose watcher ends because the folder is gone, is logged with a warning; its changes are
-    then picked up at startup and on request, and it isn't watched again until the next start.
-  - **GUI:** `GuiController.showResults()` loads the selected file's preview again when that file
-    was indexed again (found by Amar's check; see `test-failures.md`).
-- **Reason:** a library watcher's folders can't change after it is built (read in its 0.19.1
-  sources), and search folders never overlap, so one watcher per folder is the simplest form that
+    `onOverflow(folder)`.
+- **Reason:** a watcher of the directory-watcher library can't change its folders after it is
+  built, and search folders never overlap, so one watcher per folder is the simplest form that
   supports adding and removing folders. The two methods are in the design's own types, so they
-  are tested without waiting for the operating system, and a later improvement has one place to
-  go.
-- **Impact:** F01, F03, F11; `FileWatcher`, `FindAnythingService` (`open()`, `close()`,
-  `addSearchFolder()`, `removeSearchFolder()`), `CliApp`, `GuiController`. Checked on Linux: a
-  script against the built jars (create, modify, rename, delete, excluded files, a symbolic
-  link's target, new and deleted folders, `unwatch()`, `stop()`), and Amar's check in the GUI.
-  **Not checked:** Windows, where it isn't documented whether changes inside a junction's target
-  are reported (see `TODO.md`, "Live index updates"). A rename is still extracted again (see
-  "`ContentStore` postponed"). Diagrams updated: not yet (cd03 at the freeze: `watchedFolders`'
-  type and the two methods).
+  are tested without waiting for the operating system.
+- **Impact:** F01, F03; `FileWatcher`, `FindAnythingService`, `CliApp`. Diagrams: cd03.
 
-## Pending (decide during implementation; write the entry if it happens)
+### `CliApp` builds the system's objects, so `ui` uses more packages
+- **Original design:** cd00 draws `ui` using `core`, `agent` and `indexing`.
+- **Implemented change:** `CliApp.createService()` builds the objects the facade needs (the
+  settings and conversation stores, the extractor, the embedding model, the client factory, the
+  redactor, the privacy log) and passes them to `FindAnythingService`. The views also show types
+  from the lower packages. So `ui` also uses `config`, `embedding`, `llm`, `privacy`, `search`
+  and `storage`.
+- **Reason:** `CliApp` is the entry point, and with constructor injection one place has to build
+  every object; putting it there keeps the facade free of construction code and lets tests pass
+  in their own objects.
+- **Impact:** `CliApp`; the Facade pattern is unchanged. Diagrams: cd00.
 
-- GUI: editing exclusions and pausing from the GUI (CLI-only).
+### Four small parts of features are not built
+Each line gives the original design, the implemented change and the reason.
+- F02 extracts "title, author, modification date, page or slide count" with the text.
+  `ExtractedDocument` holds the content type and the pages; the modification date comes from
+  the file system, and no title or author is read, because search and the filters work on a
+  file's name, text, type, date and size.
+- F03 has `findany watch`, which "keeps the index updated until stopped", and has every command
+  first catch up on changed files. There is no `watch` command: the GUI watches the search
+  folders while it is open, and every command that reads or changes the index first catches up,
+  so the index is current whenever it is used. The `model`, `privacy`, `policy` and
+  `privacy-log` commands don't use the index and skip the catch-up.
+- F01 and UC02 (1a) let the user override a built-in exclusion after explicit confirmation. The
+  built-in rules always apply (`IndexConfig.isIncluded()`), so a credential file can never reach
+  the index or a model, and no confirmation step is needed.
+- F08's model error is "the same fallback as F07, with a retry option". The fallback is there,
+  without a retry control: the request stays in the conversation and the user sends it again.
+
+Diagrams: SD01 (the extractor's return), SD07 (its note on overriding a built-in exclusion).

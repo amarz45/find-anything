@@ -668,7 +668,7 @@ surprising.)*
 - **2026-11-14 (Session 10: the live watcher, Claude Code):**
   - Done, on branch `live-watcher` (3 code commits, the rest documents; PR #13, CI green on
     Ubuntu and Windows): F03 is Implemented. The entry is in `docs/logs/design-changes.md`
-    ("`FileWatcher`: one watcher per folder, and what the design left open").
+    ("`FileWatcher`: one watcher per folder, watching from the GUI").
     1. `a7ca3f5`: `indexing/FileWatcher` over directory-watcher 0.19.1, one library watcher and
        thread per search folder, hashing off, excluded folders never registered.
     2. `1f06018`: `FindAnythingService.open(true)` starts it; `addSearchFolder()` and
