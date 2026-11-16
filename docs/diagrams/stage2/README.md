@@ -2,9 +2,9 @@
 
 The Stage 1 diagrams, corrected to describe the system as it is implemented. Each file has the same name and sub-folder as its Stage 1 original in [`docs/diagrams/`](../), which is unchanged, so the two versions can be opened side by side. Every title ends with ", as implemented".
 
-The reason for each change is in [`docs/logs/design-changes.md`](../../logs/design-changes.md). The notation and the editing tips are in the [Stage 1 README](../README.md).
+The reason for each change is in section 4 of the [Stage 2 report](../../stage2-report.md). The notation and the editing tips are in the [Stage 1 README](../README.md).
 
-Members were added to the class diagrams only where the design-changes log names them, a sequence diagram calls them, or a class's part in the design can't be understood without them. Constructors, getters, constants and private helpers are not drawn.
+Members were added to the class diagrams only where section 4 of the Stage 2 report names them, a sequence diagram calls them, or a class's part in the design can't be understood without them. Constructors, getters, constants and private helpers are not drawn.
 
 ## What changed in each diagram
 

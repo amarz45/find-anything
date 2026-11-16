@@ -81,16 +81,16 @@ on its diagnostics.
 
 ## Scope and changes
 
-- Stage 2 scope is in `docs/notes/handoff.md` (Tier 1 must work; Tier 2 if time allows). Don't add
-  features or abstractions beyond the design.
+- Don't add features or abstractions beyond the design.
 - **Stop and ask before changing the design** (adding, removing or renaming a class, method or
-  pattern, or changing behaviour the report describes). When the change is approved, add an entry
-  to `docs/logs/design-changes.md`.
-- When a feature's code lands, update its row in `docs/traceability.md`.
-- When a test or check catches a real bug, add an entry to `docs/logs/test-failures.md`.
+  pattern, or changing behaviour a report describes). When the change is approved, record it in
+  the "State" section of `docs/notes/handoff.md` as Original design → Implemented change → Reason
+  → Impact, so the next report can explain it.
+- When a test or check catches a real bug, record it in the same section: what found it, the
+  symptom, the cause and the fix.
 - Low-priority improvements to remember go in `TODO.md` under a fitting section, in its style: a
-  bold lead sentence, what happens today, what a better version would do, and whether it needs a
-  design-changes entry. Before choosing where any note goes, look for a file that already has that
+  bold lead sentence, what happens today, what a better version would do, and whether it is a
+  design change. Before choosing where any note goes, look for a file that already has that
   purpose.
 
 ## Commits

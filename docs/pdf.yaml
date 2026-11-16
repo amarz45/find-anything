@@ -15,6 +15,9 @@ variables:
     x: 2cm
     y: 2cm
   fontsize: 10pt
+  # Typst's own default font, named because newer Typst versions refuse the
+  # empty font list that Pandoc's template passes when none is set.
+  mainfont: Libertinus Serif
   # Typst rules: let long tables break across pages, and keep table text
   # small, left-aligned, and unhyphenated so class and method names stay intact.
   header-includes: |

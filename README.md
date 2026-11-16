@@ -1,15 +1,21 @@
 # Find Anything
 
-Find Anything is a cross-platform desktop application (JavaFX GUI and a `findany` CLI) that indexes the files on your computer and lets you find files and get answers from them in natural language. An AI agent plans searches, reads the relevant excerpts, compares documents, and answers questions with citations that are checked against the files. The language model can be a cloud model or a local one, and sensitive content is withheld or redacted before anything reaches a cloud model.
+Find Anything is a cross-platform desktop application (JavaFX GUI and a `findany` CLI) that indexes the files on your computer and lets you find files and get answers from them in natural language. An AI agent plans searches, reads the relevant excerpts, and answers questions with citations that are checked against the files. The language model can be a cloud model or a local one, and sensitive content is withheld or redacted before anything reaches a cloud model.
 
 This is the EECS3311 (Fall 2026) course project.
 
-## Stage 2: implementation (in progress)
+## Stage 2: implementation
 
-The application is being built in Stage 2 (due November 15, 2026). Indexing, search by keywords and
-by meaning, filters, the agent (`ask`), the GUI and the privacy features work. While the GUI is
+**[Read the Stage 2 implementation report](docs/stage2-report.md)** (PDF copy:
+[`docs/stage2-report.pdf`](docs/stage2-report.pdf)).
+**[Watch the demonstration video](https://youtu.be/mcVUT82xOac)**, which has a chapter for each
+feature.
+
+Thirteen of the fourteen designed features are implemented: indexing, search by keywords and by
+meaning, filters, the agent (`ask`), the GUI and the privacy features. Text is extracted from PDF,
+DOCX, PPTX, TXT and MD files; a file of another format is found by its name. While the GUI is
 open it watches the search folders, so a changed file is indexed a couple of seconds later; the
-command line picks changes up by a rescan each time it runs. One part of the design is left out:
+command line picks changes up by a rescan when it runs. One part of the design is left out:
 document comparison with a diff (F10). The agent can still be asked what differs between two files
 and answers with citations from both.
 
@@ -66,7 +72,7 @@ unverified and open the file at the quoted passage. "Settings…" chooses and te
 backend, turns redaction categories on or off, and shows the privacy log. The GUI tests run the
 JavaFX toolkit without a display.
 
-### Using the command line (so far)
+### Using the command line
 
 ```
 findany folders add ~/Documents          # add a folder; it is indexed right away
@@ -102,7 +108,7 @@ waits for it ("Embedding... 120 passages left"), and the window's status shows t
 keep searching. If the model can't be loaded on a computer, search goes on with keywords only and
 says so.
 
-Every command first catches up on files that changed since the last run. If another Find Anything
+Every command that uses the index first catches up on files that changed since the last run. If another Find Anything
 process is updating the index, the command runs read-only and says so. The index and settings
 live in `FINDANY_HOME` (default: the platform's app-data folder, for example
 `~/.local/share/find-anything`); set that variable to try the app on test data without touching
@@ -126,18 +132,20 @@ testdata/                fictional sample files for testing and demos, and their
 docs/
   stage1-report.md       the Stage 1 design report (the main version)
   stage1-report.pdf      PDF copy of the report, built from the Markdown file
-  traceability.md        feature-to-implementation mapping, kept up to date during Stage 2
-  logs/                  AI collaboration log, design changes, defects found
+  stage2-report.md       the Stage 2 implementation report (the main version)
+  stage2-report.pdf      PDF copy of the report, built from the Markdown file
   notes/handoff.md       the state of the work and what comes next, updated every session
   notes/                 working notes (Tika findings)
-  pdf.yaml               settings for building the PDF
-  table-widths.lua       small filter that sizes table columns in the PDF
-  diagrams/              UMLet sources (.uxf) and images (.png) of every diagram
+  pdf.yaml               settings for building the Stage 1 PDF
+  stage2-pdf.yaml        settings for building the Stage 2 PDF
+  table-widths.lua       small filter that sizes table columns in the PDFs
+  diagrams/              UMLet sources (.uxf) and images (.png) of every Stage 1 diagram
+  diagrams/stage2/       the same diagrams as implemented in Stage 2
 ```
 
-## Building the report as a PDF
+## Building the reports as PDFs
 
-The PDF is built from `docs/stage1-report.md` with [Pandoc](https://pandoc.org) and the [Typst](https://typst.app) PDF engine. Both are single programs with no other dependencies. Typst includes its own fonts, so the PDF looks the same on every computer.
+Each PDF is built from its Markdown file (`docs/stage1-report.md`, `docs/stage2-report.md`) with [Pandoc](https://pandoc.org) and the [Typst](https://typst.app) PDF engine. Both are single programs with no other dependencies. Typst includes its own fonts, so the PDF looks the same on every computer.
 
 ### 1. Install Pandoc (3.1.3 or newer) and Typst
 
@@ -154,7 +162,7 @@ pandoc --version
 typst --version
 ```
 
-The build has been tested with Pandoc 3.1.3 and 3.6.4, and Typst 0.13.1.
+The build has been tested with Pandoc 3.1.3 and 3.6.4 with Typst 0.13.1, and with Pandoc 3.7.0.2 with Typst 0.15.1.
 
 ### 2. Build
 
@@ -162,12 +170,13 @@ From the `docs` folder, run:
 
 ```
 cd docs
-pandoc -d pdf.yaml
+pandoc -d pdf.yaml           # writes docs/stage1-report.pdf
+pandoc -d stage2-pdf.yaml    # writes docs/stage2-report.pdf
 ```
 
-This writes `docs/stage1-report.pdf`. The command is the same in PowerShell, Command Prompt, and Unix shells. It has to run from `docs` so that the diagram paths in the report resolve.
+The commands are the same in PowerShell, Command Prompt, and Unix shells. They have to run from `docs` so that the diagram paths in the reports resolve.
 
-All the settings, such as paper size, margins, and font size, are in `docs/pdf.yaml`. Rebuild and commit the PDF whenever the report or a diagram changes.
+All the settings, such as paper size, margins, and font size, are in `docs/pdf.yaml` and `docs/stage2-pdf.yaml`. Rebuild and commit a PDF whenever its report or a diagram changes.
 
 The diagrams keep their full resolution in the PDF, so zoom in to read the large ones. On GitHub, clicking a diagram in the report opens it at full size.
 

@@ -1,8 +1,8 @@
 # To do
 
 Low-priority improvements noticed during implementation. None of these is in the Stage 1 design;
-ask before doing one and log it in `docs/logs/design-changes.md` if it changes behaviour the
-report describes.
+ask before doing one, and record it as a design change (see `AGENTS.md`) if it changes behaviour
+the report describes.
 
 ## CLI search output
 
@@ -28,7 +28,7 @@ report describes.
   scores 0.63), and on Amar's documents "marks" didn't list his transcript (not measured;
   presumably under the floor). A better version would measure names and passages separately on
   more data and give each its own floor, or drop hits that are far below the query's best hit.
-  It changes the floor that the design-changes log records, so it needs an entry.
+  It changes the floor that the Stage 2 report records, so it is a design change.
 - **Rank a file higher when its name and its text both match by meaning.** `vectorSearch()` puts
   name hits and text hits in one list by similarity, so a file found both ways is placed by its
   better hit and gets nothing for the other. A better version would give `fuseRankings()` the
@@ -77,8 +77,8 @@ report describes.
 - **Trim what is sent, not what is kept.** `trimToFit()` changes the conversation itself (as SD03
   draws it), so dropped exchanges also disappear from the saved conversation and from the GUI's
   view of it. A better version would keep the full history and trim only the copy that
-  `PromptBuilder.buildRequest()` sends. This changes behaviour the report describes, so log it in
-  `docs/logs/design-changes.md`.
+  `PromptBuilder.buildRequest()` sends. This changes behaviour the report describes, so it is a
+  design change.
 - **Tell the model that its earlier searches were removed.** A follow-up now sees the earlier
   requests and answers but not the tool calls and results behind them (see the design changes).
   Seen on 2026-11-08: asked why it had skipped some files, the model wrote that it hadn't searched
@@ -101,7 +101,7 @@ report describes.
   `SearchFilters.location` already filters inside `SearchIndex`, and `SearchTool` just doesn't
   expose it (see "The agent's search filters by type and date only" in the design changes).
   Indexing the path's words as a searchable field would let a query with the folder's name find
-  it. Changes behaviour the report describes, so log it in `docs/logs/design-changes.md`.
+  it. Changes behaviour the report describes, so it is a design change.
 - **Try the local model with its thinking turned off.** `LangChain4jClient` doesn't set
   `think()`, so a thinking model such as Qwen3 reasons before every reply. Seen on 2026-11-13
   with `qwen3:14b` on the RX 7600 XT: "What's my cumulative GPA?" took 39 seconds, 35 of them
@@ -110,7 +110,7 @@ report describes.
   seconds, so smaller results no longer help the speed. A better version would turn thinking off
   for local models, or make it a setting, after comparing the time and the answers on the same
   questions: it may cost quality, and some models reject the option, which is why it isn't set
-  today. The design doesn't describe this, so it needs no design-changes entry unless it becomes
+  today. The design doesn't describe this, so it is not a design change unless it becomes
   a setting.
 
 ## The answer format
@@ -145,7 +145,7 @@ report describes.
     reply that only forgot the `CITATIONS:` line parse without a reformat request. Reword the
     format instructions in `PromptBuilder`. Set a low temperature. The model does this on its own
     and only sometimes, so wording alone can't rule it out. A parser change alters the answer
-    format, so log it in `docs/logs/test-failures.md`.
+    format, so record it as a defect fixed (see `AGENTS.md`).
 
 ## Citation verification
 
@@ -162,7 +162,7 @@ Amar may change these later; undecided.
   Models often turn curly quotes, apostrophes and dashes into plain ones (and PDFs contain
   ligatures), so a true quote can come back unverified. Check how often this happens with the
   real models first. Folding those characters before comparing changes behaviour the report
-  describes, so log it in `docs/logs/design-changes.md`.
+  describes, so it is a design change.
 
 ## Live index updates
 
@@ -172,17 +172,17 @@ Amar may change these later; undecided.
   one registration, and neither it, the JDK nor Microsoft's `ReadDirectoryChangesW` page says
   whether changes inside a junction's target are reported. If they are, such a file would be
   indexed. A better version checks it by hand on Windows and, if needed, drops in
-  `FileWatcher.onChange()` any path that passes through a link. No design-changes entry: it is
+  `FileWatcher.onChange()` any path that passes through a link. Not a design change: it is
   what the design already says.
 - **Apply the quiet period to watched changes only.** In the GUI every path in `ChangeQueue`
   waits two seconds, so the startup rescan begins two seconds after the window opens and its
   changed files wait two more. The period is there for the bursts of events one save produces. A
   better version gives `ChangeQueue.offer()` a delay per path, with none for a rescan's paths.
-  That changes `ChangeQueue`, so it needs a design-changes entry.
+  That changes `ChangeQueue`, so it is a design change.
 - **Watch a folder again when it comes back.** A search folder whose watcher ends (the folder
   was deleted, or its drive removed) is logged and not watched again until the next start, even
-  if it returns. A better version tries again on the next rescan of that folder. It needs a note
-  in the `FileWatcher` design-changes entry.
+  if it returns. A better version tries again on the next rescan of that folder. It adds to the
+  `FileWatcher` design change that the Stage 2 report records.
 
 ## GUI
 
@@ -214,7 +214,7 @@ Amar may change these later; undecided.
   file also matched a note elsewhere, and both were withheld. A better version needs the tool
   result to carry per-file structure (a part per file with its source), so the decorator can drop
   one entry and keep the rest; parsing the search tool's text layout in the decorator would be
-  brittle. Changes SD04, so log it in `docs/logs/design-changes.md`.
+  brittle. Changes SD04, so it is a design change.
 - **Keep sensitive files from reaching the model through search results.** Every search result
   carries each file's best passage, so the model sees file text without opening a file, and for a
   very small file that passage is the whole file. Seen in real use in November 2026: a small text
@@ -234,8 +234,8 @@ Amar may change these later; undecided.
     every file name to a cloud model is its own disclosure. One model call per new file is slow
     at indexing time, so names would be judged in batches. A flagged file could stay findable by
     name while its text never leaves the machine, like an unsupported format today. Whatever is
-    chosen changes F01 and F14 as the report describes them, so log it in
-    `docs/logs/design-changes.md`.
+    chosen changes F01 and F14 as the report describes them, so it is a
+    design change.
 
 ## Extraction
 
@@ -244,5 +244,5 @@ Amar may change these later; undecided.
   annotation per visual fragment of a link, so the same URL repeats up to a dozen times per page,
   bloating chunks and skewing keyword scores toward link-heavy pages (seen on a job posting with
   79 annotations over 3 pages). Fix: set the PDF parser's `extractAnnotationText` to false in the
-  extractor's Tika config (or drop duplicate URLs per page). Changes what F02 extracts, so log it
-  in `docs/logs/design-changes.md`.
+  extractor's Tika config (or drop duplicate URLs per page). Changes what F02 extracts, so it is a
+  design change.
