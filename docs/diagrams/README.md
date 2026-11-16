@@ -9,6 +9,7 @@ All diagrams are made in [UMLet](https://www.umlet.com). Each `.uxf` file is the
 | `sequence-diagrams/` | SD01–SD08 |
 | `activity-diagrams/` | AD01: how work moves between threads |
 | `state-diagrams/` | SM01: the index lifecycle |
+| `stage2/` | The Stage 2 versions of these diagrams, corrected to match the implemented system (see its [README](stage2/README.md)) |
 
 ## Notation
 

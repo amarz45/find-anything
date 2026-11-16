@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>Text</id>
+    <coordinates>
+      <x>20</x>
+      <y>20</y>
+      <w>800</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>fontsize=18
+*Class diagram 2: storage and embedding (Adapter), as implemented*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLPackage</id>
+    <coordinates>
+      <x>700</x>
+      <y>480</y>
+      <w>2100</w>
+      <h>490</h>
+    </coordinates>
+    <panel_attributes>storage
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLPackage</id>
+    <coordinates>
+      <x>180</x>
+      <y>90</y>
+      <w>1050</w>
+      <h>180</h>
+    </coordinates>
+    <panel_attributes>embedding
+layer=-1</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>730</x>
+      <y>590</y>
+      <w>630</w>
+      <h>350</h>
+    </coordinates>
+    <panel_attributes>SearchIndex
+--
+-indexDirectory: Path
+-mode: IndexMode
+--
+_+open(indexDirectory: Path): SearchIndex_
++getMode(): IndexMode
++put(file: IndexedFile, chunks: List&lt;Chunk&gt;)
++addEmbeddings(contentHash: String, vectors: List&lt;float[]&gt;)
++addNameEmbedding(file: Path, vector: float[])
++remove(path: Path)
++commit()
++refresh()
++getFile(file: Path): Optional&lt;IndexedFile&gt;
++getChunks(file: Path): List&lt;Chunk&gt;
++getChunksOfContent(contentHash: String): List&lt;Chunk&gt;
++findContentWithoutEmbeddings(limit: int): List&lt;String&gt;
++countChunksWithoutEmbeddings(): int
++findFilesWithoutNameEmbeddings(limit: int): List&lt;Path&gt;
++keywordSearch(query: String, searchFilters: SearchFilters, limit: int): List&lt;ChunkHit&gt;
++vectorSearch(queryVector: float[], searchFilters: SearchFilters, limit: int): List&lt;ChunkHit&gt;
++listFiles(searchFilters: SearchFilters, limit: int): List&lt;IndexedFile&gt;</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>2130</x>
+      <y>720</y>
+      <w>270</w>
+      <h>150</h>
+    </coordinates>
+    <panel_attributes>IndexedFile
+--
+-path: Path
+-fileType: String
+-sizeBytes: long
+-modifiedTime: Instant
+-contentHash: String
+-extractionStatus: ExtractionStatus</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>2620</x>
+      <y>550</y>
+      <w>160</w>
+      <h>120</h>
+    </coordinates>
+    <panel_attributes>Chunk
+--
+-position: int
+-pageNumber: int
+-text: String
+-embedding: float[]</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1640</x>
+      <y>560</y>
+      <w>150</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>ChunkHit
+--
+-file: IndexedFile
+-chunk: Chunk
+-score: double</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>1530</x>
+      <y>750</y>
+      <w>360</w>
+      <h>190</h>
+    </coordinates>
+    <panel_attributes>SearchFilters
+--
+-fileTypes: Set&lt;String&gt;
+-modifiedAfter: LocalDate
+-modifiedBefore: LocalDate
+-minSizeBytes: long
+-maxSizeBytes: long
+-location: Path
+--
++validate(indexConfig: IndexConfig): List&lt;String&gt;
++matches(file: IndexedFile): boolean</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>890</x>
+      <y>140</y>
+      <w>310</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;interface&gt;&gt;
+/EmbeddingModel/
+--
++embed(texts: List&lt;String&gt;): List&lt;float[]&gt;
++getDimension(): int</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>200</x>
+      <y>160</y>
+      <w>210</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Adapter&gt;&gt;
+LocalEmbeddingModel
+--
+-nativeLibraryFolder: Path</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>2180</x>
+      <y>1000</y>
+      <w>170</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>config.IndexConfig
+bg=#F2F2F2
+fg=#666666</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1480</x>
+      <y>1000</y>
+      <w>480</w>
+      <h>260</h>
+    </coordinates>
+    <panel_attributes>One entry per chunk of each indexed file, stored together
+with that file's attributes (path, type, size, modified time).
+So filters are applied inside the query, including vector
+search; a removed file disappears from results immediately;
+and two copies of a file are two separate results.
+remove(path) on a folder removes every file under it.
+addEmbeddings() updates every file with that content.
+
+open() takes the index's write lock if it can (mode WRITER);
+otherwise it opens the index READ_ONLY ("first process wins").
+Single writer: only the indexing worker thread calls put(),
+addEmbeddings(), addNameEmbedding(), remove(), and commit().
+Reads are safe from any thread and see the last refreshed
+snapshot. A READ_ONLY process calls refresh() every few seconds.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2540</x>
+      <y>1000</y>
+      <w>310</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>extractionStatus is OK, PARTIAL,
+METADATA_ONLY, NO_TEXT, or FAILED.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>2930</x>
+      <y>570</y>
+      <w>310</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>embedding stays empty until the second
+indexing phase fills it in (see SD01).</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>1530</x>
+      <y>160</y>
+      <w>370</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>Must be thread-safe: the indexing worker embeds
+chunks while background threads embed queries.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>640</x>
+      <y>300</y>
+      <w>620</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>Adapts an embedding model that runs inside the application's process
+(bge-small-en-v1.5, an ONNX model run through LangChain4j) to EmbeddingModel.
+The model is inside the library's jar; nativeLibraryFolder is where the
+tokenizer's native library is unpacked. The model is loaded on the first embed()
+call; if it can't be loaded or can't embed a text, embed() throws EmbeddingException.</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2390</x>
+      <y>660</y>
+      <w>250</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m1=1
+m2=0..*
+split into &gt;</panel_attributes>
+    <additional_attributes>10.0;70.0;240.0;70.0;240.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1350</x>
+      <y>770</y>
+      <w>190</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;180.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1770</x>
+      <y>650</y>
+      <w>370</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;80.0;360.0;80.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1880</x>
+      <y>920</y>
+      <w>320</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+validated against</panel_attributes>
+    <additional_attributes>10.0;10.0;310.0;10.0;310.0;80.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>400</x>
+      <y>190</y>
+      <w>500</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;490.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1350</x>
+      <y>640</y>
+      <w>300</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;
+returns</panel_attributes>
+    <additional_attributes>10.0;10.0;290.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1780</x>
+      <y>600</y>
+      <w>850</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=0..1</panel_attributes>
+    <additional_attributes>10.0;10.0;840.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1350</x>
+      <y>690</y>
+      <w>810</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;-
+m1=1
+m2=0..*</panel_attributes>
+    <additional_attributes>10.0;10.0;800.0;10.0;800.0;30.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2770</x>
+      <y>600</y>
+      <w>170</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>160.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>2380</x>
+      <y>860</y>
+      <w>170</w>
+      <h>160</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>160.0;150.0;10.0;150.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1190</x>
+      <y>180</y>
+      <w>350</w>
+      <h>20</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>340.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>370</x>
+      <y>230</y>
+      <w>290</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>270.0;120.0;10.0;120.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1350</x>
+      <y>920</y>
+      <w>150</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=.</panel_attributes>
+    <additional_attributes>140.0;80.0;140.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+</diagram>
