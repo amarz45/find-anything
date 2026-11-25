@@ -69,7 +69,7 @@ Section 4 lists every difference from the Stage 1 design, with its reason.
 
 ## 2. Feature to implementation mapping
 
-Each feature below has a table with the fields the instructions list, then a paragraph that follows the classes from the user's input to the result. Every Stage 1 feature is accounted for, and there are no new features. A method is written as `Class.method()` when its class isn't obvious. Each video link opens the demonstration at that feature's segment.
+Each feature below has a table with the fields the instructions list, the original requirement from the Stage 1 report, a paragraph that follows the classes from the user's input to the result, and two screenshots of the feature running: one in the GUI and one in the CLI. The screenshots are frames of the demonstration video, and their files are in [`screenshots/`](screenshots/). Where the implementation differs from the requirement, the status row says so and points to Section 4, which explains what changed and why. Every Stage 1 feature is accounted for, and there are no new features. A method is written as `Class.method()` when its class isn't obvious. Each video link opens the demonstration at that feature's segment.
 
 ### F01: Search folder management
 
@@ -83,9 +83,19 @@ Each feature below has a table with the fields the instructions list, then a par
 | Design patterns | Facade, MVC |
 | Video link/timestamp | [0:00](https://youtu.be/mcVUT82xOac?t=0) |
 
+**Original requirement (Stage 1).** The user chooses which folders are searched, each one recursively, and excludes files within them with patterns, globally or per folder. Folders appear as chips with a menu (Edit exclusions, Pause, Local model only, Remove), and the CLI has `findany folders` and `findany exclude`. A folder that can't be read, an invalid pattern and a folder already covered are refused with a message.
+
 **How it works.** In the GUI, `MainWindow` passes the chosen folder to `GuiController.onAddFolder()`; in the CLI, `findany folders add` does the same from `CliApp`. Both call `FindAnythingService.addSearchFolder()`. The facade first refuses the change if another process owns the index. It then calls `IndexConfig.addFolder()`, which rejects a folder that doesn't exist or is already covered by a search folder, saves the configuration with `SettingsStore.saveIndexConfig()`, starts `FileWatcher.watch()` when the process is watching, and calls `Indexer.requestUpdate(folder)`, which queues a rescan of the whole folder. Exclusions go through `addExclusion()`: `ExclusionRule.parse()` validates the pattern, and the rule is added to one `SearchFolder` or to the global rules. `IndexConfig.isIncluded()` combines the built-in, global and per-folder rules, and both the watcher and the rescan consult it, so an excluded file leaves the index and a re-included one returns. These calls are quick; the indexing they cause happens later on the worker thread.
 
 **Deterministic.** No model is involved.
+
+![F01 in the GUI](screenshots/f01-gui.jpg)
+
+*Screenshot 1. F01 in the GUI: the `docs` folder as a chip with its indexed files, a warning icon on each file whose text couldn't be read, and the status "Up to date · 2 files could not be read". On the left, `findany folders add nonexistent` is refused because the folder doesn't exist.*
+
+![F01 in the CLI](screenshots/f01-cli.jpg)
+
+*Screenshot 2. F01 in the CLI: `findany folders add docs` indexes the folder (23 files, with a warning for each of the 2 that failed), and `findany folders list` lists it.*
 
 ### F02: Text extraction across formats
 
@@ -99,9 +109,19 @@ Each feature below has a table with the fields the instructions list, then a par
 | Design patterns | Adapter |
 | Video link/timestamp | [3:05](https://youtu.be/mcVUT82xOac?t=185) |
 
+**Original requirement (Stage 1).** During indexing, the text of plain-text, PDF, Word and PowerPoint files is extracted, with metadata, and split into chunks that keep their page or slide number so citations can point to an exact place. Parsing runs isolated from the application. An unsupported format is indexed by name; a corrupt or password-protected file is marked failed and listed by `findany index status --failed`.
+
 **How it works.** On the indexing worker thread, `Indexer.indexFile()` hashes the file's bytes and calls `TextExtractor.extract()`. Its adapter, `IsolatedTextExtractor`, runs the parser in a separate process, so a file that crashes or hangs the parser can't take the application down, and returns an `ExtractedDocument` holding the content type and the pages. PDF pages and PowerPoint slides are numbered, with slides in deck order; DOCX, TXT and MD files are one unnumbered page. Each outcome has its own record: an `UnsupportedFormatException` produces an `IndexedFile` marked `METADATA_ONLY`, which is found by its name; an `ExtractionException` (an empty or password-protected file, for example) produces one marked `FAILED`, listed by `findany index status --failed`; a file that can't be read is retried up to three times first. `Chunker.split()` splits each page separately into passages of at most 1,500 characters, so every `Chunk` keeps its page number, and `SearchIndex.put()` stores the file and its chunks in one step.
 
 **Deterministic.** No model is involved.
+
+![F02 in the GUI](screenshots/f02-gui.jpg)
+
+*Screenshot 3. F02 in the GUI: the extracted text of a note in the preview pane, including the line just appended to it from the terminal on the left.*
+
+![F02 in the CLI](screenshots/f02-cli.jpg)
+
+*Screenshot 4. F02 in the CLI: `findany show` prints the text extracted from a PowerPoint deck, one marker per slide, in deck order.*
 
 ### F03: Incremental index updates
 
@@ -115,9 +135,19 @@ Each feature below has a table with the fields the instructions list, then a par
 | Design patterns | Observer |
 | Video link/timestamp | [4:15](https://youtu.be/mcVUT82xOac?t=255) |
 
+**Original requirement (Stage 1).** The index follows files as they are created, modified, renamed, moved or deleted, without a full rebuild, and catches up on changes made while the app was closed. A status indicator shows the progress. Only one process updates the index; a second one opens it read-only.
+
 **How it works.** While the GUI is open, `FileWatcher` keeps one watcher per search folder. For each event, `onChange()` checks `IndexConfig.isIncluded()` and calls `ChangeQueue.offer(path)`, which only records the latest change time, so a burst of events becomes one entry. When the operating system reports lost events, `onOverflow()` offers the whole folder. The indexing worker loops on `ChangeQueue.takeReady()`, which returns a path once it has been unchanged for the quiet period (two seconds in the GUI). The worker removes a path that no longer exists with `SearchIndex.remove()`, rescans a folder with `rescanFolder()`, which compares sizes and modification times with the index, and indexes a file with `indexFile()`. It commits when the queue empties or after twenty files, then calls `notifyStatus()`, which calls `onStatusChanged()` on each `IndexStatusListener`. `GuiController` hands the update to the JavaFX thread, where `MainWindow.showStatus()` shows it and the current search runs again. A CLI command runs once, so it catches up by a rescan before it uses the index. At startup, `FindAnythingService.open()` tries to take the index's write lock through `SearchIndex.open()`; if another process holds it, the index opens read-only, no watcher or worker starts, and `SearchIndex.refresh()` runs every three seconds.
 
 **Deterministic.** No model is involved.
+
+![F03 in the GUI](screenshots/f03-gui.jpg)
+
+*Screenshot 5. F03 in the GUI: a note created in the terminal on the left (`echo … > docs/notes/landlord.txt`) appears in the window's results for "landlord meeting" a couple of seconds later, with no action in the window.*
+
+![F03 in the CLI](screenshots/f03-cli.jpg)
+
+*Screenshot 6. F03 in the CLI: after the note is renamed, edited and deleted, `findany index status` reports that another process is updating the index and that this one is read-only. The window's results no longer list the deleted note.*
 
 ### F04: Filters
 
@@ -131,9 +161,19 @@ Each feature below has a table with the fields the instructions list, then a par
 | Design patterns | Facade |
 | Video link/timestamp | [6:51](https://youtu.be/mcVUT82xOac?t=411) |
 
+**Original requirement (Stage 1).** Results can be narrowed by file type, modification date, size and location, from a Filters menu in the GUI and with `--type`, `--after`, `--before`, `--min-size`, `--max-size` and `--in` in the CLI. An invalid range is shown as a validation message, and no results suggests loosening the filters. The agent can apply the same filters through its search tool.
+
 **How it works.** In the GUI, every change in the filter row goes to `GuiController.onFiltersChanged()`, which stores the new `SearchFilters` and runs the current search again. In the CLI, `findany search` builds the same object from `--type`, `--after`, `--before`, `--min-size`, `--max-size` and `--in`. `FindAnythingService.search()` calls `SearchFilters.validate()` before anything else; an invalid combination, such as a start date after the end date, fails with an `InvalidFiltersException`, which the GUI shows in the row through `MainWindow.showFilterError()` and the CLI prints. Valid filters are passed to `SearchIndex.keywordSearch()`, `vectorSearch()` and `listFiles()`. Each index entry carries its file's type, size, modification time and path, so the filters are applied inside the query, not afterwards. The agent's `SearchTool` builds a `SearchFilters` from its `file_type`, `modified_after` and `modified_before` arguments and passes it to the same `SearchEngine.search()`.
 
 **Deterministic.** No model is involved.
+
+![F04 in the GUI](screenshots/f04-gui.jpg)
+
+*Screenshot 7. F04 in the GUI: the filter row open with the type set to `pdf`, the button reading "Filters (1)", and only the two lease PDFs listed for "lease". On the left, the CLI's filters, including the error for a start date after the end date and "No results. Try loosening the filters."*
+
+![F04 in the CLI](screenshots/f04-cli.jpg)
+
+*Screenshot 8. F04 in the CLI: `findany search lease --type pdf` lists only the two PDFs.*
 
 ### F05: Semantic search
 
@@ -147,9 +187,19 @@ Each feature below has a table with the fields the instructions list, then a par
 | Design patterns | Adapter |
 | Video link/timestamp | [9:07](https://youtu.be/mcVUT82xOac?t=547) |
 
+**Original requirement (Stage 1).** Passages are found by meaning, not only by exact words, with an embedding model that runs locally; for example, "CV" finds a file that only says "résumé". `--keyword-only` turns it off. If the model fails to load, search falls back to keywords with a warning, and files not yet embedded are still found by keywords.
+
 **How it works.** Embedding is a second indexing phase, so a file is searchable by keywords before its vectors exist. When `ChangeQueue.takeReady()` returns nothing, `Indexer.embedNextBatch()` asks `SearchIndex.findContentWithoutEmbeddings()` for content without vectors, loads its chunks with `getChunksOfContent()`, calls `EmbeddingModel.embed()` and stores the vectors with `addEmbeddings()`. When no chunk is left, it embeds each file's name together with its folder's name and stores it with `addNameEmbedding()`, which is how the query "cv" finds a file named `resume`. At search time, `SearchEngine.search()` embeds the query with the same model and calls `SearchIndex.vectorSearch()`, which looks up the nearest chunk texts and the nearest names; a chunk counts as a semantic match only at a cosine similarity of 0.62 or more. `LocalEmbeddingModel` adapts the library's model to `EmbeddingModel` and loads it on the first call. If the model fails, `SearchEngine` turns semantic search off, returns the keyword results, and the GUI and the CLI show a warning.
 
 **Hybrid.** A local embedding model ranks by meaning; no language model is involved, and nothing leaves the computer.
+
+![F05 in the GUI](screenshots/f05-gui.jpg)
+
+*Screenshot 9. F05 in the GUI: "CV" finds `resume-jordan-rivera.docx`, whose text never contains "CV", shown in the preview.*
+
+![F05 in the CLI](screenshots/f05-cli.jpg)
+
+*Screenshot 10. F05 in the CLI: `findany search cv` finds the résumé by meaning, and `findany search cv --keyword-only` finds nothing.*
 
 ### F06: Instant hybrid search
 
@@ -163,9 +213,19 @@ Each feature below has a table with the fields the instructions list, then a par
 | Design patterns | Facade, MVC |
 | Video link/timestamp | [10:50](https://youtu.be/mcVUT82xOac?t=650) |
 
+**Original requirement (Stage 1).** The default search combines keyword and semantic matches into one ranked list as the user types, without calling a language model. Each file appears once with its best passage; before any query, all files are listed newest first. Special characters are taken literally, and no results suggests Ask mode.
+
 **How it works.** Each change to the search field calls `GuiController.onQueryChanged()`, which increments `latestQueryId` and calls `FindAnythingService.search()`. The facade submits `SearchEngine.search()` to its background executor and returns a future at once, so the UI thread never waits. For an empty query the engine calls `SearchIndex.listFiles()`, which returns files newest first. Otherwise it calls `keywordSearch()` and, when semantic search is on, `vectorSearch()`; `fuseRankings()` merges the two lists by rank (reciprocal rank fusion), and the ranked `ChunkHit`s are grouped by file into `SearchResult`s. When the future completes, `GuiController` hands the results to `ResultsView.setResults()` on the JavaFX thread, but only if `latestQueryId` hasn't changed since, so the table never shows the results of an older query. When nothing matches, the table suggests Ask mode.
 
 **Hybrid.** Deterministic keyword search is fused with F05's embedding model; no language model is involved.
+
+![F06 in the GUI](screenshots/f06-gui.jpg)
+
+*Screenshot 11. F06 in the GUI: "lease ends" typed in Search mode, with each matching file and its best passage. On the left, the CLI's searches, including "résumé" with its accent and a nonsense word that gives "No results."*
+
+![F06 in the CLI](screenshots/f06-cli.jpg)
+
+*Screenshot 12. F06 in the CLI: `findany search lease ends` lists the two leases and a note, each with its best passage.*
 
 ### F07: Natural-language search
 
@@ -179,6 +239,8 @@ Each feature below has a table with the fields the instructions list, then a par
 | Design patterns | Command, Adapter, Facade |
 | Video link/timestamp | [12:09](https://youtu.be/mcVUT82xOac?t=729) |
 
+**Original requirement (Stage 1).** The user describes a file vaguely, such as "the co-op info session slides from last year". The agent plans searches with filters, inspects the results, refines the search if needed, and reports the best matches, with its steps shown as they happen (`findany ask`, `--verbose`). An invalid tool call is returned to the model, the number of steps is limited, and an unavailable model falls back to instant search.
+
 **How it works.** `GuiController.onAskSubmitted()` disables the Ask input and calls `FindAnythingService.ask()`; `findany ask` calls the same method. On a background thread, the facade gets the client for the conversation's own model from `LlmClientFactory.createClient()` and calls `AgentController.run()`. Each step of the loop works as follows:
 
 1. `PromptBuilder.buildRequest()` combines the instructions, today's date, the conversation and `ToolRegistry.getToolSpecs()` into an `LlmRequest`.
@@ -189,6 +251,14 @@ Each feature below has a table with the fields the instructions list, then a par
 The loop ends when the model gives a final answer or after eight steps. If the model's first reply has no tool call, it is asked once to search first or to say that no search is needed. If the client throws an `LlmException`, the facade completes the request with ordinary search results and a "model unavailable" notice.
 
 **AI-based.** The language model decides which searches to run and when it has found the file; the searches themselves are deterministic.
+
+![F07 in the GUI](screenshots/f07-gui.jpg)
+
+*Screenshot 13. F07 in the GUI: Ask mode while the agent works. The request and its first step appear in the pane, and the input is disabled until the answer arrives.*
+
+![F07 in the CLI](screenshots/f07-cli.jpg)
+
+*Screenshot 14. F07 in the CLI: `findany ask --verbose "Find my co-op slides from last year"`. The agent's first searches, with a type and a date filter, find nothing; it searches again without them and names the deck, with two verified citations.*
 
 ### F08: Question answering across files
 
@@ -202,9 +272,19 @@ The loop ends when the model gives a final answer or after eight steps. If the m
 | Design patterns | Command, Adapter |
 | Video link/timestamp | [13:43](https://youtu.be/mcVUT82xOac?t=823) |
 
+**Original requirement (Stage 1).** A question is answered from the files' contents, combining several files when needed, with a citation to the file and passage behind each claim. The answer has clickable citations in the GUI and numbered sources in the CLI. When nothing relevant is found the agent says so, and when files conflict both versions are given with their sources.
+
 **How it works.** The loop is F07's. For a question, the model typically calls `SearchTool` to find candidate files and `ReadExcerptTool` to read more of them from `SearchIndex`, by page or by position; an excerpt is at most 6,000 characters, so only excerpts are sent, never whole files. Each `ToolResult` lists the files its text came from, which the redacting decorator uses (F14). When the model returns its final reply, `ResponseParser.parseAnswer()` turns it into an `Answer` with `Citation`s, each naming a file, a page where the format has pages, and a quoted passage. `CitationVerifier.verify()` then checks each citation (F09). The facade saves the conversation and completes the request; `GuiController` calls `DetailPane.showAnswer()`, where each citation marker is a link to its source, and `ResultsView.setResults()` with the answer's files. When two files disagree, the answer gives both values with their sources.
 
 **AI-based.** The language model chooses what to read and writes the answer; reading, parsing and checking are deterministic.
+
+![F08 in the GUI](screenshots/f08-gui.jpg)
+
+*Screenshot 15. F08 in the GUI: "What is the final exam worth?" answered 40%, with the citation marker in the text and the cited passage under "Sources".*
+
+![F08 in the CLI](screenshots/f08-cli.jpg)
+
+*Screenshot 16. F08 in the CLI: `findany ask "When does my lease end?"` answers from both leases with two verified sources, and says it ignored the instructions planted in a note.*
 
 ### F09: Citation verification
 
@@ -218,9 +298,19 @@ The loop ends when the model gives a final answer or after eight steps. If the m
 | Design patterns | N/A |
 | Video link/timestamp | [15:53](https://youtu.be/mcVUT82xOac?t=953) |
 
+**Original requirement (Stage 1).** A deterministic check that every quoted passage in an answer really appears in the cited file on the stated page. Each citation is marked verified or unverified (`[✓]` or `[?]` in the CLI), a quote that is close but not exact is unverified, and a reply whose citations can't be parsed gets one reformat request.
+
 **How it works.** After `ResponseParser` produces an `Answer`, `AgentController` passes it to `CitationVerifier.verify()`. For each citation, `verifyCitation()` loads the cited file's chunks with `SearchIndex.getChunks()` and searches the chunks of the cited page for the quote, ignoring differences in whitespace; for a format without pages it searches the whole file. Each citation gets a `VerificationStatus`, and `Answer.isVerified()` is true only when every citation is verified. If the model's reply can't be parsed, `AgentController` sends one `PromptBuilder.buildReformatRequest()` that tells the model what to correct; a second failure produces an unverified answer with a notice. The CLI prints `[✓]` or `[?]` beside each source with the status in words, and `DetailPane` puts the same mark on each citation marker and highlights unverified sources. A model that quotes text that isn't in the file, including text it received in redacted form, is therefore shown as unverified.
 
 **Deterministic.** The check is ordinary code that verifies what the AI wrote.
+
+![F09 in the GUI](screenshots/f09-gui.jpg)
+
+*Screenshot 17. F09 in the GUI: the lease answer with a `✓` on each citation marker and "verified" beside each source.*
+
+![F09 in the CLI](screenshots/f09-cli.jpg)
+
+*Screenshot 18. F09 in the CLI: the model received only a redacted copy of the bank-details file, so its quote isn't in the real file, and the citation is marked `[?]` unverified.*
 
 ### F10: Document comparison
 
@@ -246,9 +336,19 @@ The loop ends when the model gives a final answer or after eight steps. If the m
 | Design patterns | Facade, MVC |
 | Video link/timestamp | [17:08](https://youtu.be/mcVUT82xOac?t=1028) |
 
+**Original requirement (Stage 1).** A result's extracted text is shown with the matching or cited passages highlighted, scrolled to the first one, with "Open file" and "Show in folder" buttons; a clicked citation opens the preview with a Back button. `findany show --highlight` does the same in the CLI. A deleted file gives a message, and a file without text shows its details.
+
 **How it works.** `GuiController.onResultSelected()`, or `onCitationClicked()` with the cited quote, calls `FindAnythingService.preview(file, highlight)`; `findany show` calls the same method. On a background thread, the facade loads the chunks with `SearchIndex.getChunks()` and the file's entry with `getFile()`, joins the chunks in order with a page marker before each numbered page, and finds the ranges to highlight: every occurrence of the query or the quote as a whole phrase, or of each of its words when the phrase doesn't occur. It returns a `Preview`, which `DetailPane.showPreview()` displays scrolled to the first highlight. If the file no longer exists, the facade calls `Indexer.requestUpdate(file)` so the worker removes it from the index, and the request fails with "This file no longer exists". A file with no extracted text gets a preview of its details alone. When the selected file is indexed again, or leaves the results, `GuiController` reloads or empties the preview.
 
 **Deterministic.** No model is involved.
+
+![F11 in the GUI](screenshots/f11-gui.jpg)
+
+*Screenshot 19. F11 in the GUI: the selected lease in the preview pane, with "lease" and "ends" highlighted, a marker for each page, and the "Open file" and "Show in folder" buttons.*
+
+![F11 in the CLI](screenshots/f11-cli.jpg)
+
+*Screenshot 20. F11 in the CLI: `findany show … --highlight "August 31"` prints the lease's text with page markers and the match marked `[[August 31]]`.*
 
 ### F12: Conversation follow-ups
 
@@ -262,9 +362,19 @@ The loop ends when the model gives a final answer or after eight steps. If the m
 | Design patterns | N/A |
 | Video link/timestamp | [18:45](https://youtu.be/mcVUT82xOac?t=1125) |
 
+**Original requirement (Stage 1).** The agent remembers the current conversation's requests and results, so a follow-up such as "only the ones from 2025" builds on them. Conversations are saved and reopened from a drawer with a "New conversation" button; `findany ask --continue` continues the last one. Each conversation keeps the model it started with, and a long history is trimmed.
+
 **How it works.** A `Conversation` holds its `Message`s, the last answer's files and the `ModelSettings` it was created with. `AgentController.run()` calls `addUserMessage()`, `addToolResult()` and `addAssistantMessage()` as the loop proceeds, and `PromptBuilder.buildRequest()` sends the history with every request, so the model can resolve a follow-up such as "And what is the midterm worth?". When a new request starts, `dropToolMessages()` reduces each earlier exchange to its request and its answer, and `trimToFit()` keeps the history within 40,000 characters. `FindAnythingService.ask()` saves the conversation with `ConversationStore.save()` after each answer. In the GUI, "New conversation" calls `newConversation()`, and the "Conversations" menu lists the saved ones through `listConversations()` and reopens one through `openConversation()`; the CLI continues the most recent one with `ask --continue`. Because the factory is always asked for a client for `conversation.getModelSettings()`, a conversation never switches model, so content withheld from a cloud model can't reach it later through another client.
 
 **AI-based.** The language model interprets the follow-up in the light of the history; storing and trimming the history are deterministic.
+
+![F12 in the GUI](screenshots/f12-gui.jpg)
+
+*Screenshot 21. F12 in the GUI: the follow-up "And what is the midterm worth?" is answered 30% from the same syllabus, without the course being named again.*
+
+![F12 in the CLI](screenshots/f12-cli.jpg)
+
+*Screenshot 22. F12 in the CLI: `findany ask --continue "And how much is the rent?"` builds on the earlier lease question and answers from both leases.*
 
 ### F13: Model backend selection and privacy log
 
@@ -278,9 +388,19 @@ The loop ends when the model gives a final answer or after eight steps. If the m
 | Design patterns | Factory, Adapter, Decorator |
 | Video link/timestamp | [20:32](https://youtu.be/mcVUT82xOac?t=1232) |
 
+**Original requirement (Stage 1).** The user chooses between a cloud model and a local model, tests the connection, and can read a log of everything sent to cloud models, with each request's time, excerpts and redactions (`findany model set`, `model test`, `privacy-log`). An invalid key or a local runtime that isn't running gives a clear message, and existing conversations keep their model.
+
 **How it works.** In `SettingsDialog`, "Test connection" calls `GuiController.onTestBackend()`; `findany model set` and `model test` take the same path from the CLI. `FindAnythingService.resolveModelSettings()` completes the user's choice with the API key and the defaults from `.env`, and `testBackend()` gets a client from `LlmClientFactory.createClient()` and calls `LlmClient.testConnection()` on a background thread. When the backend can't be used, the client throws an `LlmException` whose message says what to fix (a wrong key, an unknown model, an unreachable server), and nothing is saved. On success, `setBackend()` saves the choice with `SettingsStore.saveModelSettings()`, and new conversations use it. `LangChain4jClient` adapts the library's chat models for both OpenRouter and Ollama, so the rest of the system knows only `LlmClient`. For a cloud model, `LoggingLlmClient.complete()` appends a `PrivacyLogEntry` (the time, the model, the redacted categories and the messages as sent) with `PrivacyLog.append()` before the request leaves. `findany privacy-log` and the dialog's "Show privacy log" read it through `getPrivacyLog()`.
 
 **Deterministic.** The feature controls which AI model is used and records what it is sent; it uses no model itself, apart from the one-line connection test.
+
+![F13 in the GUI](screenshots/f13-gui.jpg)
+
+*Screenshot 23. F13 in the GUI: the settings dialog with the cloud backend, the result of "Test connection", and the privacy log showing the last request sent to the cloud model.*
+
+![F13 in the CLI](screenshots/f13-cli.jpg)
+
+*Screenshot 24. F13 in the CLI: `findany model test` succeeds; an unknown local model is refused; the local model `qwen3:14b` answers a question, then the cloud model answers it; and `findany privacy-log --last 1` shows what was sent.*
 
 ### F14: Sensitive-data protection
 
@@ -294,9 +414,19 @@ The loop ends when the model gives a final answer or after eight steps. If the m
 | Design patterns | Decorator, Factory |
 | Video link/timestamp | [23:37](https://youtu.be/mcVUT82xOac?t=1417) |
 
+**Original requirement (Stage 1).** Sensitive data is protected in three ways: credential locations are never indexed; a folder can be marked "local model only"; and card numbers, SINs, private keys and API keys are replaced before anything is sent to a cloud model, with a toggle per category (`findany policy local-only`, `findany privacy redact`). When needed sources are withheld, the answer says so, and the settings state that unstructured sensitive text isn't detected.
+
 **How it works.** The three protections are in different places. **Built-in exclusions:** `IndexConfig`'s built-in rules keep credential locations, such as SSH keys, out of the index entirely, so they can never reach a search or a model. **Local-only folders:** "Local model only" on a folder chip calls `GuiController.onSetLocalOnly()`, and `findany policy local-only` does the same from the CLI; `FindAnythingService.setLocalOnly()` updates `FolderPolicy` and saves it. **Redaction:** the check boxes and `findany privacy redact` call `setRedaction()`, which calls `Redactor.setCategoryEnabled()`. For a cloud model, `LlmClientFactory.createClient()` wraps the client in `RedactingLlmClient`. Its `complete()` checks each message's source files with `FolderPolicy.isLocalOnly()`, replaces the content of any message from a local-only folder with a withheld marker, and passes the rest through `Redactor.redact()`, which replaces every match of each enabled `SensitivePattern` with a placeholder naming its category. The redacted request then goes to `LoggingLlmClient` and the adapter. When sources were withheld, the answer carries a notice saying so. A local model gets no decorators, because nothing leaves the computer.
 
 **Deterministic.** The feature limits what the AI model receives; it uses no model itself.
+
+![F14 in the GUI](screenshots/f14-gui.jpg)
+
+*Screenshot 25. F14 in the GUI: the redaction check boxes and the limitation sentence in the settings dialog, and the folder chip marked "docs (local model only)".*
+
+![F14 in the CLI](screenshots/f14-cli.jpg)
+
+*Screenshot 26. F14 in the CLI: `findany privacy` lists the four categories; asked for bank details, the agent receives only placeholders; and `findany privacy-log --last 1` shows "Redacted: card-number, sin, api-key".*
 
 ## 3. Implemented design patterns
 
