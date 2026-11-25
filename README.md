@@ -62,6 +62,66 @@ local backend, install [Ollama](https://ollama.com), run `ollama pull <model>` a
 On Windows, use `gradlew.bat` in Command Prompt, or `.\gradlew` in PowerShell. `build` does not
 refresh the launcher under `build/install`; run `installDist` again after changing the code.
 
+### Running `findany` from a terminal
+
+`installDist` makes a standalone launcher: `build/install/findany/bin/findany` (macOS and Linux)
+and `build\install\findany\bin\findany.bat` (Windows). The examples below call it `findany`. To
+type it that way, add an alias in bash or zsh, from the repository root:
+
+```
+alias findany="$PWD/build/install/findany/bin/findany"
+```
+
+or add `build/install/findany/bin` to your `PATH`. `findany --help` lists the commands, and
+`findany --version` prints the version.
+
+### A working example on the test files
+
+The repository includes 25 fictional test files in `testdata/corpus/`. From the repository root,
+with a cloud model set up in `.env` (see above):
+
+```
+export FINDANY_HOME="$PWD/build/demo-home"   # keep the demo apart from your own index
+findany folders add testdata/corpus          # index the test files
+findany model set cloud                      # test the OpenRouter model from .env, then use it
+findany ask "When does my lease end?"
+```
+
+The answer is August 31, 2026, cited to page 2 of `testdata/corpus/housing/lease-2025-2026.pdf`.
+It usually also says that it ignored the instruction planted in `notes/note-from-unknown-sender.md`. Each
+source is marked `[✓]` when its quoted passage was found in the file and `[?]` when it wasn't.
+On Windows PowerShell, set the data folder with `$env:FINDANY_HOME = "$PWD\build\demo-home"`.
+
+### Asking the agent: `findany ask`
+
+```
+findany ask [--continue] [--json] [--verbose] <request>...
+```
+
+| Option | What it does |
+|---|---|
+| `<request>` | The task, in your own words. Quote it, so the shell passes characters such as `?` unchanged. |
+| `--continue` | Continue the most recent conversation, so the request can build on its earlier answers. Without it, a new conversation starts. |
+| `--json` | Print the result as JSON: the conversation's ID, the request, the answer, whether every citation was verified, each citation with its file, page, quote and status, the files found, any notices, the model, the agent's tool calls, and whether ordinary search stood in for an unavailable model. |
+| `--verbose` | Also print each step of the agent (each search and excerpt it reads) on standard error. |
+
+To run the agent on a task written in a file, put `@` before the file's name:
+
+```
+echo "When does my lease end?" > task.txt
+findany ask @task.txt
+findany ask --json @task.txt > result.json
+```
+
+In such a file, `'` and `"` mark quoted text, so an apostrophe is dropped ("What's" is read as
+"What s"). For a task with apostrophes, let the shell read the file instead (bash and zsh):
+
+```
+findany ask "$(cat task.txt)"
+```
+
+If the model can't be reached, `ask` says so and shows ordinary search results instead.
+
 ### The window
 
 `findany gui` opens the window: a Search/Ask switch and one input field, the search folders as
@@ -72,7 +132,7 @@ unverified and open the file at the quoted passage. "Settings…" chooses and te
 backend, turns redaction categories on or off, and shows the privacy log. The GUI tests run the
 JavaFX toolkit without a display.
 
-### Using the command line
+### All commands
 
 ```
 findany folders add ~/Documents          # add a folder; it is indexed right away
